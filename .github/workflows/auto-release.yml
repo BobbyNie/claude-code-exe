@@ -17,16 +17,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup PowerShell
-        uses: microsoft/setup-powershell@v1
-
       - name: Check for new version
         id: check_version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: pwsh
         run: |
-          . .\scripts\check-version.ps1
+          $versionOutput = .\scripts\check-version.ps1
           if ($LASTEXITCODE -eq 0) {
-            $version = .\scripts\check-version.ps1
+            $version = $versionOutput | Select-Object -Last 1
             echo "new_version=true" >> $env:GITHUB_OUTPUT
             echo "version=$version" >> $env:GITHUB_OUTPUT
             echo "New version detected: $version"
