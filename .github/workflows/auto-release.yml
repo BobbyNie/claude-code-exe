@@ -1,0 +1,104 @@
+name: Auto Release Claude Code Portable
+
+on:
+  schedule:
+    # Run every day at 00:00 UTC
+    - cron: '0 0 * * *'
+  workflow_dispatch:  # Allow manual triggering
+
+permissions:
+  contents: write
+
+jobs:
+  check-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PowerShell
+        uses: microsoft/setup-powershell@v1
+
+      - name: Check for new version
+        id: check_version
+        shell: pwsh
+        run: |
+          . .\scripts\check-version.ps1
+          if ($LASTEXITCODE -eq 0) {
+            $version = .\scripts\check-version.ps1
+            echo "new_version=true" >> $env:GITHUB_OUTPUT
+            echo "version=$version" >> $env:GITHUB_OUTPUT
+            echo "New version detected: $version"
+          } else {
+            echo "new_version=false" >> $env:GITHUB_OUTPUT
+            echo "No new version available"
+          }
+
+      - name: Download Claude Code
+        if: steps.check_version.outputs.new_version == 'true'
+        shell: pwsh
+        run: |
+          .\scripts\download.ps1 -Version ${{ steps.check_version.outputs.version }} -OutputDir .
+
+      - name: Prepare portable package
+        if: steps.check_version.outputs.new_version == 'true'
+        shell: pwsh
+        run: |
+          # Create release directory
+          mkdir release
+
+          # Copy files to release directory
+          Copy-Item cloude.exe release\
+          Copy-Item scripts\wrapper.bat release\
+
+          # Create a simple README for the release
+          @"
+          Claude Code ${{ steps.check_version.outputs.version }} Portable
+          ====================================================
+
+          使用 wrapper.bat 启动以获得完整的便携体验：
+          双击 wrapper.bat 或在命令行运行 wrapper.bat
+
+          所有配置和数据将存储在 data\ 目录下。
+          "@ | Out-File -Encoding UTF8 release\README.txt
+
+      - name: Create Release
+        if: steps.check_version.outputs.new_version == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          $version = "v${{ steps.check_version.outputs.version }}"
+          $title = "Claude Code ${{ steps.check_version.outputs.version }} Portable"
+
+          # Create release notes
+          $notes = @"
+          ## Claude Code ${{ steps.check_version.outputs.version }} Portable
+
+          自动从官方源获取的最新版本。
+
+          ### 文件说明
+          - \`cloude.exe\` - 主程序
+          - \`wrapper.bat\` - 启动脚本（推荐使用）
+
+          ### 使用方法
+          推荐使用 \`wrapper.bat\` 启动，确保所有数据存储在便携目录内。
+
+          ### 官方链接
+          - [Claude Code 官网](https://claude.ai/code)
+          - [官方文档](https://docs.anthropic.com/en/docs/build-with-claude/claude-for-developers)
+
+          ---
+          自动发布于 $(Get-Date -Format "yyyy-MM-dd HH:mm:ss") UTC
+          "@
+
+          # Create release using GitHub CLI
+          gh release create "$version" `
+            --title "$title" `
+            --notes "$notes" `
+            release\cloude.exe `
+            release\wrapper.bat `
+            release\README.txt
+
+          echo "Release $version created successfully"
