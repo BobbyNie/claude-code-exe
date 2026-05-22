@@ -15,7 +15,7 @@ $ErrorActionPreference = "Stop"
 $BaseUrl = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases"
 $Platform = "win32-x64"
 $DownloadUrl = "$BaseUrl/$Version/$Platform/claude.exe"
-$OutputFile = Join-Path $OutputDir "cloude.exe"
+$OutputFile = Join-Path $OutputDir "claude.exe"
 
 function Download-File {
     param(

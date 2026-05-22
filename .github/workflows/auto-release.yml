@@ -48,7 +48,7 @@ jobs:
           mkdir release
 
           # Copy files to release directory
-          Copy-Item cloude.exe release\
+          Copy-Item claude.exe release\
           Copy-Item scripts\wrapper.bat release\
 
           # Create a simple README for the release
