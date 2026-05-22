@@ -29,15 +29,15 @@ wrapper.bat
 
 ### 方式二：直接运行
 
-直接双击 `cloude.exe` 运行。
+直接双击 `claude.exe` 运行。
 
 **注意**：直接运行时，配置和数据会存储在用户目录下，失去便携性。建议始终使用 `wrapper.bat` 启动。
 
 ## 文件结构
 
 ```
-cloude-portable/
-├── cloude.exe           # 主程序
+claude-portable/
+├── claude.exe           # 主程序
 ├── wrapper.bat          # 启动脚本（推荐使用）
 └── data/                # 数据目录（运行时自动创建）
     ├── .claude/         # 配置文件

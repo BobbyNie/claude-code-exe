@@ -13,4 +13,4 @@ if not exist "%CLAUDE_CONFIG_DIR%" mkdir "%CLAUDE_CONFIG_DIR%"
 if not exist "%CLAUDE_DATA_DIR%" mkdir "%CLAUDE_DATA_DIR%"
 
 REM Launch Claude Code with any passed arguments
-start "" "%~dp0cloude.exe" %*
+start "" "%~dp0claude.exe" %*
