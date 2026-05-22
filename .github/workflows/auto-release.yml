@@ -78,7 +78,7 @@ jobs:
           自动从官方源获取的最新版本。
 
           ### 文件说明
-          - \`cloude.exe\` - 主程序
+          - \`claude.exe\` - 主程序
           - \`wrapper.bat\` - 启动脚本（推荐使用）
 
           ### 使用方法
@@ -96,7 +96,7 @@ jobs:
           gh release create "$version" `
             --title "$title" `
             --notes "$notes" `
-            release\cloude.exe `
+            release\claude.exe `
             release\wrapper.bat `
             release\README.txt
 

@@ -36,8 +36,8 @@ wrapper.bat
 ## 文件结构
 
 ```
-cloude-portable/
-├── cloude.exe           # 主程序
+claude-portable/
+├── claude.exe           # 主程序
 ├── wrapper.bat          # 启动脚本（推荐使用）
 └── data/                # 数据目录（运行时自动创建）
     ├── .claude/         # 配置文件
