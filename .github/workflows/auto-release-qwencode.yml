@@ -1,0 +1,116 @@
+name: Auto Release Qwen Code Portable
+
+on:
+  schedule:
+    - cron: '30 0 * * *'
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/auto-release-qwencode.yml'
+      - 'scripts/qwen/**'
+
+permissions:
+  contents: write
+
+jobs:
+  check-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for new version
+        id: check_version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          $versionOutput = .\scripts\qwen\check-version.ps1
+          if ($LASTEXITCODE -eq 0) {
+            $version = $versionOutput | Select-Object -Last 1
+            echo "new_version=true" >> $env:GITHUB_OUTPUT
+            echo "version=$version" >> $env:GITHUB_OUTPUT
+            echo "New Qwen Code version detected: $version"
+          } else {
+            echo "new_version=false" >> $env:GITHUB_OUTPUT
+            echo "No new Qwen Code version available"
+          }
+
+      - name: Download Qwen Code
+        if: steps.check_version.outputs.new_version == 'true'
+        shell: pwsh
+        run: |
+          .\scripts\qwen\download.ps1 -Version ${{ steps.check_version.outputs.version }} -OutputDir .
+
+      - name: Prepare portable package
+        if: steps.check_version.outputs.new_version == 'true'
+        shell: pwsh
+        run: |
+          $version = "${{ steps.check_version.outputs.version }}"
+          $releaseDir = "release-qwen"
+          $archiveName = "qwen-code-$version-portable.zip"
+
+          if (Test-Path $releaseDir) {
+            Remove-Item $releaseDir -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path $releaseDir | Out-Null
+
+          Copy-Item -Recurse qwen-code (Join-Path $releaseDir "qwen-code")
+          Copy-Item scripts\qwen\wrapper.bat (Join-Path $releaseDir "wrapper.bat")
+
+          @"
+          Qwen Code $version Portable
+          =====================================
+
+          使用 wrapper.bat 启动以获得完整的便携体验：
+          双击 wrapper.bat 或在命令行运行 wrapper.bat
+
+          所有配置和数据将存储在 data\ 目录下。
+          "@ | Out-File -Encoding UTF8 (Join-Path $releaseDir "README.txt")
+
+          Compress-Archive -Path (Join-Path $releaseDir "*") -DestinationPath $archiveName -Force
+
+      - name: Create Release
+        if: steps.check_version.outputs.new_version == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          $version = "${{ steps.check_version.outputs.version }}"
+          $tag = "qwencode-v$version"
+          $title = "Qwen Code $version Portable"
+          $archiveName = "qwen-code-$version-portable.zip"
+
+          $notes = @"
+          ## Qwen Code $version Portable
+
+          自动从官方 Qwen Code Windows 独立版封装为便携版。
+
+          ### 文件说明
+          - ``$archiveName`` - 完整便携包（含官方运行时与启动脚本）
+          - ``wrapper.bat`` - 便携启动脚本（推荐使用）
+          - ``README.txt`` - 使用说明
+
+          ### 使用方法
+          1. 下载并解压 ``$archiveName``
+          2. 使用 ``wrapper.bat`` 启动，确保配置与运行数据保存在便携目录内
+
+          ### 官方链接
+          - [Qwen Code 官网](https://qwen.ai/qwencode)
+          - [官方仓库](https://github.com/QwenLM/qwen-code)
+
+          ---
+          自动发布于 $(Get-Date -Format "yyyy-MM-dd HH:mm:ss") UTC
+          "@
+
+          gh release create "$tag" `
+            --title "$title" `
+            --notes "$notes" `
+            $archiveName `
+            release-qwen\wrapper.bat `
+            release-qwen\README.txt
+
+          echo "Release $tag created successfully"

@@ -21,7 +21,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 文件说明
 
 ### `.github/workflows/auto-release.yml`
-GitHub Actions 主工作流，包含完整的自动化逻辑。
+Claude Code 自动发布工作流。
+
+### `.github/workflows/auto-release-qwencode.yml`
+Qwen Code 自动发布工作流。
+
+### `scripts/qwen/`
+Qwen Code 版本检测、下载与便携启动脚本。
 
 ### `scripts/wrapper.bat`
 便携版启动脚本，设置环境变量使 Claude Code 使用便携目录存储数据。

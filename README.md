@@ -1,67 +1,93 @@
-# Claude Code Windows 便携版
+# AI 终端工具 Windows 便携版
 
-自动将 Claude Code 官方 Windows 版本封装为便携版，每天自动发布最新版本。
+自动将 **Claude Code** 与 **Qwen Code** 官方 Windows 版本封装为便携版，每天通过 GitHub Actions 自动发布最新版本。
 
 ## 简介
 
-Claude Code 是 Anthropic 官方的 Claude AI 命令行工具。官方安装版会将配置和数据存储在用户目录下，本项目将其封装为真正的便携版，所有数据都在程序目录内，无需安装，可放在 U 盘中随身携带。
+| 产品 | 说明 |
+| --- | --- |
+| [Claude Code](https://claude.ai/code) | Anthropic 官方 Claude AI 命令行工具 |
+| [Qwen Code](https://qwen.ai/qwencode) | 通义千问开源终端 AI Agent |
+
+官方安装版通常将配置和数据放在用户目录。本项目封装为便携版：所有数据在程序目录内，无需安装，可放在 U 盘中使用。
 
 ## 特点
 
-- **零安装**：无需安装，下载即用
-- **便携性**：所有数据和配置都在程序目录内
+- **零安装**：下载即用
+- **便携性**：配置与运行数据集中在 `data\` 目录
 - **自动更新**：每天自动检测并发布最新版本
-- **原汁原味**：直接使用官方二进制，仅做便携化封装
+- **原汁原味**：使用官方二进制/独立包，仅做便携化封装
 
 ## 下载
 
-访问 [Releases](https://github.com/your-username/claude-code-exe/releases) 页面下载最新版本。
+在 [Releases](https://github.com/BobbyNie/claude-code-exe/releases) 页面选择对应产品：
 
-## 使用方法
+- **Claude Code**：标签为 `v{版本号}`，例如 `v2.1.150`
+- **Qwen Code**：标签为 `qwencode-v{版本号}`，例如 `qwencode-v0.16.1`
 
-### 方式一：使用启动脚本（推荐）
+## Claude Code 使用方法
 
-双击 `wrapper.bat` 启动，或在命令行中：
+### 推荐：启动脚本
 
 ```cmd
 wrapper.bat
 ```
 
-### 方式二：直接运行
+### 直接运行
 
-直接双击 `claude.exe` 运行。
+双击 `claude.exe` 也可运行，但配置会落在用户目录，失去便携性。
 
-**注意**：直接运行时，配置和数据会存储在用户目录下，失去便携性。建议始终使用 `wrapper.bat` 启动。
-
-## 文件结构
+### 目录结构
 
 ```
 claude-portable/
-├── claude.exe           # 主程序
-├── wrapper.bat          # 启动脚本（推荐使用）
-└── data/                # 数据目录（运行时自动创建）
-    ├── .claude/         # 配置文件
-    └── claude/          # 数据文件
+├── claude.exe
+├── wrapper.bat
+└── data/
+    ├── .claude/
+    └── claude/
+```
+
+## Qwen Code 使用方法
+
+### 推荐：启动脚本
+
+解压 `qwen-code-{version}-portable.zip` 后运行：
+
+```cmd
+wrapper.bat
+```
+
+### 目录结构
+
+```
+qwen-portable/
+├── wrapper.bat
+├── qwen-code/          # 官方 Windows 独立运行时
+│   └── bin/qwen.cmd
+└── data/
+    ├── .qwen/          # 配置（QWEN_HOME）
+    └── qwen-runtime/   # 运行时会话数据（QWEN_RUNTIME_DIR）
 ```
 
 ## 工作原理
 
-1. 每天自动从官方源检测最新版本
-2. 下载官方 claude.exe
-3. 创建便携版启动脚本 wrapper.bat
+1. 每天从官方源检测最新版本
+2. 下载官方 Windows 包
+3. 添加便携启动脚本 `wrapper.bat`
 4. 发布到 GitHub Releases
+
+| 产品 | 工作流 | 版本源 | 发布产物 |
+| --- | --- | --- | --- |
+| Claude Code | `auto-release.yml` | Google Cloud Storage | `claude.exe` + `wrapper.bat` |
+| Qwen Code | `auto-release-qwencode.yml` | 阿里云 OSS / GitHub Releases | 便携 zip + `wrapper.bat` |
 
 ## 免责声明
 
-本项目仅对官方 Claude Code 进行便携化封装，不修改任何核心功能。
-
-Claude Code 由 [Anthropic](https://www.anthropic.com) 开发，遵循其官方许可条款。
-
-## 许可证
-
-本项目与 Claude Code 官方许可保持一致。
+本项目仅对官方程序做便携化封装，不修改核心功能。各产品版权归其官方所有，使用须遵守相应许可条款。
 
 ## 链接
 
 - [Claude Code 官网](https://claude.ai/code)
-- [Claude Code 文档](https://docs.anthropic.com/en/docs/build-with-claude/claude-for-developers)
+- [Qwen Code 官网](https://qwen.ai/qwencode)
+- [Qwen Code 仓库](https://github.com/QwenLM/qwen-code)
