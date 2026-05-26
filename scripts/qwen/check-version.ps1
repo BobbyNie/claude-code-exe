@@ -4,7 +4,7 @@ $ErrorActionPreference = "Stop"
 
 $LatestVersionUrl = "https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/releases/qwen-code/latest/VERSION"
 $ReleaseTagPrefix = "qwencode-v"
-$RequiredLauncherRevision = "2"
+$RequiredLauncherRevision = "3"
 
 function Get-ResponseText {
     param(
