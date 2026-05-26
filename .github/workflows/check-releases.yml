@@ -1,0 +1,30 @@
+name: Check GitHub Releases
+
+on:
+  schedule:
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/check-releases.yml'
+      - 'scripts/check-github-releases.ps1'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-releases:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify releases match official latest versions
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          .\scripts\check-github-releases.ps1
