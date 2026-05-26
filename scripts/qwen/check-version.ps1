@@ -93,7 +93,7 @@ function Test-PortableReleaseComplete {
 
     $launcherRevision = Get-ReleaseLauncherRevision -Tag $tag
     if ($launcherRevision -ne $RequiredLauncherRevision) {
-        Write-Output "Release $tag launcher revision is '$launcherRevision', expected '$RequiredLauncherRevision'"
+        Write-Host "Release $tag launcher revision is '$launcherRevision', expected '$RequiredLauncherRevision'"
         return $false
     }
 
@@ -111,7 +111,7 @@ if (Test-PortableReleaseComplete -Version $latestVersion) {
 $tag = "$ReleaseTagPrefix$latestVersion"
 $existingAssets = Get-ReleaseAssetNames -Tag $tag
 if ($existingAssets.Count -gt 0) {
-    Write-Output "Release $tag exists but is missing qwen.exe; republish required"
+    Write-Output "Release $tag exists but needs republish (missing qwen.exe or outdated launcher)"
 } else {
     Write-Output "New Qwen Code version detected: $latestVersion"
 }
