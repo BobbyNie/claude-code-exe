@@ -30,14 +30,18 @@ jobs:
         shell: pwsh
         run: |
           $versionOutput = .\scripts\check-version.ps1
-          if ($LASTEXITCODE -eq 0) {
+          $code = $LASTEXITCODE
+          if ($code -eq 0) {
             $version = $versionOutput | Select-Object -Last 1
             echo "new_version=true" >> $env:GITHUB_OUTPUT
             echo "version=$version" >> $env:GITHUB_OUTPUT
             echo "New version detected: $version"
-          } else {
+          } elseif ($code -eq 1 -and ($versionOutput -match 'already exists')) {
             echo "new_version=false" >> $env:GITHUB_OUTPUT
             echo "No new version available"
+          } else {
+            Write-Error "Version check failed:`n$versionOutput"
+            exit 1
           }
 
       - name: Download Claude Code
