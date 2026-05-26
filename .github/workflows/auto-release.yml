@@ -43,6 +43,7 @@ jobs:
             Write-Error "Version check failed:`n$versionOutput"
             exit 1
           }
+          exit 0
 
       - name: Download Claude Code
         if: steps.check_version.outputs.new_version == 'true'
