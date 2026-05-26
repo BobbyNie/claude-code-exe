@@ -38,7 +38,6 @@ internal static class Program
             {
                 FileName = nodeExe,
                 Arguments = BuildArguments(cliJs, args),
-                WorkingDirectory = exeDir,
                 UseShellExecute = false,
             };
 

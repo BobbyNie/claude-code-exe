@@ -9,4 +9,4 @@ if not exist "%~dp0data" mkdir "%~dp0data"
 if not exist "%QWEN_HOME%" mkdir "%QWEN_HOME%"
 if not exist "%QWEN_RUNTIME_DIR%" mkdir "%QWEN_RUNTIME_DIR%"
 
-start "" "%~dp0qwen.exe" %*
+"%~dp0qwen.exe" %*

@@ -58,6 +58,7 @@ jobs:
 
           Copy-Item qwen.exe release\
           Copy-Item scripts\qwen\wrapper.bat release\
+          Set-Content -Path release\launcher.revision -Value "2" -Encoding ASCII -NoNewline
 
           @"
           Qwen Code ${{ steps.check_version.outputs.version }} Portable
@@ -109,6 +110,7 @@ jobs:
             --notes "$notes" `
             release\qwen.exe `
             release\wrapper.bat `
+            release\launcher.revision `
             release\README.txt
 
           echo "Release $tag created successfully"

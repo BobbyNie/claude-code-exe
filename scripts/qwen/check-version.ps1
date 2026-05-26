@@ -4,6 +4,7 @@ $ErrorActionPreference = "Stop"
 
 $LatestVersionUrl = "https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/releases/qwen-code/latest/VERSION"
 $ReleaseTagPrefix = "qwencode-v"
+$RequiredLauncherRevision = "2"
 
 function Get-ResponseText {
     param(
@@ -49,6 +50,31 @@ function Get-ReleaseAssetNames {
     return @($release.assets | ForEach-Object { $_.name })
 }
 
+function Get-ReleaseLauncherRevision {
+    param(
+        [string]$Tag
+    )
+
+    $assets = Get-ReleaseAssetNames -Tag $Tag
+    if ($assets -notcontains "launcher.revision") {
+        return $null
+    }
+
+    $tempFile = Join-Path $env:RUNNER_TEMP ([System.IO.Path]::GetRandomFileName())
+    try {
+        gh release download "$Tag" -p "launcher.revision" -O $tempFile 2>$null
+        if (-not $?) {
+            return $null
+        }
+        return (Get-Content $tempFile -Raw).Trim()
+    }
+    finally {
+        if (Test-Path $tempFile) {
+            Remove-Item $tempFile -Force
+        }
+    }
+}
+
 function Test-PortableReleaseComplete {
     param(
         [string]$Version
@@ -61,7 +87,17 @@ function Test-PortableReleaseComplete {
         return $false
     }
 
-    return ($assets -contains "qwen.exe")
+    if ($assets -notcontains "qwen.exe") {
+        return $false
+    }
+
+    $launcherRevision = Get-ReleaseLauncherRevision -Tag $tag
+    if ($launcherRevision -ne $RequiredLauncherRevision) {
+        Write-Output "Release $tag launcher revision is '$launcherRevision', expected '$RequiredLauncherRevision'"
+        return $false
+    }
+
+    return $true
 }
 
 $latestVersion = Get-LatestVersion
