@@ -73,10 +73,9 @@ try {
         $qwenLatest = $qwenLatest.Substring(1)
     }
     $qwenTag = "qwencode-v$qwenLatest"
-    $qwenZip = "qwen-code-$qwenLatest-portable.zip"
     Write-Output "[Qwen] Official latest: $qwenLatest | Expected tag: $qwenTag"
 
-    $qwenError = Test-ReleaseAssets -Tag $qwenTag -RequiredAssets @($qwenZip, "wrapper.bat", "README.txt")
+    $qwenError = Test-ReleaseAssets -Tag $qwenTag -RequiredAssets @("qwen.exe", "wrapper.bat", "README.txt")
     if ($qwenError) {
         $failures += "[Qwen] $qwenError"
         Write-Output "[Qwen] FAIL: $qwenError"

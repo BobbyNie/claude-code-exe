@@ -1,4 +1,4 @@
-# Download the official Qwen Code Windows standalone archive.
+# Download the official Qwen Code Windows standalone archive and build qwen.exe.
 
 param(
     [Parameter(Mandatory = $true)]
@@ -133,6 +133,14 @@ if (-not (Verify-Checksum -FilePath $ArchivePath -ExpectedHash $expectedChecksum
 Expand-ArchiveSafely -ZipPath $ArchivePath -Destination $ExtractDir
 Remove-Item $ArchivePath -Force
 
-$rootSize = (Get-ChildItem $ExtractDir -Recurse | Measure-Object -Property Length -Sum).Sum
-Write-Output "Extracted package size: $rootSize bytes ($([math]::Round($rootSize / 1MB, 2)) MB)"
-Write-Output "Download and extraction complete!"
+& (Join-Path $PSScriptRoot "build-qwen-exe.ps1") -Version $Version -SourceDir $ExtractDir -OutputDir $OutputDir
+
+if (-not (Test-Path (Join-Path $OutputDir "qwen.exe"))) {
+    Write-Error "qwen.exe was not created"
+}
+
+Remove-Item $ExtractDir -Recurse -Force
+
+$exeInfo = Get-Item (Join-Path $OutputDir "qwen.exe")
+Write-Output "qwen.exe size: $($exeInfo.Length) bytes ($([math]::Round($exeInfo.Length / 1MB, 2)) MB)"
+Write-Output "Download and packaging complete!"

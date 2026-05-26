@@ -44,7 +44,7 @@ jobs:
           }
           exit 0
 
-      - name: Download Qwen Code
+      - name: Download and build qwen.exe
         if: steps.check_version.outputs.new_version == 'true'
         shell: pwsh
         run: |
@@ -54,29 +54,20 @@ jobs:
         if: steps.check_version.outputs.new_version == 'true'
         shell: pwsh
         run: |
-          $version = "${{ steps.check_version.outputs.version }}"
-          $releaseDir = "release-qwen"
-          $archiveName = "qwen-code-$version-portable.zip"
+          mkdir release
 
-          if (Test-Path $releaseDir) {
-            Remove-Item $releaseDir -Recurse -Force
-          }
-          New-Item -ItemType Directory -Path $releaseDir | Out-Null
-
-          Copy-Item -Recurse qwen-code (Join-Path $releaseDir "qwen-code")
-          Copy-Item scripts\qwen\wrapper.bat (Join-Path $releaseDir "wrapper.bat")
+          Copy-Item qwen.exe release\
+          Copy-Item scripts\qwen\wrapper.bat release\
 
           @"
-          Qwen Code $version Portable
-          =====================================
+          Qwen Code ${{ steps.check_version.outputs.version }} Portable
+          ====================================================
 
           使用 wrapper.bat 启动以获得完整的便携体验：
           双击 wrapper.bat 或在命令行运行 wrapper.bat
 
           所有配置和数据将存储在 data\ 目录下。
-          "@ | Out-File -Encoding UTF8 (Join-Path $releaseDir "README.txt")
-
-          Compress-Archive -Path (Join-Path $releaseDir "*") -DestinationPath $archiveName -Force
+          "@ | Out-File -Encoding UTF8 release\README.txt
 
       - name: Create Release
         if: steps.check_version.outputs.new_version == 'true'
@@ -87,7 +78,11 @@ jobs:
           $version = "${{ steps.check_version.outputs.version }}"
           $tag = "qwencode-v$version"
           $title = "Qwen Code $version Portable"
-          $archiveName = "qwen-code-$version-portable.zip"
+
+          if (gh release view "$tag" 2>$null) {
+            Write-Output "Removing outdated release $tag before republishing qwen.exe"
+            gh release delete "$tag" -y --cleanup-tag
+          }
 
           $notes = @"
           ## Qwen Code $version Portable
@@ -95,13 +90,11 @@ jobs:
           自动从官方 Qwen Code Windows 独立版封装为便携版。
 
           ### 文件说明
-          - ``$archiveName`` - 完整便携包（含官方运行时与启动脚本）
-          - ``wrapper.bat`` - 便携启动脚本（推荐使用）
-          - ``README.txt`` - 使用说明
+          - ``qwen.exe`` - 主程序（内嵌官方运行时，首次运行解压到 ``.qwen-runtime``）
+          - ``wrapper.bat`` - 启动脚本（推荐使用）
 
           ### 使用方法
-          1. 下载并解压 ``$archiveName``
-          2. 使用 ``wrapper.bat`` 启动，确保配置与运行数据保存在便携目录内
+          推荐使用 ``wrapper.bat`` 启动，确保所有数据存储在便携目录内。
 
           ### 官方链接
           - [Qwen Code 官网](https://qwen.ai/qwencode)
@@ -114,8 +107,8 @@ jobs:
           gh release create "$tag" `
             --title "$title" `
             --notes "$notes" `
-            $archiveName `
-            release-qwen\wrapper.bat `
-            release-qwen\README.txt
+            release\qwen.exe `
+            release\wrapper.bat `
+            release\README.txt
 
           echo "Release $tag created successfully"

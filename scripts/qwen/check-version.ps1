@@ -1,4 +1,4 @@
-# Check Qwen Code version and whether this repo already published it.
+# Check Qwen Code version and whether this repo already published qwen.exe.
 
 $ErrorActionPreference = "Stop"
 
@@ -35,24 +35,50 @@ function Get-LatestVersion {
     }
 }
 
-function Test-VersionExists {
+function Get-ReleaseAssetNames {
+    param(
+        [string]$Tag
+    )
+
+    $releaseJson = gh release view "$Tag" --json assets 2>$null
+    if (-not $?) {
+        return @()
+    }
+
+    $release = $releaseJson | ConvertFrom-Json
+    return @($release.assets | ForEach-Object { $_.name })
+}
+
+function Test-PortableReleaseComplete {
     param(
         [string]$Version
     )
 
     $tag = "$ReleaseTagPrefix$Version"
-    $null = gh release view "$tag" 2>$null
-    return $?
+    $assets = Get-ReleaseAssetNames -Tag $tag
+
+    if ($assets.Count -eq 0) {
+        return $false
+    }
+
+    return ($assets -contains "qwen.exe")
 }
 
 $latestVersion = Get-LatestVersion
 Write-Output "Latest Qwen Code version: $latestVersion"
 
-if (Test-VersionExists -Version $latestVersion) {
-    Write-Output "Version $latestVersion already exists as release $ReleaseTagPrefix$latestVersion"
+if (Test-PortableReleaseComplete -Version $latestVersion) {
+    Write-Output "Version $latestVersion already exists as release $ReleaseTagPrefix$latestVersion with qwen.exe"
     exit 1
 }
 
-Write-Output "New Qwen Code version detected: $latestVersion"
+$tag = "$ReleaseTagPrefix$latestVersion"
+$existingAssets = Get-ReleaseAssetNames -Tag $tag
+if ($existingAssets.Count -gt 0) {
+    Write-Output "Release $tag exists but is missing qwen.exe; republish required"
+} else {
+    Write-Output "New Qwen Code version detected: $latestVersion"
+}
+
 Write-Output $latestVersion
 exit 0
