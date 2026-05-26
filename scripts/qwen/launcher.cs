@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Reflection;
+using System.Text;
 
 internal static class Program
 {
@@ -14,7 +15,8 @@ internal static class Program
     {
         try
         {
-            string exeDir = Path.GetDirectoryName(Environment.ProcessPath);
+            string exePath = Assembly.GetExecutingAssembly().Location;
+            string exeDir = Path.GetDirectoryName(exePath);
             if (string.IsNullOrEmpty(exeDir))
             {
                 exeDir = Directory.GetCurrentDirectory();
@@ -35,30 +37,69 @@ internal static class Program
             var startInfo = new ProcessStartInfo
             {
                 FileName = nodeExe,
+                Arguments = BuildArguments(cliJs, args),
                 WorkingDirectory = exeDir,
                 UseShellExecute = false,
             };
 
-            startInfo.ArgumentList.Add(cliJs);
-            foreach (var arg in args)
+            using (var process = Process.Start(startInfo))
             {
-                startInfo.ArgumentList.Add(arg);
-            }
+                if (process == null)
+                {
+                    return 1;
+                }
 
-            using var process = Process.Start(startInfo);
-            if (process == null)
-            {
-                return 1;
+                process.WaitForExit();
+                return process.ExitCode;
             }
-
-            process.WaitForExit();
-            return process.ExitCode;
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine(ex.Message);
             return 1;
         }
+    }
+
+    private static string BuildArguments(string cliJs, string[] args)
+    {
+        var builder = new StringBuilder();
+        builder.Append('"').Append(cliJs).Append('"');
+
+        foreach (var arg in args)
+        {
+            builder.Append(' ');
+            builder.Append(QuoteArgument(arg));
+        }
+
+        return builder.ToString();
+    }
+
+    private static string QuoteArgument(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return "\"\"";
+        }
+
+        if (value.IndexOfAny(new[] { ' ', '\t', '"', '\n', '\r' }) < 0)
+        {
+            return value;
+        }
+
+        var quoted = new StringBuilder();
+        quoted.Append('"');
+        foreach (var ch in value)
+        {
+            if (ch == '\\' || ch == '"')
+            {
+                quoted.Append('\\');
+            }
+
+            quoted.Append(ch);
+        }
+
+        quoted.Append('"');
+        return quoted.ToString();
     }
 
     private static void EnsureRuntimeExtracted(string runtimeDir)
@@ -74,32 +115,34 @@ internal static class Program
 
         if (Directory.Exists(runtimeDir))
         {
-            Directory.Delete(runtimeDir, recursive: true);
+            Directory.Delete(runtimeDir, true);
         }
 
         Directory.CreateDirectory(runtimeDir);
 
-        using Stream? resourceStream = Assembly.GetExecutingAssembly().GetManifestResourceStream(EmbeddedResourceName);
-        if (resourceStream == null)
+        using (Stream resourceStream = Assembly.GetExecutingAssembly().GetManifestResourceStream(EmbeddedResourceName))
         {
-            throw new InvalidOperationException("Embedded Qwen Code runtime archive not found.");
-        }
-
-        string tempZip = Path.Combine(Path.GetTempPath(), "qwen-runtime-" + Guid.NewGuid().ToString("N") + ".zip");
-        try
-        {
-            using (var fileStream = File.Create(tempZip))
+            if (resourceStream == null)
             {
-                resourceStream.CopyTo(fileStream);
+                throw new InvalidOperationException("Embedded Qwen Code runtime archive not found.");
             }
 
-            ZipFile.ExtractToDirectory(tempZip, runtimeDir);
-        }
-        finally
-        {
-            if (File.Exists(tempZip))
+            string tempZip = Path.Combine(Path.GetTempPath(), "qwen-runtime-" + Guid.NewGuid().ToString("N") + ".zip");
+            try
             {
-                File.Delete(tempZip);
+                using (var fileStream = File.Create(tempZip))
+                {
+                    resourceStream.CopyTo(fileStream);
+                }
+
+                ZipFile.ExtractToDirectory(tempZip, runtimeDir);
+            }
+            finally
+            {
+                if (File.Exists(tempZip))
+                {
+                    File.Delete(tempZip);
+                }
             }
         }
 
@@ -108,14 +151,18 @@ internal static class Program
 
     private static string ReadEmbeddedVersion()
     {
-        using Stream? versionStream = Assembly.GetExecutingAssembly().GetManifestResourceStream("QwenVersion");
-        if (versionStream == null)
+        using (Stream versionStream = Assembly.GetExecutingAssembly().GetManifestResourceStream("QwenVersion"))
         {
-            return "unknown";
-        }
+            if (versionStream == null)
+            {
+                return "unknown";
+            }
 
-        using var reader = new StreamReader(versionStream);
-        return reader.ReadToEnd().Trim();
+            using (var reader = new StreamReader(versionStream))
+            {
+                return reader.ReadToEnd().Trim();
+            }
+        }
     }
 
     private static string ReadInstalledVersion(string runtimeDir)
