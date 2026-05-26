@@ -18,6 +18,21 @@ $ChecksumUrl = "$BaseUrl/SHA256SUMS"
 $ArchivePath = Join-Path $OutputDir $ArchiveName
 $ExtractDir = Join-Path $OutputDir "qwen-code"
 
+function Get-ResponseText {
+    param(
+        [string]$Url
+    )
+
+    $response = Invoke-WebRequest -Uri $Url -UseBasicParsing
+    $content = $response.Content
+
+    if ($content -is [byte[]]) {
+        return [System.Text.Encoding]::UTF8.GetString($content)
+    }
+
+    return [string]$content
+}
+
 function Download-File {
     param(
         [string]$Url,
@@ -41,7 +56,8 @@ function Get-ExpectedChecksum {
     param([string]$Url)
 
     try {
-        $checksums = (Invoke-WebRequest -Uri $Url -UseBasicParsing).Content -split "`n"
+        $checksumText = Get-ResponseText -Url $Url
+        $checksums = $checksumText -split "`r?`n"
         foreach ($line in $checksums) {
             $trimmed = $line.Trim()
             if ($trimmed -match "^([a-f0-9]{64})\s+$ArchiveName$") {
