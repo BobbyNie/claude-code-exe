@@ -5,10 +5,25 @@ $ErrorActionPreference = "Stop"
 $LatestVersionUrl = "https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/releases/qwen-code/latest/VERSION"
 $ReleaseTagPrefix = "qwencode-v"
 
+function Get-ResponseText {
+    param(
+        [string]$Url
+    )
+
+    $response = Invoke-WebRequest -Uri $Url -UseBasicParsing
+    $content = $response.Content
+
+    if ($content -is [byte[]]) {
+        return [System.Text.Encoding]::UTF8.GetString($content)
+    }
+
+    return [string]$content
+}
+
 function Get-LatestVersion {
     try {
-        $response = Invoke-WebRequest -Uri $LatestVersionUrl -UseBasicParsing
-        $version = $response.Content.Trim().Trim([char]0xFEFF)
+        $version = Get-ResponseText -Url $LatestVersionUrl
+        $version = $version.Trim().Trim([char]0xFEFF)
         if ($version.StartsWith("v")) {
             $version = $version.Substring(1)
         }
