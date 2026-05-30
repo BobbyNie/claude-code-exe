@@ -1,16 +1,16 @@
-name: Auto Release Claude Code Portable
+name: Auto Release AI Tools Portable
 
 on:
   schedule:
-    # Run every day at 00:00 UTC
     - cron: '0 0 * * *'
-  workflow_dispatch:  # Allow manual triggering
+  workflow_dispatch:
   push:
     branches:
       - main
     paths:
       - '.github/workflows/auto-release.yml'
       - 'scripts/**'
+      - 'tests/**'
 
 permissions:
   contents: write
@@ -23,92 +23,151 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Check for new version
-        id: check_version
+      - name: Check for new bundle release
+        id: check_versions
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: pwsh
         run: |
-          $versionOutput = .\scripts\check-version.ps1
+          $versionOutput = .\scripts\check-all-versions.ps1
           $code = $LASTEXITCODE
+
+          $info = @{}
+          foreach ($line in $versionOutput) {
+            Write-Output $line
+            if ($line -match '^([a-z_]+)=(.*)$') {
+              $info[$Matches[1]] = $Matches[2]
+            }
+          }
+
           if ($code -eq 0) {
-            $version = $versionOutput | Select-Object -Last 1
-            echo "new_version=true" >> $env:GITHUB_OUTPUT
-            echo "version=$version" >> $env:GITHUB_OUTPUT
-            echo "New version detected: $version"
-          } elseif ($code -eq 1 -and ($versionOutput -match 'already exists')) {
-            echo "new_version=false" >> $env:GITHUB_OUTPUT
-            echo "No new version available"
+            $required = @(
+              "release_tag",
+              "claude_version",
+              "qwen_version",
+              "codex_app_version",
+              "codex_cli_version"
+            )
+
+            foreach ($key in $required) {
+              if (-not $info.ContainsKey($key) -or -not $info[$key]) {
+                Write-Error "Missing output from check-all-versions.ps1: $key"
+                exit 1
+              }
+            }
+
+            echo "new_release=true" >> $env:GITHUB_OUTPUT
+            echo "release_tag=$($info.release_tag)" >> $env:GITHUB_OUTPUT
+            echo "claude_version=$($info.claude_version)" >> $env:GITHUB_OUTPUT
+            echo "qwen_version=$($info.qwen_version)" >> $env:GITHUB_OUTPUT
+            echo "codex_app_version=$($info.codex_app_version)" >> $env:GITHUB_OUTPUT
+            echo "codex_cli_version=$($info.codex_cli_version)" >> $env:GITHUB_OUTPUT
+            echo "New bundle release detected: $($info.release_tag)"
+          } elseif ($code -eq 1 -and (($versionOutput -join "`n") -match 'already exists')) {
+            echo "new_release=false" >> $env:GITHUB_OUTPUT
+            echo "No new bundle release available"
           } else {
-            Write-Error "Version check failed:`n$versionOutput"
+            Write-Error "Bundle version check failed:`n$($versionOutput -join "`n")"
             exit 1
           }
           exit 0
 
       - name: Download Claude Code
-        if: steps.check_version.outputs.new_version == 'true'
+        if: steps.check_versions.outputs.new_release == 'true'
         shell: pwsh
         run: |
-          .\scripts\download.ps1 -Version ${{ steps.check_version.outputs.version }} -OutputDir .
+          .\scripts\download.ps1 -Version ${{ steps.check_versions.outputs.claude_version }} -OutputDir .
 
-      - name: Prepare portable package
-        if: steps.check_version.outputs.new_version == 'true'
+      - name: Download and build Qwen Code
+        if: steps.check_versions.outputs.new_release == 'true'
         shell: pwsh
         run: |
-          # Create release directory
-          mkdir release
+          .\scripts\qwen\download.ps1 -Version ${{ steps.check_versions.outputs.qwen_version }} -OutputDir .
 
-          # Copy files to release directory
-          Copy-Item claude.exe release\
-          Copy-Item scripts\wrapper.bat release\
+      - name: Download Codex app installer
+        if: steps.check_versions.outputs.new_release == 'true'
+        shell: pwsh
+        run: |
+          .\scripts\codex\download-app.ps1 -Version ${{ steps.check_versions.outputs.codex_app_version }} -OutputDir .
 
-          # Create a simple README for the release
+      - name: Download Codex CLI
+        if: steps.check_versions.outputs.new_release == 'true'
+        shell: pwsh
+        run: |
+          .\scripts\codex\download-cli.ps1 -Version ${{ steps.check_versions.outputs.codex_cli_version }} -OutputDir .
+
+      - name: Prepare release assets
+        if: steps.check_versions.outputs.new_release == 'true'
+        shell: pwsh
+        run: |
+          if (Test-Path release) {
+            Remove-Item release -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path release | Out-Null
+
+          Copy-Item claude.exe release\claude.exe
+          Copy-Item qwen.exe release\qwen.exe
+          Copy-Item Codex-Installer.exe release\Codex-Installer.exe
+          Copy-Item codex.exe release\codex.exe
+          Copy-Item scripts\wrapper.bat release\claude-wrapper.bat
+          Copy-Item scripts\qwen\wrapper.bat release\qwen-wrapper.bat
+          Copy-Item scripts\codex\wrapper.bat release\codex-wrapper.bat
+          Set-Content -Path release\qwen-launcher.revision -Value "3" -Encoding ASCII -NoNewline
+
           @"
-          Claude Code ${{ steps.check_version.outputs.version }} Portable
-          ====================================================
+          AI Tools Portable Bundle
+          ========================
 
-          使用 wrapper.bat 启动以获得完整的便携体验：
-          双击 wrapper.bat 或在命令行运行 wrapper.bat
+          Versions:
+          - Claude Code: ${{ steps.check_versions.outputs.claude_version }}
+          - Qwen Code: ${{ steps.check_versions.outputs.qwen_version }}
+          - Codex App: ${{ steps.check_versions.outputs.codex_app_version }}
+          - Codex CLI: ${{ steps.check_versions.outputs.codex_cli_version }}
 
-          所有配置和数据将存储在 data\ 目录下。
+          Assets:
+          - claude.exe / claude-wrapper.bat
+          - qwen.exe / qwen-wrapper.bat
+          - Codex-Installer.exe
+          - codex.exe / codex-wrapper.bat
           "@ | Out-File -Encoding UTF8 release\README.txt
 
       - name: Create Release
-        if: steps.check_version.outputs.new_version == 'true'
+        if: steps.check_versions.outputs.new_release == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: pwsh
         run: |
-          $version = "v${{ steps.check_version.outputs.version }}"
-          $title = "Claude Code ${{ steps.check_version.outputs.version }} Portable"
+          $tag = "${{ steps.check_versions.outputs.release_tag }}"
+          $title = "AI Tools Portable Bundle"
+          $claudeVersion = "${{ steps.check_versions.outputs.claude_version }}"
+          $qwenVersion = "${{ steps.check_versions.outputs.qwen_version }}"
+          $codexAppVersion = "${{ steps.check_versions.outputs.codex_app_version }}"
+          $codexCliVersion = "${{ steps.check_versions.outputs.codex_cli_version }}"
 
-          # Create release notes
+          if (gh release view "$tag" 2>$null) {
+            Write-Output "Removing incomplete release $tag before republishing"
+            gh release delete "$tag" -y --cleanup-tag
+          }
+
           $notes = @"
-          ## Claude Code ${{ steps.check_version.outputs.version }} Portable
-
-          自动从官方源获取的最新版本。
-
-          ### 文件说明
-          - \`claude.exe\` - 主程序
-          - \`wrapper.bat\` - 启动脚本（推荐使用）
-
-          ### 使用方法
-          推荐使用 \`wrapper.bat\` 启动，确保所有数据存储在便携目录内。
-
-          ### 官方链接
-          - [Claude Code 官网](https://claude.ai/code)
-          - [官方文档](https://docs.anthropic.com/en/docs/build-with-claude/claude-for-developers)
-
-          ---
-          自动发布于 $(Get-Date -Format "yyyy-MM-dd HH:mm:ss") UTC
+          ## Versions
+          - Claude Code: $claudeVersion
+          - Qwen Code: $qwenVersion
+          - Codex App: $codexAppVersion
+          - Codex CLI: $codexCliVersion
           "@
 
-          # Create release using GitHub CLI
-          gh release create "$version" `
+          gh release create "$tag" `
             --title "$title" `
             --notes "$notes" `
             release\claude.exe `
-            release\wrapper.bat `
+            release\qwen.exe `
+            release\Codex-Installer.exe `
+            release\codex.exe `
+            release\claude-wrapper.bat `
+            release\qwen-wrapper.bat `
+            release\codex-wrapper.bat `
+            release\qwen-launcher.revision `
             release\README.txt
 
-          echo "Release $version created successfully"
+          echo "Release $tag created successfully"

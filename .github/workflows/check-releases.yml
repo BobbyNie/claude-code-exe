@@ -9,7 +9,10 @@ on:
       - main
     paths:
       - '.github/workflows/check-releases.yml'
+      - 'scripts/check-all-versions.ps1'
       - 'scripts/check-github-releases.ps1'
+      - 'scripts/codex/**'
+      - 'scripts/qwen/**'
 
 permissions:
   contents: read
