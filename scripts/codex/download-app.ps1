@@ -67,6 +67,7 @@ $wingetArgs = @(
     "--skip-license",
     "--download-directory", $DownloadRoot,
     "--accept-source-agreements",
+    "--accept-package-agreements",
     "--disable-interactivity"
 )
 

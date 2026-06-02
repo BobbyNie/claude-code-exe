@@ -77,6 +77,7 @@ class ReleaseBundleTests(unittest.TestCase):
 
         self.assertIn("winget download", app_script)
         self.assertIn("--skip-license", app_script)
+        self.assertIn("--accept-package-agreements", app_script)
         self.assertIn("9PLM9XGG6VKS", app_script)
         self.assertIn("Codex.msix", app_script)
 
