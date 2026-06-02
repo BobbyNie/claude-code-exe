@@ -48,12 +48,21 @@ if (-not $codexEntry) {
 }
 
 Write-Output "Selected package: $($codexEntry.FileName)"
+Write-Output "Candidate Microsoft CDN URLs: $(@($codexEntry.URLS).Count)"
 
 $downloaded = $false
 foreach ($url in @($codexEntry.URLS)) {
     try {
         Write-Output "Downloading from Microsoft CDN: $url"
         Invoke-WebRequest -Uri $url -OutFile $OutputFile -UseBasicParsing
+        $candidateInfo = Get-Item $OutputFile
+        Write-Output "Candidate size: $($candidateInfo.Length) bytes ($([math]::Round($candidateInfo.Length / 1MB, 2)) MB)"
+        if ($candidateInfo.Length -lt 100MB) {
+            Remove-Item $OutputFile -Force
+            Write-Warning "Candidate URL returned an unexpectedly small file; trying next URL"
+            continue
+        }
+
         $downloaded = $true
         break
     }
