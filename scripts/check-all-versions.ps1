@@ -81,19 +81,52 @@ function Get-QwenLatestVersion {
     return $version
 }
 
-function Get-CodexAppLatestVersion {
+function Get-CodexAppPackageInfo {
     $product = Invoke-JsonRequest -Url $CodexAppProductUrl
-    $revision = $product.Product.Properties.RevisionId
+    $packages = @()
 
-    if (-not $revision) {
-        $revision = $product.Product.LastModifiedDate
+    foreach ($availability in @($product.Product.DisplaySkuAvailabilities)) {
+        if ($availability.Sku -and $availability.Sku.Properties -and $availability.Sku.Properties.Packages) {
+            $packages += @($availability.Sku.Properties.Packages)
+        }
     }
 
-    if (-not $revision) {
-        return "store-unknown"
+    $package = $packages |
+        Where-Object {
+            $_.PackageFamilyName -eq "OpenAI.Codex_2p2nqsd0c76g0" -and
+            $_.PackageFullName -match "_x64__" -and
+            $_.PackageFormat -eq "Msix"
+        } |
+        Select-Object -First 1
+
+    if (-not $package) {
+        throw "Could not find x64 MSIX package metadata for Codex App"
     }
 
-    return "store-$(Convert-DateVersion -Value $revision)"
+    $packageVersion = $null
+    if ($package.PackageFullName -match "^OpenAI\.Codex_([^_]+)_") {
+        $packageVersion = $Matches[1]
+    }
+
+    if (-not $packageVersion) {
+        $revision = $product.Product.Properties.RevisionId
+        if (-not $revision) {
+            $revision = $product.Product.LastModifiedDate
+        }
+        $packageVersion = "store-$(Convert-DateVersion -Value $revision)"
+    }
+
+    return [pscustomobject]@{
+        Version = $packageVersion
+        PackageFormat = $package.PackageFormat
+        PackageFullName = $package.PackageFullName
+        MaxDownloadSizeInBytes = $package.MaxDownloadSizeInBytes
+    }
+}
+
+function Get-CodexAppLatestVersion {
+    $package = Get-CodexAppPackageInfo
+    return $package.Version
 }
 
 function Get-CodexCliLatestVersion {
@@ -126,7 +159,7 @@ function Get-BundleRequiredAssets {
     return @(
         "claude.exe",
         "qwen.exe",
-        "Codex-Installer.exe",
+        "Codex.msix",
         "codex.exe",
         "README.txt"
     )

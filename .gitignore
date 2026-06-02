@@ -4,3 +4,8 @@ __pycache__/
 release/
 *.exe
 *.zip
+*.appx
+*.appxbundle
+*.msi
+*.msix
+*.msixbundle

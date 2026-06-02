@@ -84,7 +84,7 @@ jobs:
         run: |
           .\scripts\qwen\download.ps1 -Version ${{ steps.check_versions.outputs.qwen_version }} -OutputDir .
 
-      - name: Download Codex app installer
+      - name: Download Codex app offline MSIX
         if: steps.check_versions.outputs.new_release == 'true'
         shell: pwsh
         run: |
@@ -107,7 +107,7 @@ jobs:
 
           Copy-Item claude.exe release\claude.exe
           Copy-Item qwen.exe release\qwen.exe
-          Copy-Item Codex-Installer.exe release\Codex-Installer.exe
+          Copy-Item Codex.msix release\Codex.msix
           Copy-Item codex.exe release\codex.exe
           Copy-Item scripts\wrapper.bat release\claude-wrapper.bat
           Copy-Item scripts\qwen\wrapper.bat release\qwen-wrapper.bat
@@ -127,7 +127,7 @@ jobs:
           Assets:
           - claude.exe / claude-wrapper.bat
           - qwen.exe / qwen-wrapper.bat
-          - Codex-Installer.exe
+          - Codex.msix
           - codex.exe / codex-wrapper.bat
           "@ | Out-File -Encoding UTF8 release\README.txt
 
@@ -162,7 +162,7 @@ jobs:
             --notes "$notes" `
             release\claude.exe `
             release\qwen.exe `
-            release\Codex-Installer.exe `
+            release\Codex.msix `
             release\codex.exe `
             release\claude-wrapper.bat `
             release\qwen-wrapper.bat `

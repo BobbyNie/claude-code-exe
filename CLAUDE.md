@@ -19,7 +19,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Claude 下载 URL: `https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/{version}/win32-x64/claude.exe`
 - Qwen 版本 API: `https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/releases/qwen-code/latest/VERSION`
 - Codex App 元数据: `https://displaycatalog.mp.microsoft.com/v7.0/products/9PLM9XGG6VKS?market=US&languages=en-US&fieldsTemplate=details`
-- Codex App 安装器: `https://get.microsoft.com/installer/download/9PLM9XGG6VKS`
+- Codex App 离线包: Microsoft Store `msstore` 源，Product ID `9PLM9XGG6VKS`，通过 `winget download --skip-license` 下载完整 MSIX
 - Codex CLI Releases: `https://github.com/openai/codex/releases`
 
 ## 文件说明
@@ -34,7 +34,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Qwen Code 版本检测、下载与便携启动脚本。
 
 ### `scripts/codex/`
-Codex App 安装器下载、Codex CLI 下载与便携启动脚本。
+Codex App 离线 MSIX 下载、Codex CLI 下载与便携启动脚本。
 
 ### `scripts/check-all-versions.ps1`
 统一版本检测、bundle tag 生成和 release asset 完整性判断。

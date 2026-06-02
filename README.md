@@ -26,7 +26,7 @@
 
 - `claude.exe` / `claude-wrapper.bat`
 - `qwen.exe` / `qwen-wrapper.bat`
-- `Codex-Installer.exe`
+- `Codex.msix`
 - `codex.exe` / `codex-wrapper.bat`
 
 Release 描述会列出 Claude Code、Qwen Code、Codex App、Codex CLI 各自的版本号。
@@ -79,7 +79,13 @@ qwen-portable/
 
 ### Codex App
 
-运行 `Codex-Installer.exe` 安装官方 Windows 桌面应用。该安装器来自 Microsoft Store 官方下载入口。
+运行完整离线包安装官方 Windows 桌面应用：
+
+```powershell
+Add-AppxPackage -Path .\Codex.msix
+```
+
+Codex App 在 Microsoft Store 清单中的格式是 MSIX，不是 MSI；本项目发布的是完整离线 MSIX 包，不再发布在线安装器 stub。
 
 ### Codex CLI
 
@@ -102,7 +108,7 @@ codex-wrapper.bat
 | --- | --- | --- | --- |
 | Claude Code | `auto-release.yml` | Google Cloud Storage | `claude.exe` + `claude-wrapper.bat` |
 | Qwen Code | `auto-release.yml` | 阿里云 OSS | `qwen.exe` + `qwen-wrapper.bat` |
-| Codex App | `auto-release.yml` | Microsoft Store | `Codex-Installer.exe` |
+| Codex App | `auto-release.yml` | Microsoft Store / WinGet download | `Codex.msix` |
 | Codex CLI | `auto-release.yml` | `openai/codex` GitHub Releases | `codex.exe` + `codex-wrapper.bat` |
 
 ## 免责声明

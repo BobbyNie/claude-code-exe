@@ -28,7 +28,7 @@ class ReleaseBundleTests(unittest.TestCase):
         for asset in (
             "release\\claude.exe",
             "release\\qwen.exe",
-            "release\\Codex-Installer.exe",
+            "release\\Codex.msix",
             "release\\codex.exe",
             "release\\README.txt",
         ):
@@ -53,6 +53,7 @@ class ReleaseBundleTests(unittest.TestCase):
         for function_name in (
             "Get-ClaudeLatestVersion",
             "Get-QwenLatestVersion",
+            "Get-CodexAppPackageInfo",
             "Get-CodexAppLatestVersion",
             "Get-CodexCliLatestVersion",
             "New-BundleReleaseTag",
@@ -63,7 +64,7 @@ class ReleaseBundleTests(unittest.TestCase):
         for required_asset in (
             '"claude.exe"',
             '"qwen.exe"',
-            '"Codex-Installer.exe"',
+            '"Codex.msix"',
             '"codex.exe"',
             '"README.txt"',
         ):
@@ -74,8 +75,10 @@ class ReleaseBundleTests(unittest.TestCase):
         app_script = read("scripts/codex/download-app.ps1")
         cli_script = read("scripts/codex/download-cli.ps1")
 
-        self.assertIn("get.microsoft.com/installer/download/9PLM9XGG6VKS", app_script)
-        self.assertIn("Codex-Installer.exe", app_script)
+        self.assertIn("winget download", app_script)
+        self.assertIn("--skip-license", app_script)
+        self.assertIn("9PLM9XGG6VKS", app_script)
+        self.assertIn("Codex.msix", app_script)
 
         self.assertIn("openai/codex", cli_script)
         self.assertIn("codex-x86_64-pc-windows-msvc.exe", cli_script)
@@ -91,7 +94,7 @@ class ReleaseBundleTests(unittest.TestCase):
         for required_asset in (
             '"claude.exe"',
             '"qwen.exe"',
-            '"Codex-Installer.exe"',
+            '"Codex.msix"',
             '"codex.exe"',
             '"README.txt"',
         ):

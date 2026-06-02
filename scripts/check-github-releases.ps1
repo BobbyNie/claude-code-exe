@@ -14,7 +14,7 @@ $bundle = Get-LatestBundleInfo
 $requiredAssets = @(
     "claude.exe",
     "qwen.exe",
-    "Codex-Installer.exe",
+    "Codex.msix",
     "codex.exe",
     "README.txt"
 )
