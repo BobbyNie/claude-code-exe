@@ -75,9 +75,10 @@ class ReleaseBundleTests(unittest.TestCase):
         app_script = read("scripts/codex/download-app.ps1")
         cli_script = read("scripts/codex/download-cli.ps1")
 
-        self.assertIn("winget download", app_script)
-        self.assertIn("--skip-license", app_script)
-        self.assertIn("--accept-package-agreements", app_script)
+        self.assertIn("GetStoreURL.ps1", app_script)
+        self.assertIn("Get-StoreURLs", app_script)
+        self.assertIn("fe3.delivery.mp.microsoft.com", app_script)
+        self.assertNotIn("winget download", app_script)
         self.assertIn("9PLM9XGG6VKS", app_script)
         self.assertIn("Codex.msix", app_script)
 

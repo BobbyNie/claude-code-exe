@@ -13,90 +13,59 @@ $ErrorActionPreference = "Stop"
 $ProductId = "9PLM9XGG6VKS"
 $DownloadRoot = Join-Path $OutputDir "codex-app-msix-download"
 $OutputFile = Join-Path $OutputDir "Codex.msix"
-
-function Get-WingetPath {
-    $command = Get-Command winget -ErrorAction SilentlyContinue
-    if ($command) {
-        return $command.Source
-    }
-
-    $candidates = @()
-    $windowsApps = Join-Path $env:ProgramFiles "WindowsApps"
-    if (Test-Path $windowsApps) {
-        $candidates += Get-ChildItem `
-            -Path (Join-Path $windowsApps "Microsoft.DesktopAppInstaller_*_x64__8wekyb3d8bbwe\winget.exe") `
-            -ErrorAction SilentlyContinue
-    }
-
-    $localWinget = Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\winget.exe"
-    if (Test-Path $localWinget) {
-        $candidates += Get-Item $localWinget
-    }
-
-    $winget = $candidates | Sort-Object FullName -Descending | Select-Object -First 1
-    if ($winget) {
-        return $winget.FullName
-    }
-
-    return $null
-}
+$HelperUrl = "https://raw.githubusercontent.com/MattiasC85/Scripts/3687ec33533443bd47e09fada3ec180a78383b5b/OSD/GetStoreURL.ps1"
+$HelperPath = Join-Path $OutputDir "GetStoreURL.ps1"
 
 Write-Output "=== Codex App Offline MSIX Download Script ==="
 Write-Output "Target version: $Version"
 Write-Output "Product ID: $ProductId"
 Write-Output "Saving to: $OutputFile"
 
-$wingetPath = Get-WingetPath
-if (-not $wingetPath) {
-    Write-Error "winget.exe is required to download the Microsoft Store offline MSIX package"
-}
-
-Write-Output "Using winget: $wingetPath"
-Write-Output "Running winget download for Codex App"
-
 if (Test-Path $DownloadRoot) {
     Remove-Item $DownloadRoot -Recurse -Force
 }
 New-Item -ItemType Directory -Path $DownloadRoot | Out-Null
 
-$wingetArgs = @(
-    "download",
-    "--id", $ProductId,
-    "--exact",
-    "--source", "msstore",
-    "--skip-license",
-    "--download-directory", $DownloadRoot,
-    "--accept-source-agreements",
-    "--accept-package-agreements",
-    "--disable-interactivity"
-)
+Write-Output "Downloading Microsoft Store URL helper: $HelperUrl"
+Invoke-WebRequest -Uri $HelperUrl -OutFile $HelperPath -UseBasicParsing
 
-& $wingetPath @wingetArgs
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "winget download failed with exit code $LASTEXITCODE"
+. $HelperPath
+
+if (-not (Get-Command Get-StoreURLs -ErrorAction SilentlyContinue)) {
+    Write-Error "GetStoreURL.ps1 did not define Get-StoreURLs"
 }
 
-$packageFiles = Get-ChildItem -Path $DownloadRoot -Recurse -File |
-    Where-Object { $_.Extension -in @(".msix", ".msixbundle", ".appx", ".appxbundle", ".msi") }
-
-$codexPackage = $packageFiles |
-    Where-Object { $_.Name -like "OpenAI.Codex*" -or $_.Name -like "*Codex*" } |
-    Sort-Object Length -Descending |
+Write-Output "Resolving temporary Microsoft CDN URLs via fe3.delivery.mp.microsoft.com"
+$storeUrls = @(Get-StoreURLs -ProductNumber $ProductId -Architecture x64)
+$codexEntry = $storeUrls |
+    Where-Object { $_.FileName -match "OpenAI\.Codex.*_x64.*\.msix$" } |
     Select-Object -First 1
 
-if (-not $codexPackage) {
-    $codexPackage = $packageFiles | Sort-Object Length -Descending | Select-Object -First 1
+if (-not $codexEntry) {
+    Write-Output "Available Microsoft Store package entries:"
+    $storeUrls | ForEach-Object { Write-Output "  - $($_.FileName)" }
+    Write-Error "Could not find Codex x64 MSIX package in Microsoft Store response"
 }
 
-if (-not $codexPackage) {
-    Write-Error "winget download did not produce an offline app package"
+Write-Output "Selected package: $($codexEntry.FileName)"
+
+$downloaded = $false
+foreach ($url in @($codexEntry.URLS)) {
+    try {
+        Write-Output "Downloading from Microsoft CDN: $url"
+        Invoke-WebRequest -Uri $url -OutFile $OutputFile -UseBasicParsing
+        $downloaded = $true
+        break
+    }
+    catch {
+        Write-Warning "Download URL failed: $_"
+    }
 }
 
-if ($codexPackage.Extension -ine ".msix") {
-    Write-Error "Expected Codex offline package to be MSIX, got: $($codexPackage.Name)"
+if (-not $downloaded) {
+    Write-Error "All Microsoft CDN download URLs failed"
 }
 
-Copy-Item $codexPackage.FullName $OutputFile -Force
 Remove-Item $DownloadRoot -Recurse -Force
 
 $fileInfo = Get-Item $OutputFile

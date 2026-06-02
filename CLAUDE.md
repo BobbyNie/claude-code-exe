@@ -19,7 +19,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Claude 下载 URL: `https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/{version}/win32-x64/claude.exe`
 - Qwen 版本 API: `https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/releases/qwen-code/latest/VERSION`
 - Codex App 元数据: `https://displaycatalog.mp.microsoft.com/v7.0/products/9PLM9XGG6VKS?market=US&languages=en-US&fieldsTemplate=details`
-- Codex App 离线包: Microsoft Store `msstore` 源，Product ID `9PLM9XGG6VKS`，通过 `winget download --skip-license` 下载完整 MSIX
+- Codex App 离线包: Microsoft Store metadata，Product ID `9PLM9XGG6VKS`，通过 Microsoft FE3/CDN 临时链接下载完整 MSIX
 - Codex CLI Releases: `https://github.com/openai/codex/releases`
 
 ## 文件说明

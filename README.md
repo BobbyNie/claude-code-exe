@@ -108,7 +108,7 @@ codex-wrapper.bat
 | --- | --- | --- | --- |
 | Claude Code | `auto-release.yml` | Google Cloud Storage | `claude.exe` + `claude-wrapper.bat` |
 | Qwen Code | `auto-release.yml` | 阿里云 OSS | `qwen.exe` + `qwen-wrapper.bat` |
-| Codex App | `auto-release.yml` | Microsoft Store / WinGet download | `Codex.msix` |
+| Codex App | `auto-release.yml` | Microsoft Store metadata / Microsoft CDN | `Codex.msix` |
 | Codex CLI | `auto-release.yml` | `openai/codex` GitHub Releases | `codex.exe` + `codex-wrapper.bat` |
 
 ## 免责声明
