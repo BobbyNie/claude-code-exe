@@ -85,8 +85,7 @@ void RemoveOriginalEnvironmentPrefixes() {
     FreeEnvironmentStringsW(block);
 }
 
-bool InjectDll(HANDLE process, const fs::path& dllPath) {
-    const std::wstring path = dllPath.wstring();
+bool LoadRemoteLibrary(HANDLE process, const std::wstring& path) {
     const SIZE_T bytes = (path.size() + 1) * sizeof(wchar_t);
     void* remote = VirtualAllocEx(process, nullptr, bytes, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
     if (!remote) return false;
@@ -113,6 +112,12 @@ bool InjectDll(HANDLE process, const fs::path& dllPath) {
     CloseHandle(thread);
     VirtualFreeEx(process, remote, 0, MEM_RELEASE);
     return result != 0;
+}
+
+bool InjectDll(HANDLE process, const fs::path& dllPath) {
+    return LoadRemoteLibrary(process, L"ucrtbase.dll") &&
+           LoadRemoteLibrary(process, L"ws2_32.dll") &&
+           LoadRemoteLibrary(process, dllPath.wstring());
 }
 
 bool IsBlockedCommand(int argc, wchar_t** argv) {
