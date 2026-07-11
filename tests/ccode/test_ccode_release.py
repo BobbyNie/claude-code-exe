@@ -44,6 +44,7 @@ class CcodeReleaseTests(unittest.TestCase):
         self.assertIn("cc-runtime.dll", build)
         self.assertIn("RCDATA", build)
         self.assertIn("ccode.exe", build)
+        self.assertIn("hook-integration-tests.cpp", build)
 
 
 if __name__ == "__main__":

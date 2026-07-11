@@ -5,6 +5,8 @@
 #include <cstring>
 #include <cstdlib>
 #include <string>
+#include <unordered_set>
+#include <vector>
 
 #include "MinHook.h"
 #include "common.hpp"
@@ -12,6 +14,10 @@
 namespace {
 decltype(&GetEnvironmentVariableW) OriginalGetEnvironmentVariableW = nullptr;
 decltype(&GetEnvironmentVariableA) OriginalGetEnvironmentVariableA = nullptr;
+decltype(&GetEnvironmentStringsW) OriginalGetEnvironmentStringsW = nullptr;
+decltype(&GetEnvironmentStringsA) OriginalGetEnvironmentStringsA = nullptr;
+decltype(&FreeEnvironmentStringsW) OriginalFreeEnvironmentStringsW = nullptr;
+decltype(&FreeEnvironmentStringsA) OriginalFreeEnvironmentStringsA = nullptr;
 decltype(&SetEnvironmentVariableW) OriginalSetEnvironmentVariableW = nullptr;
 decltype(&SetEnvironmentVariableA) OriginalSetEnvironmentVariableA = nullptr;
 decltype(&getenv) OriginalGetEnv = nullptr;
@@ -35,6 +41,9 @@ decltype(&FindFirstFileA) OriginalFindFirstFileA = nullptr;
 decltype(&GetAddrInfoW) OriginalGetAddrInfoW = nullptr;
 decltype(&getaddrinfo) OriginalGetAddrInfoA = nullptr;
 
+SRWLOCK SyntheticEnvironmentLock = SRWLOCK_INIT;
+std::unordered_set<void*> SyntheticEnvironmentBlocks;
+
 std::wstring Widen(const char* value) {
     if (!value) return {};
     const int size = MultiByteToWideChar(CP_ACP, 0, value, -1, nullptr, 0);
@@ -50,6 +59,100 @@ std::string Narrow(const std::wstring& value) {
     if (size > 1) WideCharToMultiByte(CP_ACP, 0, value.c_str(), -1, result.data(), size, nullptr, nullptr);
     if (!result.empty()) result.pop_back();
     return result;
+}
+
+std::wstring ExpandEnvironmentEntry(const std::wstring& entry) {
+    const size_t equals = entry.find(L'=');
+    if (equals == std::wstring::npos || equals == 0) return entry;
+    return ccode::ExpandEnvironmentName(entry.substr(0, equals)) + entry.substr(equals);
+}
+
+bool RegisterSyntheticEnvironmentBlock(void* block) {
+    try {
+        AcquireSRWLockExclusive(&SyntheticEnvironmentLock);
+        SyntheticEnvironmentBlocks.insert(block);
+        ReleaseSRWLockExclusive(&SyntheticEnvironmentLock);
+        return true;
+    } catch (...) {
+        ReleaseSRWLockExclusive(&SyntheticEnvironmentLock);
+        return false;
+    }
+}
+
+bool ReleaseSyntheticEnvironmentBlock(void* block) {
+    AcquireSRWLockExclusive(&SyntheticEnvironmentLock);
+    const auto found = SyntheticEnvironmentBlocks.find(block);
+    if (found == SyntheticEnvironmentBlocks.end()) {
+        ReleaseSRWLockExclusive(&SyntheticEnvironmentLock);
+        return false;
+    }
+    SyntheticEnvironmentBlocks.erase(found);
+    ReleaseSRWLockExclusive(&SyntheticEnvironmentLock);
+    HeapFree(GetProcessHeap(), 0, block);
+    return true;
+}
+
+LPWCH WINAPI HookGetEnvironmentStringsW() {
+    LPWCH original = OriginalGetEnvironmentStringsW();
+    if (!original) return nullptr;
+
+    std::vector<std::wstring> entries;
+    size_t characters = 1;
+    for (const wchar_t* cursor = original; *cursor; cursor += wcslen(cursor) + 1) {
+        entries.push_back(ExpandEnvironmentEntry(cursor));
+        characters += entries.back().size() + 1;
+    }
+
+    auto* mapped = static_cast<wchar_t*>(
+        HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, characters * sizeof(wchar_t)));
+    if (!mapped) return original;
+
+    wchar_t* output = mapped;
+    for (const auto& entry : entries) {
+        std::memcpy(output, entry.c_str(), entry.size() * sizeof(wchar_t));
+        output += entry.size() + 1;
+    }
+    if (!RegisterSyntheticEnvironmentBlock(mapped)) {
+        HeapFree(GetProcessHeap(), 0, mapped);
+        return original;
+    }
+    OriginalFreeEnvironmentStringsW(original);
+    return mapped;
+}
+
+LPCH WINAPI HookGetEnvironmentStringsA() {
+    LPCH original = OriginalGetEnvironmentStringsA();
+    if (!original) return nullptr;
+
+    std::vector<std::string> entries;
+    size_t characters = 1;
+    for (const char* cursor = original; *cursor; cursor += strlen(cursor) + 1) {
+        entries.push_back(Narrow(ExpandEnvironmentEntry(Widen(cursor))));
+        characters += entries.back().size() + 1;
+    }
+
+    auto* mapped = static_cast<char*>(HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, characters));
+    if (!mapped) return original;
+
+    char* output = mapped;
+    for (const auto& entry : entries) {
+        std::memcpy(output, entry.c_str(), entry.size());
+        output += entry.size() + 1;
+    }
+    if (!RegisterSyntheticEnvironmentBlock(mapped)) {
+        HeapFree(GetProcessHeap(), 0, mapped);
+        return original;
+    }
+    OriginalFreeEnvironmentStringsA(original);
+    return mapped;
+}
+
+BOOL WINAPI HookFreeEnvironmentStringsW(LPWCH block) {
+    return ReleaseSyntheticEnvironmentBlock(block) ? TRUE : OriginalFreeEnvironmentStringsW(block);
+}
+
+BOOL WINAPI HookFreeEnvironmentStringsA(LPCH block) {
+    return ReleaseSyntheticEnvironmentBlock(block) ? TRUE : OriginalFreeEnvironmentStringsA(block);
 }
 
 DWORD WINAPI HookGetEnvironmentVariableW(LPCWSTR name, LPWSTR buffer, DWORD size) {
@@ -199,6 +302,10 @@ bool InstallHooks() {
     bool ok = true;
     ok &= Install(L"kernel32.dll", "GetEnvironmentVariableW", HookGetEnvironmentVariableW, &OriginalGetEnvironmentVariableW);
     ok &= Install(L"kernel32.dll", "GetEnvironmentVariableA", HookGetEnvironmentVariableA, &OriginalGetEnvironmentVariableA);
+    ok &= Install(L"kernel32.dll", "GetEnvironmentStringsW", HookGetEnvironmentStringsW, &OriginalGetEnvironmentStringsW);
+    ok &= Install(L"kernel32.dll", "GetEnvironmentStringsA", HookGetEnvironmentStringsA, &OriginalGetEnvironmentStringsA);
+    ok &= Install(L"kernel32.dll", "FreeEnvironmentStringsW", HookFreeEnvironmentStringsW, &OriginalFreeEnvironmentStringsW);
+    ok &= Install(L"kernel32.dll", "FreeEnvironmentStringsA", HookFreeEnvironmentStringsA, &OriginalFreeEnvironmentStringsA);
     ok &= Install(L"kernel32.dll", "SetEnvironmentVariableW", HookSetEnvironmentVariableW, &OriginalSetEnvironmentVariableW);
     ok &= Install(L"kernel32.dll", "SetEnvironmentVariableA", HookSetEnvironmentVariableA, &OriginalSetEnvironmentVariableA);
     ok &= Install(L"ucrtbase.dll", "getenv", HookGetEnv, &OriginalGetEnv);

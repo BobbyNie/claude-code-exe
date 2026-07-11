@@ -110,6 +110,8 @@ ccode.exe "请解释当前项目的目录结构"
 
 运行时会将以 `ANTHROPIC_` 开头的内部环境查询映射为 `A_` 前缀，将以 `CLAUDE_CODE_` 开头的内部查询映射为 `C_` 前缀；这些原始前缀不会写入 ccode 子进程环境。文件系统路径中的 `anthropic` 与 `claude` 会分别改写为 `aa` 与 `cc`。
 
+映射时会移除完整前缀，例如 `ANTHROPIC_AUTH_TOKEN` 应配置为 `A_AUTH_TOKEN`，`CLAUDE_CODE_SUBAGENT_MODEL` 应配置为 `C_SUBAGENT_MODEL`，不要写成 `C_CODE_SUBAGENT_MODEL`。ccode 同时映射逐项查询和环境区块枚举，以兼容会在启动时一次性读取全部环境变量的 runtime。
+
 首次启动后目录如下：
 
 ```text
@@ -132,6 +134,7 @@ ccode-portable/
 ### 安全与故障排查
 
 - ccode 会拒绝同时缺少 `A_AUTH_TOKEN` 和 `A_API_KEY`、空的 `A_BASE_URL`、交互式登录命令，以及名称含保留字的启动目录或工作目录；它不会检查凭证或 URL 值中的保留字、路径或协议。
+- 如果仍出现连接官方服务的提示，请确认使用的是最新 Release 中的 `ccode.exe`，并在同一个启动脚本中设置 `A_AUTH_TOKEN`、`A_BASE_URL` 和模型变量；`C_*` 变量不要保留 `CODE_` 片段。
 - 不要使用 `setx` 持久化 API Key；优先在当前终端设置，或通过企业认可的密钥管理工具注入。
 - 企业 EDR/防毒软件可能会拦截启动期相容层注入。若启动返回错误，请将 `ccode.exe` 及其解压出的 `data\cc\runtime\` 加入企业批准的白名单，而不是关闭防护软件。
 - 该封装不改变官方 payload 的版权、许可或服务条款；请确认企业代理和账号使用方式符合适用条款。

@@ -94,6 +94,13 @@ try {
         (Join-Path $PSScriptRoot "..\..\tests\ccode\native-tests.cpp") "/Fe:$nativeTests"
     Invoke-Checked $nativeTests
 
+    Write-Output "Compiling and running hook integration tests..."
+    $hookTests = Join-Path $work "ccode-hook-tests.exe"
+    Invoke-Checked cl.exe /nologo /std:c++17 /O2 /EHsc `
+        (Join-Path $PSScriptRoot "..\..\tests\ccode\hook-integration-tests.cpp") `
+        "/Fe:$hookTests"
+    Invoke-Checked $hookTests $hook
+
     $info = Get-Item $output
     if ($info.Length -le (Get-Item $payload).Length) {
         throw "ccode.exe is unexpectedly small; embedded resources may be missing"

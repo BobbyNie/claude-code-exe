@@ -12,6 +12,10 @@ int main() {
     assert(MapEnvironmentName(L"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC") ==
            L"C_DISABLE_NONESSENTIAL_TRAFFIC");
     assert(MapEnvironmentName(L"PATH") == L"PATH");
+    assert(ExpandEnvironmentName(L"A_BASE_URL") == L"ANTHROPIC_BASE_URL");
+    assert(ExpandEnvironmentName(L"A_AUTH_TOKEN") == L"ANTHROPIC_AUTH_TOKEN");
+    assert(ExpandEnvironmentName(L"C_SUBAGENT_MODEL") == L"CLAUDE_CODE_SUBAGENT_MODEL");
+    assert(ExpandEnvironmentName(L"PATH") == L"PATH");
     assert(HasApiCredential(L"", L"vendor-token"));
     assert(HasApiCredential(L"compatibility-key", L""));
     assert(!HasApiCredential(L"", L""));

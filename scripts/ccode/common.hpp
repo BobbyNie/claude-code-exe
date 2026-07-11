@@ -35,6 +35,18 @@ inline std::wstring MapEnvironmentName(const std::wstring& requested) {
     return requested;
 }
 
+inline std::wstring ExpandEnvironmentName(const std::wstring& stored) {
+    const std::wstring aPrefix = L"A_";
+    const std::wstring cPrefix = L"C_";
+    if (StartsWithInsensitive(stored, aPrefix)) {
+        return L"ANTHROPIC_" + stored.substr(aPrefix.size());
+    }
+    if (StartsWithInsensitive(stored, cPrefix)) {
+        return L"CLAUDE_CODE_" + stored.substr(cPrefix.size());
+    }
+    return stored;
+}
+
 inline bool HasApiCredential(const std::wstring& apiKey, const std::wstring& authToken) {
     return !apiKey.empty() || !authToken.empty();
 }
