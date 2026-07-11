@@ -29,10 +29,11 @@ try {
     $locationPushed = $true
 
     Remove-Item Env:A_API_KEY -ErrorAction SilentlyContinue
+    Remove-Item Env:A_AUTH_TOKEN -ErrorAction SilentlyContinue
     Remove-Item Env:A_BASE_URL -ErrorAction SilentlyContinue
     Invoke-ExpectExit -Arguments @() -Expected 64
 
-    $env:A_API_KEY = "test-only-key"
+    $env:A_AUTH_TOKEN = "test-only-token"
     Remove-Item Env:A_BASE_URL -ErrorAction SilentlyContinue
     Invoke-ExpectExit -Arguments @("--version") -Expected 64
 
@@ -57,6 +58,7 @@ finally {
         Pop-Location
     }
     Remove-Item Env:A_API_KEY -ErrorAction SilentlyContinue
+    Remove-Item Env:A_AUTH_TOKEN -ErrorAction SilentlyContinue
     Remove-Item Env:A_BASE_URL -ErrorAction SilentlyContinue
     if (Test-Path $testRoot) {
         Remove-Item $testRoot -Recurse -Force

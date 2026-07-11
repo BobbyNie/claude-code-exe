@@ -38,11 +38,12 @@ Release 描述会列出 Claude Code、Qwen Code、Codex App、Codex CLI 各自�
 
 ### 前置条件
 
-ccode 仅支持 API Key 模式，不支持浏览器登录、`login`、`logout` 或 `setup-token`。运行前必须设置以下进程环境变量：
+ccode 仅支持 API 凭证模式，不支持浏览器登录、`login`、`logout` 或 `setup-token`。必须设置 `A_AUTH_TOKEN` 或 `A_API_KEY` 其中之一，并设置 `A_BASE_URL`：
 
 | 变量 | 必填 | 说明 |
 | --- | --- | --- |
-| `A_API_KEY` | 是 | API Key；请勿写入脚本、仓库或 Release 说明。 |
+| `A_AUTH_TOKEN` | 推荐 | 首选凭证变量；映射为上游 CLI 的 `ANTHROPIC_AUTH_TOKEN`。DeepSeek、阿里云百炼等 Claude Code 兼容服务应使用此变量。 |
+| `A_API_KEY` | 可选 | 兼容部分服务的 API Key 变量；`A_AUTH_TOKEN` 与它任意设置一个即可。 |
 | `A_BASE_URL` | 是 | API Base URL，例如 `https://api.deepseek.com/anthropic`、`http://intranet-gateway/v1` 或企业反向代理地址。ccode 不检查变量值中的保留字或协议。 |
 | `A_<NAME>` | 否 | 映射给上游 CLI 所需的同名服务配置。 |
 | `C_<NAME>` | 否 | 映射给上游 CLI 所需的同名 CLI 配置。 |
@@ -51,21 +52,52 @@ ccode 只允许其运行时解析 `A_BASE_URL` 中的主机；主机名本身仍
 
 ### 启动
 
-在 `cmd.exe` 中：
+#### DeepSeek
+
+在 `cmd.exe` 中设置 DeepSeek API：
 
 ```cmd
-set "A_API_KEY=你的密钥"
+set "A_AUTH_TOKEN=你的 DeepSeek API Key"
 set "A_BASE_URL=https://api.deepseek.com/anthropic"
+set "A_MODEL=deepseek-v4-pro"
+set "A_DEFAULT_OPUS_MODEL=deepseek-v4-pro"
+set "A_DEFAULT_SONNET_MODEL=deepseek-v4-pro"
+set "A_DEFAULT_HAIKU_MODEL=deepseek-v4-flash"
+set "C_SUBAGENT_MODEL=deepseek-v4-flash"
 ccode.exe
 ```
 
 在 PowerShell 中：
 
 ```powershell
-$env:A_API_KEY = '你的密钥'
+$env:A_AUTH_TOKEN = '你的 DeepSeek API Key'
 $env:A_BASE_URL = 'https://api.deepseek.com/anthropic'
+$env:A_MODEL = 'deepseek-v4-pro'
+$env:A_DEFAULT_OPUS_MODEL = 'deepseek-v4-pro'
+$env:A_DEFAULT_SONNET_MODEL = 'deepseek-v4-pro'
+$env:A_DEFAULT_HAIKU_MODEL = 'deepseek-v4-flash'
+$env:C_SUBAGENT_MODEL = 'deepseek-v4-flash'
 .\ccode.exe
 ```
+
+DeepSeek 的 Anthropic-compatible base URL 是 `https://api.deepseek.com/anthropic`；`deepseek-v4-pro` 与 `deepseek-v4-flash` 是当前可用模型。不要留空凭证：留空会使上游 CLI 进入账号登录回退流程，进而尝试访问官方服务。
+
+#### Qwen / 阿里云百炼
+
+按量付费、北京地域可使用以下配置；API Key 与 Base URL 必须属于同一地域和计费方案：
+
+```powershell
+$env:A_AUTH_TOKEN = '你的百炼 API Key'
+$env:A_BASE_URL = 'https://dashscope.aliyuncs.com/apps/anthropic'
+$env:A_MODEL = 'qwen3.6-plus'
+$env:A_DEFAULT_OPUS_MODEL = 'qwen3.6-plus'
+$env:A_DEFAULT_SONNET_MODEL = 'qwen3.6-plus'
+$env:A_DEFAULT_HAIKU_MODEL = 'qwen3.6-flash'
+$env:C_SUBAGENT_MODEL = 'qwen3.6-plus'
+.\ccode.exe
+```
+
+若使用百炼 Coding Plan，请改用其专属 endpoint `https://coding.dashscope.aliyuncs.com/apps/anthropic`、套餐专属 Key 及套餐支持的模型（例如 `qwen3.7-plus`）。新加坡、美国等地域应使用相应地域或业务空间专属 endpoint。
 
 可像使用普通 CLI 一样传递参数，例如：
 
@@ -99,7 +131,7 @@ ccode-portable/
 
 ### 安全与故障排查
 
-- ccode 会拒绝缺少 `A_API_KEY`、空的 `A_BASE_URL`、交互式登录命令，以及名称含保留字的启动目录或工作目录；它不会检查 API Key 或 URL 值中的保留字、路径或协议。
+- ccode 会拒绝同时缺少 `A_AUTH_TOKEN` 和 `A_API_KEY`、空的 `A_BASE_URL`、交互式登录命令，以及名称含保留字的启动目录或工作目录；它不会检查凭证或 URL 值中的保留字、路径或协议。
 - 不要使用 `setx` 持久化 API Key；优先在当前终端设置，或通过企业认可的密钥管理工具注入。
 - 企业 EDR/防毒软件可能会拦截启动期相容层注入。若启动返回错误，请将 `ccode.exe` 及其解压出的 `data\cc\runtime\` 加入企业批准的白名单，而不是关闭防护软件。
 - 该封装不改变官方 payload 的版权、许可或服务条款；请确认企业代理和账号使用方式符合适用条款。

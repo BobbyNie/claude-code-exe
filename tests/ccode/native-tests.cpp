@@ -8,9 +8,13 @@ int main() {
 
     assert(MapEnvironmentName(L"ANTHROPIC_DEFAULT_HAIKU_MODEL") == L"A_DEFAULT_HAIKU_MODEL");
     assert(MapEnvironmentName(L"anthropic_api_key") == L"A_api_key");
+    assert(MapEnvironmentName(L"ANTHROPIC_AUTH_TOKEN") == L"A_AUTH_TOKEN");
     assert(MapEnvironmentName(L"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC") ==
            L"C_DISABLE_NONESSENTIAL_TRAFFIC");
     assert(MapEnvironmentName(L"PATH") == L"PATH");
+    assert(HasApiCredential(L"", L"vendor-token"));
+    assert(HasApiCredential(L"compatibility-key", L""));
+    assert(!HasApiCredential(L"", L""));
 
     assert(RewritePath(L"data\\Claude\\settings.json") == L"data\\cc\\settings.json");
     assert(RewritePath(L"DATA\\ANTHROPIC\\Claude") == L"DATA\\aa\\cc");

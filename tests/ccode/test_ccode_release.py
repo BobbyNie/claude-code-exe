@@ -24,6 +24,7 @@ class CcodeReleaseTests(unittest.TestCase):
 
         for behavior in (
             "A_DEFAULT_HAIKU_MODEL",
+            "A_AUTH_TOKEN",
             "C_DISABLE_NONESSENTIAL_TRAFFIC",
             r"data\\cc\\settings.json",
             "https://gateway.example.test",

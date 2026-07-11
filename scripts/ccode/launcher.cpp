@@ -145,9 +145,10 @@ int wmain(int argc, wchar_t** argv) {
     }
 
     const std::wstring apiKey = ReadRequired(L"A_API_KEY");
+    const std::wstring authToken = ReadRequired(L"A_AUTH_TOKEN");
     const std::wstring baseUrl = ReadRequired(L"A_BASE_URL");
-    if (apiKey.empty()) {
-        std::wcerr << L"A_API_KEY is required.\n";
+    if (!ccode::HasApiCredential(apiKey, authToken)) {
+        std::wcerr << L"A_AUTH_TOKEN or A_API_KEY is required.\n";
         return 64;
     }
     if (!ccode::IsValidGatewayUrl(baseUrl)) {
@@ -155,7 +156,7 @@ int wmain(int argc, wchar_t** argv) {
         return 64;
     }
     if (IsBlockedCommand(argc, argv)) {
-        std::wcerr << L"Interactive account commands are disabled; use A_API_KEY.\n";
+        std::wcerr << L"Interactive account commands are disabled; use A_AUTH_TOKEN or A_API_KEY.\n";
         return 64;
     }
 

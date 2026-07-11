@@ -35,6 +35,10 @@ inline std::wstring MapEnvironmentName(const std::wstring& requested) {
     return requested;
 }
 
+inline bool HasApiCredential(const std::wstring& apiKey, const std::wstring& authToken) {
+    return !apiKey.empty() || !authToken.empty();
+}
+
 inline void ReplaceInsensitive(std::wstring& value, const std::wstring& needle,
                                const std::wstring& replacement) {
     size_t position = 0;
