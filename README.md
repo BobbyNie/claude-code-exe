@@ -43,11 +43,11 @@ ccode 仅支持 API Key 模式，不支持浏览器登录、`login`、`logout` �
 | 变量 | 必填 | 说明 |
 | --- | --- | --- |
 | `A_API_KEY` | 是 | API Key；请勿写入脚本、仓库或 Release 说明。 |
-| `A_BASE_URL` | 是 | 企业 HTTPS 反向代理地址，例如 `https://gateway.example.com`。主机名不能包含 `anthropic` 或 `claude`。 |
+| `A_BASE_URL` | 是 | API Base URL，例如 `https://api.deepseek.com/anthropic`、`http://intranet-gateway/v1` 或企业反向代理地址。ccode 不检查变量值中的保留字或协议。 |
 | `A_<NAME>` | 否 | 映射给上游 CLI 所需的同名服务配置。 |
 | `C_<NAME>` | 否 | 映射给上游 CLI 所需的同名 CLI 配置。 |
 
-ccode 只允许其运行时解析 `A_BASE_URL` 中的网关主机；请确保企业反向代理已兼容所需 API。
+ccode 只允许其运行时解析 `A_BASE_URL` 中的主机；主机名本身仍不能包含保留字。可直接使用 DeepSeek 等兼容服务的 HTTP/HTTPS Base URL，或使用企业反向代理。
 
 ### 启动
 
@@ -55,7 +55,7 @@ ccode 只允许其运行时解析 `A_BASE_URL` 中的网关主机；请确保企
 
 ```cmd
 set "A_API_KEY=你的密钥"
-set "A_BASE_URL=https://gateway.example.com"
+set "A_BASE_URL=https://api.deepseek.com/anthropic"
 ccode.exe
 ```
 
@@ -63,7 +63,7 @@ ccode.exe
 
 ```powershell
 $env:A_API_KEY = '你的密钥'
-$env:A_BASE_URL = 'https://gateway.example.com'
+$env:A_BASE_URL = 'https://api.deepseek.com/anthropic'
 .\ccode.exe
 ```
 
@@ -99,7 +99,7 @@ ccode-portable/
 
 ### 安全与故障排查
 
-- ccode 会拒绝缺少 `A_API_KEY`、非 HTTPS 的 `A_BASE_URL`、含保留字的网关地址、交互式登录命令，以及名称含保留字的启动目录或工作目录。
+- ccode 会拒绝缺少 `A_API_KEY`、空的 `A_BASE_URL`、交互式登录命令，以及名称含保留字的启动目录或工作目录；它不会检查 API Key 或 URL 值中的保留字、路径或协议。
 - 不要使用 `setx` 持久化 API Key；优先在当前终端设置，或通过企业认可的密钥管理工具注入。
 - 企业 EDR/防毒软件可能会拦截启动期相容层注入。若启动返回错误，请将 `ccode.exe` 及其解压出的 `data\cc\runtime\` 加入企业批准的白名单，而不是关闭防护软件。
 - 该封装不改变官方 payload 的版权、许可或服务条款；请确认企业代理和账号使用方式符合适用条款。

@@ -27,15 +27,12 @@ class CcodeReleaseTests(unittest.TestCase):
             "C_DISABLE_NONESSENTIAL_TRAFFIC",
             r"data\\cc\\settings.json",
             "https://gateway.example.test",
+            "https://api.deepseek.com/anthropic",
+            "http://gateway.example.test",
         ):
             self.assertIn(behavior, native_test)
 
-        for rejected_value in (
-            "https://api.anthropic.example",
-            "https://claude.example",
-            "http://gateway.example.test",
-        ):
-            self.assertIn(rejected_value, native_test)
+        self.assertIn('assert(!IsValidGatewayUrl(L""))', native_test)
 
     def test_build_produces_one_resource_packed_executable(self):
         build = (ROOT / "scripts/ccode/build.ps1").read_text(encoding="utf-8")

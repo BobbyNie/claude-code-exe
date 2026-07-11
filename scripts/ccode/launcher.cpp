@@ -69,7 +69,7 @@ std::wstring ReadRequired(const wchar_t* name) {
     return value;
 }
 
-void SanitizeEnvironment() {
+void RemoveOriginalEnvironmentPrefixes() {
     LPWCH block = GetEnvironmentStringsW();
     if (!block) return;
     for (const wchar_t* cursor = block; *cursor; cursor += wcslen(cursor) + 1) {
@@ -77,8 +77,8 @@ void SanitizeEnvironment() {
         const size_t equals = entry.find(L'=');
         if (equals == std::wstring::npos || equals == 0) continue;
         const std::wstring name = entry.substr(0, equals);
-        const std::wstring value = entry.substr(equals + 1);
-        if (ccode::ContainsForbiddenText(name) || ccode::ContainsForbiddenText(value)) {
+        if (ccode::StartsWithInsensitive(name, L"ANTHROPIC_") ||
+            ccode::StartsWithInsensitive(name, L"CLAUDE_CODE_")) {
             SetEnvironmentVariableW(name.c_str(), nullptr);
         }
     }
@@ -146,12 +146,12 @@ int wmain(int argc, wchar_t** argv) {
 
     const std::wstring apiKey = ReadRequired(L"A_API_KEY");
     const std::wstring baseUrl = ReadRequired(L"A_BASE_URL");
-    if (apiKey.empty() || ccode::ContainsForbiddenText(apiKey)) {
+    if (apiKey.empty()) {
         std::wcerr << L"A_API_KEY is required.\n";
         return 64;
     }
     if (!ccode::IsValidGatewayUrl(baseUrl)) {
-        std::wcerr << L"A_BASE_URL must be a neutral HTTPS gateway URL.\n";
+        std::wcerr << L"A_BASE_URL is required.\n";
         return 64;
     }
     if (IsBlockedCommand(argc, argv)) {
@@ -185,7 +185,7 @@ int wmain(int argc, wchar_t** argv) {
     SetEnvironmentVariableW(L"C_DISABLE_NONESSENTIAL_TRAFFIC", L"1");
     SetEnvironmentVariableW(L"C_DISABLE_AUTOUPDATER", L"1");
     SetEnvironmentVariableW(L"DISABLE_AUTOUPDATER", L"1");
-    SanitizeEnvironment();
+    RemoveOriginalEnvironmentPrefixes();
 
     std::wstring command = Quote(payload.wstring());
     for (int i = 1; i < argc; ++i) command += L" " + Quote(argv[i]);

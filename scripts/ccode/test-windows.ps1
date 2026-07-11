@@ -33,10 +33,10 @@ try {
     Invoke-ExpectExit -Arguments @() -Expected 64
 
     $env:A_API_KEY = "test-only-key"
-    $env:A_BASE_URL = "http://gateway.example.test"
+    Remove-Item Env:A_BASE_URL -ErrorAction SilentlyContinue
     Invoke-ExpectExit -Arguments @("--version") -Expected 64
 
-    $env:A_BASE_URL = "https://gateway.example.test"
+    $env:A_BASE_URL = "http://gateway.example.test"
     Invoke-ExpectExit -Arguments @("login") -Expected 64
     Invoke-ExpectExit -Arguments @("--ccode-self-test") -Expected 0
 

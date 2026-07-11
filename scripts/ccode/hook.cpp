@@ -64,20 +64,11 @@ DWORD WINAPI HookGetEnvironmentVariableA(LPCSTR name, LPSTR buffer, DWORD size) 
 
 BOOL WINAPI HookSetEnvironmentVariableW(LPCWSTR name, LPCWSTR value) {
     const std::wstring mapped = ccode::MapEnvironmentName(name ? name : L"");
-    if (ccode::ContainsForbiddenText(mapped) || (value && ccode::ContainsForbiddenText(value))) {
-        SetLastError(ERROR_INVALID_NAME);
-        return FALSE;
-    }
     return OriginalSetEnvironmentVariableW(mapped.c_str(), value);
 }
 
 BOOL WINAPI HookSetEnvironmentVariableA(LPCSTR name, LPCSTR value) {
     const std::string mapped = Narrow(ccode::MapEnvironmentName(Widen(name)));
-    if (ccode::ContainsForbiddenText(Widen(mapped.c_str())) ||
-        (value && ccode::ContainsForbiddenText(Widen(value)))) {
-        SetLastError(ERROR_INVALID_NAME);
-        return FALSE;
-    }
     return OriginalSetEnvironmentVariableA(mapped.c_str(), value);
 }
 

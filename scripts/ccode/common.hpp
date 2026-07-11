@@ -56,22 +56,16 @@ inline std::wstring RewritePath(std::wstring path) {
 }
 
 inline bool IsValidGatewayUrl(const std::wstring& url) {
-    const std::wstring lower = Lower(url);
-    if (!StartsWithInsensitive(lower, L"https://") || ContainsForbiddenText(lower)) {
-        return false;
-    }
-    const std::wstring remainder = url.substr(8);
-    if (remainder.empty() || remainder[0] == L'/' || remainder.find_first_of(L" \t\r\n") != std::wstring::npos) {
-        return false;
-    }
-    return true;
+    return !url.empty();
 }
 
 inline std::wstring GatewayHost(const std::wstring& url) {
-    if (!StartsWithInsensitive(url, L"https://")) return {};
-    const size_t start = 8;
+    const size_t scheme = url.find(L"://");
+    if (scheme == std::wstring::npos) return {};
+    const size_t start = scheme + 3;
     const size_t end = url.find_first_of(L"/:?#", start);
-    return Lower(url.substr(start, end == std::wstring::npos ? end : end - start));
+    const std::wstring host = url.substr(start, end == std::wstring::npos ? end : end - start);
+    return host.empty() ? std::wstring() : Lower(host);
 }
 
 inline bool IsAllowedNetworkHost(const std::wstring& requested, const std::wstring& gatewayUrl) {
