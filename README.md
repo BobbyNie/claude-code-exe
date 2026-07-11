@@ -25,11 +25,84 @@
 在 [Releases](https://github.com/BobbyNie/claude-code-exe/releases) 页面下载最新 `AI Tools Portable Bundle`。同一个 Release asset 中包含：
 
 - `claude.exe` / `claude-wrapper.bat`
+- `ccode.exe`（Claude Code 的隔离便携封装）
 - `qwen.exe` / `qwen-wrapper.bat`
 - `Codex.msix`
 - `codex.exe` / `codex-wrapper.bat`
 
 Release 描述会列出 Claude Code、Qwen Code、Codex App、Codex CLI 各自的版本号。
+
+## ccode.exe 使用方法
+
+`ccode.exe` 是 Claude Code 的单文件隔离封装。它会在首次运行时把经过校验的官方 Windows x64 payload 解压到自身目录下的 `data\cc\runtime\`，并将用户配置、缓存和临时文件隔离到 `data\cc\profile\`。请将它放在名称不含 `anthropic` 或 `claude`（不区分大小写）的目录中运行。
+
+### 前置条件
+
+ccode 仅支持 API Key 模式，不支持浏览器登录、`login`、`logout` 或 `setup-token`。运行前必须设置以下进程环境变量：
+
+| 变量 | 必填 | 说明 |
+| --- | --- | --- |
+| `A_API_KEY` | 是 | API Key；请勿写入脚本、仓库或 Release 说明。 |
+| `A_BASE_URL` | 是 | 企业 HTTPS 反向代理地址，例如 `https://gateway.example.com`。主机名不能包含 `anthropic` 或 `claude`。 |
+| `A_<NAME>` | 否 | 映射给上游 CLI 所需的同名服务配置。 |
+| `C_<NAME>` | 否 | 映射给上游 CLI 所需的同名 CLI 配置。 |
+
+ccode 只允许其运行时解析 `A_BASE_URL` 中的网关主机；请确保企业反向代理已兼容所需 API。
+
+### 启动
+
+在 `cmd.exe` 中：
+
+```cmd
+set "A_API_KEY=你的密钥"
+set "A_BASE_URL=https://gateway.example.com"
+ccode.exe
+```
+
+在 PowerShell 中：
+
+```powershell
+$env:A_API_KEY = '你的密钥'
+$env:A_BASE_URL = 'https://gateway.example.com'
+.\ccode.exe
+```
+
+可像使用普通 CLI 一样传递参数，例如：
+
+```cmd
+ccode.exe --version
+ccode.exe "请解释当前项目的目录结构"
+```
+
+### 隔离行为与目录结构
+
+运行时会将以 `ANTHROPIC_` 开头的内部环境查询映射为 `A_` 前缀，将以 `CLAUDE_CODE_` 开头的内部查询映射为 `C_` 前缀；这些原始前缀不会写入 ccode 子进程环境。文件系统路径中的 `anthropic` 与 `claude` 会分别改写为 `aa` 与 `cc`。
+
+首次启动后目录如下：
+
+```text
+ccode-portable/
+├── ccode.exe
+└── data/
+    └── cc/
+        ├── runtime/
+        │   ├── aa-runtime.bin
+        │   └── cc-runtime.dll
+        └── profile/
+            ├── home/
+            ├── local/
+            ├── roaming/
+            └── temp/
+```
+
+请保留 `ccode.exe` 与 `data\cc\` 的相对位置；删除 `data\cc\runtime\` 后，下次启动会重新解压。单文件本身约 240 MB，首次运行后需预留额外约 250 MB 的磁盘空间给运行时和配置数据。
+
+### 安全与故障排查
+
+- ccode 会拒绝缺少 `A_API_KEY`、非 HTTPS 的 `A_BASE_URL`、含保留字的网关地址、交互式登录命令，以及名称含保留字的启动目录或工作目录。
+- 不要使用 `setx` 持久化 API Key；优先在当前终端设置，或通过企业认可的密钥管理工具注入。
+- 企业 EDR/防毒软件可能会拦截启动期相容层注入。若启动返回错误，请将 `ccode.exe` 及其解压出的 `data\cc\runtime\` 加入企业批准的白名单，而不是关闭防护软件。
+- 该封装不改变官方 payload 的版权、许可或服务条款；请确认企业代理和账号使用方式符合适用条款。
 
 ## Claude Code 使用方法
 
@@ -102,11 +175,13 @@ codex-wrapper.bat
 1. 每天从官方源检测四个产品的最新版本
 2. 下载 Claude/Qwen/Codex App/Codex CLI Windows 产物
 3. 为 CLI 工具添加便携启动脚本
-4. 将所有产物发布到同一个 GitHub Release
+4. 发布 bundle 后构建并附加单文件 `ccode.exe`
+5. 将所有产物发布到同一个 GitHub Release
 
 | 产品 | 工作流 | 版本源 | 发布产物 |
 | --- | --- | --- | --- |
 | Claude Code | `auto-release.yml` | Google Cloud Storage | `claude.exe` + `claude-wrapper.bat` |
+| ccode | `append-ccode-release.yml` | 官方 Claude Code payload + 本项目隔离层 | `ccode.exe` |
 | Qwen Code | `auto-release.yml` | 阿里云 OSS | `qwen.exe` + `qwen-wrapper.bat` |
 | Codex App | `auto-release.yml` | Microsoft Store metadata / Microsoft CDN | `Codex.msix` |
 | Codex CLI | `auto-release.yml` | `openai/codex` GitHub Releases | `codex.exe` + `codex-wrapper.bat` |
