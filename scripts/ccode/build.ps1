@@ -58,19 +58,33 @@ try {
     Expand-Archive -Path $minHookZip -DestinationPath $work
     $minHook = Join-Path $work "minhook-$minHookVersion"
 
-    $hookSources = @(
-        (Join-Path $PSScriptRoot "hook.cpp"),
+    $minHookSources = @(
         (Join-Path $minHook "src\buffer.c"),
         (Join-Path $minHook "src\hook.c"),
         (Join-Path $minHook "src\trampoline.c"),
         (Join-Path $minHook "src\hde\hde64.c")
     )
-    $hookArgs = @(
-        "/nologo", "/std:c++17", "/O2", "/EHsc", "/LD", "/DUNICODE", "/D_UNICODE",
+    $isolationObject = Join-Path $work "isolation.obj"
+    $isolationArgs = @(
+        "/nologo", "/std:c++17", "/O2", "/EHsc", "/c", "/DUNICODE", "/D_UNICODE",
         "/I$PSScriptRoot", "/I$(Join-Path $minHook 'include')", "/I$(Join-Path $minHook 'src')",
-        "/Fe:$hook"
-    ) + $hookSources + @("/link", "ws2_32.lib")
-    Invoke-Checked cl.exe @hookArgs
+        "/Fo:$isolationObject", (Join-Path $PSScriptRoot "hook.cpp")
+    )
+    Invoke-Checked cl.exe @isolationArgs
+
+    $minHookObjects = @()
+    foreach ($source in $minHookSources) {
+        $objectName = "minhook-$([System.IO.Path]::GetFileNameWithoutExtension($source)).obj"
+        $objectPath = Join-Path $work $objectName
+        Invoke-Checked cl.exe /nologo /O2 /c `
+            "/I$(Join-Path $minHook 'include')" "/I$(Join-Path $minHook 'src')" `
+            "/Fo:$objectPath" $source
+        $minHookObjects += $objectPath
+    }
+
+    $linkArgs = @("/nologo", "/LD", "/Fe:$hook", $isolationObject) +
+        $minHookObjects + @("/link", "ws2_32.lib")
+    Invoke-Checked cl.exe @linkArgs
 
     Write-Output "Embedding the verified payload and isolation layer as RCDATA resources..."
     $payloadRc = $payload.Replace('\', '\\')

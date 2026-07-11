@@ -45,6 +45,7 @@ class CcodeReleaseTests(unittest.TestCase):
         self.assertIn("RCDATA", build)
         self.assertIn("ccode.exe", build)
         self.assertIn("hook-integration-tests.cpp", build)
+        self.assertIn('"isolation.obj"', build)
 
 
 if __name__ == "__main__":
