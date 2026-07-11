@@ -12,10 +12,12 @@
 #include "common.hpp"
 
 namespace {
+using GetEnvironmentStringsAFn = LPCH(WINAPI*)();
+
 decltype(&GetEnvironmentVariableW) OriginalGetEnvironmentVariableW = nullptr;
 decltype(&GetEnvironmentVariableA) OriginalGetEnvironmentVariableA = nullptr;
 decltype(&GetEnvironmentStringsW) OriginalGetEnvironmentStringsW = nullptr;
-decltype(&GetEnvironmentStringsA) OriginalGetEnvironmentStringsA = nullptr;
+GetEnvironmentStringsAFn OriginalGetEnvironmentStringsA = nullptr;
 decltype(&FreeEnvironmentStringsW) OriginalFreeEnvironmentStringsW = nullptr;
 decltype(&FreeEnvironmentStringsA) OriginalFreeEnvironmentStringsA = nullptr;
 decltype(&SetEnvironmentVariableW) OriginalSetEnvironmentVariableW = nullptr;
