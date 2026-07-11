@@ -10,6 +10,21 @@ $testRoot = Join-Path $env:RUNNER_TEMP "ccode-test-$([Guid]::NewGuid().ToString(
 $testExe = Join-Path $testRoot "ccode.exe"
 $locationPushed = $false
 
+function Remove-TestRoot {
+    for ($attempt = 1; $attempt -le 20; $attempt++) {
+        try {
+            Remove-Item $testRoot -Recurse -Force -ErrorAction Stop
+            return
+        }
+        catch {
+            if ($attempt -eq 20) {
+                throw
+            }
+            Start-Sleep -Milliseconds 500
+        }
+    }
+}
+
 function Invoke-ExpectExit {
     param(
         [string[]]$Arguments,
@@ -61,6 +76,6 @@ finally {
     Remove-Item Env:A_AUTH_TOKEN -ErrorAction SilentlyContinue
     Remove-Item Env:A_BASE_URL -ErrorAction SilentlyContinue
     if (Test-Path $testRoot) {
-        Remove-Item $testRoot -Recurse -Force
+        Remove-TestRoot
     }
 }
