@@ -240,7 +240,10 @@ def check(executable, short_path=False, lifecycle=None, permission=None, long_wo
             result = subprocess.run([str(app), "--data-dir", str(data), "--print",
                                      "--allowedTools", "Write,Edit,Read,Grep,Glob,Bash",
                                      "Exercise the six tools in this workspace."],
-                                    cwd=workspace, env=env, input="", capture_output=True,
+                                    # Pass the same long workspace using native extended-path syntax;
+                                    # an unprefixed lpCurrentDirectory fails before the product starts.
+                                    cwd=("\\\\?\\" + str(workspace)) if long_workspace else workspace,
+                                    env=env, input="", capture_output=True,
                                     text=True, encoding="utf-8", errors="replace", timeout=120)
             assert not handler_errors, handler_errors
             assert result.returncode == 0, (result.returncode, result.stdout, result.stderr, received)
