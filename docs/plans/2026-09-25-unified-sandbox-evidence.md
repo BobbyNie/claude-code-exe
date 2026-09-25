@@ -957,3 +957,16 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   Python、語法與 diff 檢查通過；Windows 結果待 CI。
 - 此切片採保守整次列表拒絕，尚非逐會話 unavailable 展示、引擎相容性判定
   或完整損壞恢復流程。長 cwd、企業端點等完整門檻保持未放行。
+
+### 損壞末行拒絕：兩版本 Windows 驗收已核實
+
+- `ed3b03b` / `36176839996` 已完成，已讀實際日誌，不是僅看 job 狀態。
+  2.1.221 `108209395776`、2.1.282 `108209396030` 均明確輸出
+  `PASS: malformed history tails are classified without disclosure or transcript changes`。
+  主測試全部成功；既有真實多輪續接、別名工具及 gateway 案例未被跳過。
+- cross-version `108211831458` 成功，日誌核實真正舊→新→舊、外置資料根
+  搬移、歷史續接及保全資料。這些結果不替代逐會話 unavailable 狀態或
+  目標普通帳戶／企業 gateway 的完整驗收。
+- long-workspace `108211831496`、`108211831561` 均失敗；實際 traceback
+  在 Python subprocess 的 `_winapi.CreateProcess` 回報 WinError 267，
+  尚未啟動前端。整體 workflow failure，完整方案仍未放行。
