@@ -536,3 +536,18 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - 本機六組 C++、19 項 Python、diff 檢查通過。C++ probe 是受控測試回呼，
   不是真實引擎相容性證據；本次 Windows 核心回歸待 CI。公開命令接線、真正
   目標引擎恢復與原子回退提交仍需實作／驗證，整體狀態維持未放行。
+
+## 公開回退驗證接線（Windows 待驗）
+
+- `99d2181` / `36150304809` 已確認 completed/success。
+- `c32b34f` / `36150504265` 為本次測試先行紅燈；已讀取兩版本 job 日誌，
+  皆因 --validate-rollback 尚未實作回報 E_UNSUPPORTED_OPTION 失敗。
+- 接上 --validate-rollback ID，沿用實際引擎 recovery probe、停用工具、限制
+  一輪，依原工作區核驗全部會話；只允許額外 --model，不接受單會話驗證。
+  持有資料根、active 及候選鎖；management 選取允許目前 active 屬於另一引擎，
+  驗證核心仍強制 targetEngine 身份相符。
+- 新 Windows 案例要求無憑證拒絕、兩個真實會話請求都含歷史標記、回執綁定
+  計畫／引擎／完整 session 集合、備份與 active 不變、重跑零 API 並拒絕。
+  目前 active 的引擎差異仍是 synthetic；不是兩個真實版本間的相容性證據。
+- 本機六組 C++、19 項 Python、語法及 diff 檢查通過；公開命令 Windows 綠燈
+  待下一輪 CI，原子回退提交及完整驗收仍未完成。

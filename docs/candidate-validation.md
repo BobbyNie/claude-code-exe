@@ -121,6 +121,26 @@ API 憑證、不啟動引擎，不能混用其他操作、模型選項或提示�
 sourceSnapshotId、preservationSnapshotId、priorActivePointer、targetEngine 及 adapter；
 同份計畫保存在候選的 rollback.json。正式指標與現有歷史不變，不盲目合併。
 
-**prepared 不代表相容，也不會啟用候選。** 目標引擎全會話驗證與原子回退提交
+**prepared 不代表相容，也不會啟用候選。** 原子回退提交
 仍待實作；不可把此目錄搬入普通 candidates 或手動修改 active 指標以繞過驗證。
 若中途失敗，保留已產生的備份／候選供核對，不自動清理或重放。
+
+
+## 回退候選全會話驗證
+
+```powershell
+ccode.exe --data-dir DATA --validate-rollback CANDIDATE_ID
+```
+
+使用與準備計畫 targetEngine 完全一致的程式，配置核准 API 憑證與 gateway。
+命令固定驗證全部頂層會話；只能額外指定 `--model`，不能用 `--resume`、
+`--all-sessions`、工具選項或提示縮小／改寫驗證。驗證在候選中執行，停用工具，
+依每個會話的原工作區恢復並要求回覆既有歷史標記，不把預期答案放入提示。
+
+每次探測前後核對目前 active、保全快照、來源快照、原指標與準備計畫。
+變動或恢復失敗即停止；不自動重試。成功後寫出綁定計畫的
+`rollback-validation.json`，保留 `rollback-verified` 凍結副本。已有回執或
+pending 證據時拒絕重跑；失敗後保留證據，不手動刪除檔案以繞過檢查。
+
+此命令仍不切換 active，原子回退提交尚未實作。實際模型與企業 gateway
+相容性仍須以目標環境驗收，CI 的本機假 API 不能替代。
