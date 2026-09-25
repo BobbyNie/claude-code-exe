@@ -449,3 +449,18 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   本機 19 項 Python、語法與 diff 檢查通過。Windows 行為以後續 run 為準，
   本機 Mock 只驗證 fixture 控制流程，不證明 OS rename 故障已驗收。
 - 磁碟滿、真正進程強制中斷、跨引擎回退及完整企業端點驗收仍未完成。
+
+## 啟用 I/O 錯誤分類修正（Windows 待驗）
+
+- `62b842e` / `36146154154` completed/success；已逐一讀取兩個 Windows job
+  的真實 pointer replacement failure PASS，確認正式指標保留、pending 歸檔
+  及驗證後重試的實際故障流程通過，不只是 helper Mock。
+- 原先 CreateFile/open 的所有失敗都錯報 E_ACTIVATION_PENDING。現在只有
+  已存在的 pending（Windows FILE_EXISTS/ALREADY_EXISTS、POSIX EEXIST）
+  使用此碼；其他建立失敗使用 E_ACTIVATION_WRITE。Windows close 失敗也
+  不再提交正式指標。候選完整驗證仍先於內部提交原語，沒有公開繞過入口。
+- TDD：抽取提交原語先測首次寫入與覆寫；新增不存在父目錄案例在舊分類上
+  斷言失敗，修正後通過。另覆蓋既有 pending bytes 不變、真實 rename 目標
+  阻擋時 pending 保留且原目標不變。本機六組 C++、19 項 Python 全部通過。
+- 新增 C++ 案例由 Windows build 原有六 suite 執行；本次 Windows 結果待 CI。
+  父目錄缺失及 rename 失敗不能冒充磁碟滿或斷電驗收，這些缺口仍保留。

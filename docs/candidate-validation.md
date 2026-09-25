@@ -86,6 +86,8 @@ ccode.exe --data-dir DATA --validate-profile CANDIDATE_ID --all-sessions
 將原始 bytes 移至 `activation-recovery/UUID/pending.json` 並輸出 UUID。即使 pending
 截斷或正式指標損壞也不解析／改寫它們，不建立 fallback profile，不需要 API。
 無 pending、非法檔案或歸檔碰撞明確拒絕；失敗保留證據，不承諾斷電耐久性。
+啟用建立 pending 時，已有同名檔案回報 `E_ACTIVATION_PENDING`；其他建立、
+寫入、flush、close 或替換失敗回報 `E_ACTIVATION_WRITE`，不自動重試。
 此命令不修復損壞的正式指標、不啟用候選；之後重試啟用仍須通過完整驗證。
 原 profile、來源快照與 verified 凍結副本都保留，後續會話寫入所選
 候選的 live profile。指標是唯一啟用提交記錄，candidate metadata 保持 staged。

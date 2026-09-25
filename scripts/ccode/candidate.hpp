@@ -2,6 +2,7 @@
 #include "snapshot.hpp"
 #include "workspaces.hpp"
 #ifndef _WIN32
+#include <cerrno>
 #include <fcntl.h>
 #include <unistd.h>
 #endif
@@ -347,6 +348,38 @@ inline std::filesystem::path ArchiveActivationPending(const std::filesystem::pat
     return destination / "pending.json";
 }
 
+// Internal commit primitive: caller holds the coordination lock and has verified
+// the complete activation receipt. Never call this to bypass candidate checks.
+inline void CommitActiveProfilePointer(const std::filesystem::path& data, const std::string& bytes) {
+    namespace fs = std::filesystem;
+    const auto pending = SnapshotIoPath(data / "active-profile.json.pending");
+    const auto pointer = SnapshotIoPath(data / "active-profile.json");
+#ifdef _WIN32
+    HANDLE file = CreateFileW(pending.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) {
+        const auto error = GetLastError();
+        throw std::runtime_error(error == ERROR_FILE_EXISTS || error == ERROR_ALREADY_EXISTS ?
+            "E_ACTIVATION_PENDING" : "E_ACTIVATION_WRITE");
+    }
+    DWORD written = 0;
+    const bool saved = WriteFile(file, bytes.data(), static_cast<DWORD>(bytes.size()), &written, nullptr) &&
+        written == bytes.size() && FlushFileBuffers(file);
+    const bool closed = CloseHandle(file) != 0;
+    if (!saved || !closed) throw std::runtime_error("E_ACTIVATION_WRITE");
+    if (!MoveFileExW(pending.c_str(), pointer.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+        throw std::runtime_error("E_ACTIVATION_WRITE");
+#else
+    const int file = ::open(pending.c_str(), O_WRONLY | O_CREAT | O_EXCL, 0600);
+    if (file < 0) throw std::runtime_error(errno == EEXIST ? "E_ACTIVATION_PENDING" : "E_ACTIVATION_WRITE");
+    const bool saved = ::write(file, bytes.data(), bytes.size()) == static_cast<ssize_t>(bytes.size()) && ::fsync(file) == 0;
+    const int closed = ::close(file);
+    if (!saved || closed != 0) throw std::runtime_error("E_ACTIVATION_WRITE");
+    std::error_code error;
+    fs::rename(pending, pointer, error);
+    if (error) throw std::runtime_error("E_ACTIVATION_WRITE");
+#endif
+}
+
 // Caller holds data-root, active-profile and candidate-profile exclusive locks.
 // Pending evidence is never silently reused. The pointer is the commit record;
 // candidate metadata stays staged so there is no second non-atomic state change.
@@ -371,28 +404,7 @@ inline void ActivateProfileCandidate(const std::filesystem::path& data, const st
     for (const auto* key : {"candidateId", "verificationId", "sourceSnapshotId", "engine", "adapter"})
         state[key] = receipt[key];
     const auto bytes = state.dump(2) + "\n";
-    const auto pending = SnapshotIoPath(data / "active-profile.json.pending");
-    const auto pointer = SnapshotIoPath(data / "active-profile.json");
-#ifdef _WIN32
-    HANDLE file = CreateFileW(pending.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (file == INVALID_HANDLE_VALUE) throw std::runtime_error("E_ACTIVATION_PENDING");
-    DWORD written = 0;
-    const bool saved = WriteFile(file, bytes.data(), static_cast<DWORD>(bytes.size()), &written, nullptr) &&
-        written == bytes.size() && FlushFileBuffers(file);
-    CloseHandle(file);
-    if (!saved) throw std::runtime_error("E_ACTIVATION_WRITE");
-    if (!MoveFileExW(pending.c_str(), pointer.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
-        throw std::runtime_error("E_ACTIVATION_WRITE");
-#else
-    const int file = ::open(pending.c_str(), O_WRONLY | O_CREAT | O_EXCL, 0600);
-    if (file < 0) throw std::runtime_error("E_ACTIVATION_PENDING");
-    const bool saved = ::write(file, bytes.data(), bytes.size()) == static_cast<ssize_t>(bytes.size()) && ::fsync(file) == 0;
-    const int closed = ::close(file);
-    if (!saved || closed != 0) throw std::runtime_error("E_ACTIVATION_WRITE");
-    std::error_code error;
-    fs::rename(pending, pointer, error);
-    if (error) throw std::runtime_error("E_ACTIVATION_WRITE");
-#endif
+    CommitActiveProfilePointer(data, bytes);
 }
 
 }

@@ -25,6 +25,34 @@ int main() try {
     const auto root = fs::temp_directory_path() / ("ccode-profile-" +
         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(root);
+    const auto pointerIo = root / "pointer-io";
+    fs::create_directories(pointerIo);
+    ccode::CommitActiveProfilePointer(pointerIo, "first pointer\n");
+    assert(Read(pointerIo / "active-profile.json") == "first pointer\n");
+    ccode::CommitActiveProfilePointer(pointerIo, "second pointer\n");
+    assert(Read(pointerIo / "active-profile.json") == "second pointer\n");
+    assert(!fs::exists(pointerIo / "active-profile.json.pending"));
+    bool missingPointerDirectory = false;
+    try { ccode::CommitActiveProfilePointer(root / "missing-pointer-dir", "must not commit"); }
+    catch (const std::runtime_error& error) { missingPointerDirectory = std::string(error.what()) == "E_ACTIVATION_WRITE"; }
+    assert(missingPointerDirectory);
+    assert(!fs::exists(root / "missing-pointer-dir"));
+    Write(pointerIo / "active-profile.json.pending", "previous evidence");
+    bool commitConflict = false;
+    try { ccode::CommitActiveProfilePointer(pointerIo, "replacement"); }
+    catch (const std::runtime_error& error) { commitConflict = std::string(error.what()) == "E_ACTIVATION_PENDING"; }
+    assert(commitConflict);
+    assert(Read(pointerIo / "active-profile.json.pending") == "previous evidence");
+    assert(Read(pointerIo / "active-profile.json") == "second pointer\n");
+    const auto obstructedPointer = root / "obstructed-pointer";
+    fs::create_directories(obstructedPointer / "active-profile.json");
+    Write(obstructedPointer / "active-profile.json" / "retain.txt", "unrelated directory");
+    bool commitReplaceFailed = false;
+    try { ccode::CommitActiveProfilePointer(obstructedPointer, "uncommitted pointer\n"); }
+    catch (const std::runtime_error& error) { commitReplaceFailed = std::string(error.what()) == "E_ACTIVATION_WRITE"; }
+    assert(commitReplaceFailed);
+    assert(Read(obstructedPointer / "active-profile.json.pending") == "uncommitted pointer\n");
+    assert(Read(obstructedPointer / "active-profile.json" / "retain.txt") == "unrelated directory");
     const auto old = root / ".cc/projects/D--tt";
     const auto current = root / ".claude/projects/D--tt";
     Write(old / "history.jsonl", "old transcript\n");
