@@ -24,6 +24,13 @@ inline std::vector<Session> ListWorkspaceSessions(const std::filesystem::path& p
     auto candidate = target; candidate += ".new";
     if (fs::is_symlink(fs::symlink_status(candidate)) || fs::is_symlink(fs::symlink_status(target)))
         throw std::runtime_error("E_SESSION_INDEX_WRITE");
+    const auto candidateStatus = fs::symlink_status(candidate);
+    if (fs::exists(candidateStatus)) {
+        std::error_code error;
+        const auto links = fs::hard_link_count(candidate, error);
+        if (!fs::is_regular_file(candidateStatus) || error || links != 1)
+            throw std::runtime_error("E_SESSION_INDEX_WRITE");
+    }
     {
         std::ofstream output(candidate, std::ios::binary | std::ios::trunc);
         output << document.dump(2) << '\n';

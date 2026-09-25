@@ -63,6 +63,25 @@ int main() {
     fs::remove(indexPath);
     assert(ccode::ListWorkspaceSessions(indexedProfile, root).size() == 1);
     assert(loadIndex() == index);
+    // Rebuilding a cache must never truncate an authoritative transcript via a hard link.
+    const auto readBytes = [](const fs::path& path) {
+        std::ifstream input(path, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(input), {});
+    };
+    const auto originalHistory = readBytes(source);
+    const auto originalIndex = readBytes(indexPath);
+    auto indexCandidate = indexPath; indexCandidate += ".new";
+    fs::create_hard_link(source, indexCandidate);
+    bool indexLinkRejected = false;
+    try { ccode::ListWorkspaceSessions(indexedProfile, root); }
+    catch (const std::runtime_error& error) { indexLinkRejected = std::string(error.what()) == "E_SESSION_INDEX_WRITE"; }
+    assert(readBytes(source) == originalHistory);
+    assert(indexLinkRejected);
+    assert(readBytes(indexPath) == originalIndex);
+    assert(fs::equivalent(source, indexCandidate));
+    fs::remove(indexCandidate);
+    assert(ccode::ListWorkspaceSessions(indexedProfile, root).size() == 1);
+    assert(readBytes(source) == originalHistory);
     // A known workspace's damaged session remains visible but cannot resume;
     // healthy sessions remain discoverable and the cache reflects native state.
     const std::string damagedId = "abcdefab-1234-1234-1234-123456789abc";

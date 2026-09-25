@@ -205,6 +205,29 @@ def check(executable):
         print("PASS: corrupt history metadata is classified without disclosure or transcript changes")
         valid_event = {"type": "user", "sessionId": session_id, "cwd": str(root),
                        "isSidechain": False, "message": {"content": "private-history-marker"}}
+        healthy_history = (json.dumps(valid_event) + "\n").encode("utf-8")
+        transcript.write_bytes(healthy_history)
+        healthy_list = run("--data-dir", str(history_data), "--sessions")
+        assert healthy_list.returncode == 0 and session_id in healthy_list.stdout
+        history_workspace = run("--data-dir", str(history_data), "--workspace-id").stdout.strip()
+        uuid.UUID(history_workspace)
+        index_path = history_data / "profile" / "session-index" / (history_workspace + ".json")
+        index_bytes = index_path.read_bytes()
+        index_candidate = index_path.with_name(index_path.name + ".new")
+        os.link(transcript, index_candidate)
+        try:
+            rejected = run("--data-dir", str(history_data), "--sessions")
+            assert rejected.returncode == 64 and rejected.stderr.strip() == "E_SESSION_INDEX_WRITE"
+            assert rejected.stdout == "", "Index failure leaked history output"
+            assert transcript.read_bytes() == healthy_history, "Index rebuild modified native history"
+            assert index_candidate.read_bytes() == healthy_history
+            assert index_path.read_bytes() == index_bytes, "Committed index changed on rejection"
+        finally:
+            index_candidate.unlink()
+        recovered = run("--data-dir", str(history_data), "--sessions")
+        assert recovered.returncode == 0 and session_id in recovered.stdout
+        assert transcript.read_bytes() == healthy_history
+        print("PASS: hard-linked index candidate rejected without altering history or committed cache; listing recovers after link removal")
         for tail in (b'{truncated-private-marker', b'[]\n', b'{broken}\n'):
             saved = (json.dumps(valid_event) + "\n").encode("utf-8") + tail
             transcript.write_bytes(saved)
