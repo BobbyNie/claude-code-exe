@@ -27,6 +27,7 @@ jobs:
         with:
           arch: x64
       - name: Build reported runtime version
+        id: build
         shell: pwsh
         run: ./scripts/ccode/build.ps1 -Version '${{ matrix.version }}' -OutputDir .
       - name: Test native runtime and resume
@@ -42,6 +43,7 @@ jobs:
         shell: pwsh
         run: python tests/ccode/tools-integration.py ./ccode.exe
       - name: Verify actual engine gateway rejection
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         shell: pwsh
         run: python tests/ccode/gateway-integration.py ./ccode.exe
       - uses: actions/upload-artifact@v4

@@ -113,7 +113,25 @@ def check_rejection(executable, status_code, error_type, diagnostic, stream_cut=
             if stream_cut:
                 assert cut_delivered.is_set(), "Truncated tool arguments were not delivered"
             messages = [body for path, body in requests if path == "/v1/messages"]
-            assert len(messages) == 1, f"HTTP {status_code} must not replay the model request"
+            if len(messages) != 1:
+                summaries = []
+                for body in messages:
+                    request = json.loads(body)
+                    history = request.get("messages", [])
+                    blocks = [block for message in history
+                              if isinstance(message.get("content"), list)
+                              for block in message["content"] if isinstance(block, dict)]
+                    summaries.append({
+                        "same_body_as_first": body == messages[0],
+                        "stream": request.get("stream") is True,
+                        "history_messages": len(history),
+                        "tool_uses": sum(block.get("type") == "tool_use" for block in blocks),
+                        "tool_results": sum(block.get("type") == "tool_result" for block in blocks),
+                        "tool_errors": sum(block.get("type") == "tool_result" and
+                                           block.get("is_error") is True for block in blocks),
+                    })
+                raise AssertionError("Model request replay: " + json.dumps({
+                    "requests": summaries, "workspace_changed": bool(list(workspace.iterdir()))}))
             terminal = result.stdout + result.stderr
             assert private_marker not in terminal and token not in terminal, "Gateway details leaked to terminal"
             assert diagnostic in terminal, f"HTTP {status_code} needs its neutral diagnostic"

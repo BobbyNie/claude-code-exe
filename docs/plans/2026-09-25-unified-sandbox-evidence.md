@@ -834,3 +834,16 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   content_block_stop、message_delta、message_stop，工具參數 JSON 仍未完成。
   保持完全相同的批准、不重放、非零退出及無寫入斷言，以區分 HTTP 傳輸失敗
   與協定未終止。此輪僅加驗收案例，結果待 Windows CI，不宣稱產品 RED→GREEN。
+
+### 正常 HTTP EOF 驗收 RED，另有舊版 lifecycle 回歸失敗
+
+- `ec4ac61` / `36170484184` failure。已讀取失敗日誌：2.1.282 job
+  `108188530319` 的 401、429、HTTP 截斷案例通過，新增正常 EOF 案例在
+  模型請求數不等於 1 的斷言失敗；不能把傳輸截斷成功擴大成所有斷流成功。
+- 2.1.221 job `108188529965` 在既有 crash lifecycle 等待 child.pid 失敗，
+  前端仍活著；清理 communicate 又逾時，frontend.lock 被占用。gateway 被跳過。
+  這不是新 EOF 案例的結果，也尚無證據可定性為暫時性 runner 問題。
+- 補充模型請求的純結構診斷：與第一份 body 是否相同、stream 布林值、歷史
+  訊息／tool_use／tool_result／工具錯誤數與工作區是否改變，不輸出原始內容。
+  建置成功且未取消時獨立執行 gateway 步驟，前一步失敗仍保留 workflow 失敗，
+  無 continue-on-error，不放寬任何驗收斷言。下一輪須分別追查兩個失敗。
