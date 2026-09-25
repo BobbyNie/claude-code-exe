@@ -35,6 +35,23 @@ inline void WriteCandidateEvidence(const std::filesystem::path& destination,
     if (!saved || closed != 0) throw std::runtime_error(error);
 #endif
 }
+// Publish without replacing evidence created after the caller's preflight.
+// Both paths are in the same directory. This is not protection against a
+// hostile process replacing our pending path, nor a directory-fsync guarantee.
+inline void PublishCandidateEvidence(const std::filesystem::path& pendingPath,
+    const std::filesystem::path& destination, const char* error) {
+    const auto pending = SnapshotIoPath(pendingPath);
+    const auto target = SnapshotIoPath(destination);
+#ifdef _WIN32
+    if (!MoveFileExW(pending.c_str(), target.c_str(), MOVEFILE_WRITE_THROUGH))
+        throw std::runtime_error(error);
+#else
+    // link atomically allocates a new directory entry and fails if it exists.
+    // Keep pending on publication failure; never fall back to replacing rename.
+    if (::link(pending.c_str(), target.c_str()) != 0) throw std::runtime_error(error);
+    if (::unlink(pending.c_str()) != 0) throw std::runtime_error(error);
+#endif
+}
 inline Json ReadCandidateDocument(const std::filesystem::path& file) {
     namespace fs = std::filesystem;
     const auto path = SnapshotIoPath(file);
@@ -235,7 +252,7 @@ inline Json ValidateProfileCandidate(const std::filesystem::path& candidatePath,
     }
     const auto pending = candidate / "validation.json.pending";
     WriteCandidateEvidence(pending, receipt.dump(2) + "\n", "E_CANDIDATE_WRITE");
-    fs::rename(pending, candidate / "validation.json");
+    PublishCandidateEvidence(pending, candidate / "validation.json", "E_CANDIDATE_WRITE");
     return receipt;
 }
 inline Json VerifyCandidateValidation(const std::filesystem::path& candidate,
@@ -463,7 +480,7 @@ inline Json ValidateProfileRollback(const std::filesystem::path& data, const std
     const auto pending = SnapshotIoPath(candidate / "rollback-validation.json.pending");
     WriteCandidateEvidence(pending, result.dump(2) + "\n", "E_ROLLBACK_WRITE");
     guard();
-    fs::rename(pending, SnapshotIoPath(candidate / "rollback-validation.json"));
+    PublishCandidateEvidence(pending, candidate / "rollback-validation.json", "E_ROLLBACK_WRITE");
     return result;
 }
 

@@ -275,6 +275,23 @@ int main() try {
     assert(Read(pendingEvidence) == "preserve interrupted validation evidence");
     assert(latePendingRejected && !fs::exists(lateCandidate / "validation.json"));
     fs::remove(pendingEvidence); // Only remove evidence created by this test.
+    // A completed receipt appearing during the probe is also immutable evidence.
+    const auto racedCandidate = ccode::StageProfileCandidate(probeSnapshot,
+        root / "published-candidates", historyId, testDigest);
+    bool publishedReceiptRejected = false;
+    try {
+        ccode::ValidateProfileCandidate(racedCandidate, probeSnapshot, candidateProfile, root / "verified",
+            "f2345678-1234-1234-1234-123456789abc", root, historyId, engine, testDigest,
+            [&](const fs::path&, const std::string&, const std::string&) {
+                Write(racedCandidate / "validation.json", "retain existing completed receipt");
+                return true;
+            });
+    } catch (const std::runtime_error& error) {
+        publishedReceiptRejected = std::string(error.what()) == "E_CANDIDATE_WRITE";
+    }
+    assert(Read(racedCandidate / "validation.json") == "retain existing completed receipt");
+    assert(publishedReceiptRejected);
+    assert(ccode::ReadCandidateDocument(racedCandidate / "validation.json.pending")["historyVerified"] == true);
     bool sawPrivateHistory = false;
     auto receipt = ccode::ValidateProfileCandidate(probeCandidate, probeSnapshot, candidateProfile, root / "verified", snapshotId,
         root, historyId, engine, testDigest, [&](const fs::path& profile, const std::string& id, const std::string& expected) {
@@ -718,6 +735,31 @@ int main() try {
     assert(ccode::CandidateFiles(nextCandidate / "profile", testDigest) == currentFiles);
     assert(ccode::VerifyProfileSnapshot(activationRoot / "snapshots" / latePreservationId,
         testDigest)["files"] == currentFiles);
+    const std::string publishedRollbackId = "44444444-4444-4444-8444-444444444444";
+    const std::string publishedPreservationId = "55555555-5555-4555-8555-555555555555";
+    const std::string publishedVerificationId = "66666666-6666-4666-8666-666666666666";
+    ccode::PrepareProfileRollback(activationRoot, historyId, publishedRollbackId,
+        publishedPreservationId, incompatibleEngine, testDigest);
+    const auto publishedRollback = activationRoot / "rollback-candidates" / publishedRollbackId;
+    bool publishedRollbackRejected = false;
+    size_t publishedRollbackProbes = 0;
+    try {
+        ccode::ValidateProfileRollback(activationRoot, publishedRollbackId, publishedVerificationId,
+            incompatibleEngine, testDigest,
+            [&](const fs::path&, const fs::path&, const std::string&, const std::string&) {
+                if (++publishedRollbackProbes == 1)
+                    Write(publishedRollback / "rollback-validation.json", "retain published rollback evidence");
+                return true;
+            });
+    } catch (const std::runtime_error& error) {
+        publishedRollbackRejected = std::string(error.what()) == "E_ROLLBACK_WRITE";
+    }
+    assert(Read(publishedRollback / "rollback-validation.json") == "retain published rollback evidence");
+    assert(publishedRollbackRejected && publishedRollbackProbes == 2);
+    assert(ccode::ReadCandidateDocument(publishedRollback / "rollback-validation.json.pending")
+        ["validation"]["historyVerified"] == true);
+    assert(Read(activationRoot / "active-profile.json") == secondPointerBytes);
+    assert(ccode::CandidateFiles(nextCandidate / "profile", testDigest) == currentFiles);
     size_t rollbackProbes = 0;
     const auto rollbackReceipt = ccode::ValidateProfileRollback(activationRoot, historyId,
         snapshotId, incompatibleEngine, testDigest,

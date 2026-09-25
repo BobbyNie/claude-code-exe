@@ -1440,3 +1440,20 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   diff 檢查通過。這不替代 Windows 實際引擎、磁碟滿、斷電或並發替換驗收。
 - 再查 Actions：最新可見仍是 36192868765、SHA 454abc2 的 terminal failure，
   沒有新 Windows 結果。本輪未推送／重跑，不以歷史付款錯誤推斷當前帳戶狀態。
+
+### 驗證收據發布：不得替換探測期間出現的正式證據
+
+- 延續 pending 保全，分別對候選及回退的 public validation API 建立獨立
+  候選，於 probe 中建立正式 validation.json／rollback-validation.json。
+  本機舊 rename 寫法均在「原正式證據 bytes 不變」斷言實際 RED。
+- 新增不替換目的檔的發布原語：Windows MoveFileExW 不指定 REPLACE_EXISTING；
+  POSIX 以同目錄 link 原子建立目的項目，成功後才 unlink pending。不支援或
+  衝突均拒絕，不退回可替換 rename。分別回報 E_CANDIDATE_WRITE／E_ROLLBACK_WRITE。
+- 兩輪 RED→GREEN 驗證既有正式檔不變、新 pending 收據保留且可解析，回退
+  active pointer 與現行 profile 不變；原健康候選及回退驗證回歸繼續通過。
+- 六組 C++ 通過；Python 47 項：46 通過、1 Windows 專用跳過；diff 通過。
+  RED 是本機 POSIX rename 行為的證據，不宣稱在 Windows 重現相同覆寫；
+  Windows 新路徑尚未執行，仍需 runner 驗證中性錯誤及證據保留。
+- 此原語不保證防止同身份惡意替換 pending，也未提供 directory fsync 的
+  斷電持久性。POSIX 若發布後移除 pending 失敗，會保留兩項並報錯；不得
+  因這一發布衝突案例通過而將完整更新／回退故障矩陣標成完成。
