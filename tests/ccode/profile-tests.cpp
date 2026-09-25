@@ -20,7 +20,7 @@ std::string Read(const fs::path& path) {
     return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
 }
 
-int main() {
+int main() try {
     const auto root = fs::temp_directory_path() / ("ccode-profile-" +
         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(root);
@@ -80,6 +80,7 @@ int main() {
     assert(!fs::exists(snapshot / "profile/frontend.lock"));
     std::ifstream manifestInput(snapshot / "manifest.json");
     auto manifest = ccode::Json::parse(manifestInput);
+    manifestInput.close();
     assert(manifest["schema"] == 1 && manifest["snapshotId"] == snapshotId);
     assert(manifest["files"]["home/history.jsonl"]["sha256"] == "source transcript\n");
     assert(Read(active / "home/history.jsonl") == "source transcript\n");
@@ -111,4 +112,7 @@ int main() {
     assert(fs::exists(ccode::CreateProfileSnapshot(active, snapshots, retryId, fingerprint)));
     fs::remove_all(root);
     std::cout << "ccode profile recovery tests passed\n";
+} catch (const std::exception& error) {
+    std::cerr << "profile test exception: " << error.what() << '\n';
+    return 1;
 }
