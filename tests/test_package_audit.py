@@ -183,6 +183,29 @@ class PackageAuditTests(unittest.TestCase):
             finally:
                 archive.unlink(missing_ok=True)
 
+    def test_report_records_hashes_of_text_and_opaque_payload_in_both_forms(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            unpacked = root / 'package'
+            unpacked.mkdir()
+            contents = {'ccode.exe': b'MZ\x00original', 'help.txt': b'neutral help'}
+            archive = root / 'package.zip'
+            with zipfile.ZipFile(archive, 'w') as bundle:
+                for name, data in contents.items():
+                    (unpacked / name).write_bytes(data)
+                    bundle.writestr(name, data)
+            expected = [{'path': name, 'size': len(data),
+                         'sha256': hashlib.sha256(data).hexdigest()}
+                        for name, data in sorted(contents.items())]
+            directory = self.audit.scan_directory(unpacked, ['restricted'], ['ccode.exe'])
+            zipped = self.audit.scan_archive(archive, ['restricted'], ['ccode.exe'])
+            self.assertEqual(directory['files'], expected)
+            self.assertEqual(zipped['files'], expected)
+            self.assertEqual(zipped['archiveSha256'], hashlib.sha256(archive.read_bytes()).hexdigest())
+            (unpacked / 'ccode.exe').write_bytes(b'MZchanged')
+            changed = self.audit.scan_directory(unpacked, ['restricted'], ['ccode.exe'])
+            self.assertNotEqual(changed['files'], directory['files'])
+
     def test_archive_delivery_filename_is_not_exempted_as_a_user_parent(self):
         with tempfile.TemporaryDirectory() as temporary:
             archive = Path(temporary) / 'Restricted-release.zip'

@@ -4,6 +4,7 @@ import stat
 import argparse
 import json
 import zipfile
+import hashlib
 
 
 def _link(status):
@@ -35,6 +36,18 @@ def _text(contents, relative):
     return text.casefold()
 
 
+def _fingerprint(stream, relative):
+    digest = hashlib.sha256()
+    size = 0
+    while True:
+        chunk = stream.read(1024 * 1024)
+        if not chunk:
+            break
+        digest.update(chunk)
+        size += len(chunk)
+    return {'path': relative, 'size': size, 'sha256': digest.hexdigest()}
+
+
 def scan_directory(root, restricted_names, opaque_files=()):
     names, opaque = _policy(restricted_names, opaque_files)
     root = Path(root)
@@ -45,6 +58,7 @@ def scan_directory(root, restricted_names, opaque_files=()):
     except OSError:
         raise ValueError('E_PACKAGE_ROOT') from None
     findings, observed_opaque = [], set()
+    files = []
 
     def finding(relative, code):
         findings.append({'path': relative, 'code': code})
@@ -71,12 +85,17 @@ def scan_directory(root, restricted_names, opaque_files=()):
                     # Explicit binary-content exclusion, never an exemption for
                     # filenames, directories, settings, or required notices.
                     with path.open('rb') as binary:
+                        files.append(_fingerprint(binary, relative))
+                        binary.seek(0)
                         if binary.read(2) != b'MZ':
                             raise ValueError('E_PACKAGE_POLICY')
                     observed_opaque.add(relative)
                 else:
                     try:
-                        text = _text(path.read_bytes(), relative)
+                        contents = path.read_bytes()
+                        files.append({'path': relative, 'size': len(contents),
+                                      'sha256': hashlib.sha256(contents).hexdigest()})
+                        text = _text(contents, relative)
                     except (UnicodeError, ValueError):
                         finding(relative, 'E_PACKAGE_ENCODING')
                         continue
@@ -88,24 +107,27 @@ def scan_directory(root, restricted_names, opaque_files=()):
     walk(root)
     if observed_opaque != opaque:
         raise ValueError('E_PACKAGE_POLICY')
-    return _report(names, opaque, findings)
+    return _report(names, opaque, findings, files)
 
 
-def _report(names, opaque, findings):
+def _report(names, opaque, findings, files):
     return {'schema': 1, 'status': 'failed' if findings else 'passed',
             'scope': {'opaqueContents': sorted(opaque), 'parentDirectories': 'excluded',
                       'restrictedNames': sorted(set(names))},
-            'findings': findings}
+            'findings': findings, 'files': sorted(files, key=lambda item: item['path'])}
 
 
 def scan_archive(archive, restricted_names, opaque_files=()):
     names, opaque = _policy(restricted_names, opaque_files)
     findings, observed_opaque = [], set()
+    files = []
     seen = set()
     archive = Path(archive)
     if any(name in archive.name.casefold() for name in names):
         findings.append({'path': archive.name, 'code': 'E_PACKAGE_NAME'})
     try:
+        with archive.open('rb') as source:
+            archive_hash = _fingerprint(source, archive.name)['sha256']
         with zipfile.ZipFile(archive) as bundle:
             for entry in sorted(bundle.infolist(), key=lambda entry: entry.filename):
                 relative = entry.filename.rstrip('/')
@@ -126,12 +148,17 @@ def scan_archive(archive, restricted_names, opaque_files=()):
                     continue
                 if relative in opaque:
                     with bundle.open(entry) as binary:
+                        files.append(_fingerprint(binary, relative))
+                        binary.seek(0)
                         if binary.read(2) != b'MZ':
                             raise ValueError('E_PACKAGE_POLICY')
                     observed_opaque.add(relative)
                 else:
                     try:
-                        text = _text(bundle.read(entry), relative)
+                        contents = bundle.read(entry)
+                        files.append({'path': relative, 'size': len(contents),
+                                      'sha256': hashlib.sha256(contents).hexdigest()})
+                        text = _text(contents, relative)
                     except (UnicodeError, ValueError):
                         findings.append({'path': relative, 'code': 'E_PACKAGE_ENCODING'})
                         continue
@@ -141,7 +168,9 @@ def scan_archive(archive, restricted_names, opaque_files=()):
         raise ValueError('E_PACKAGE_ARCHIVE') from None
     if observed_opaque != opaque:
         raise ValueError('E_PACKAGE_POLICY')
-    return _report(names, opaque, findings)
+    report = _report(names, opaque, findings, files)
+    report['archiveSha256'] = archive_hash
+    return report
 
 
 def main():
