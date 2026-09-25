@@ -23,6 +23,22 @@ int main() {
         fragmented.Finish();
         assert(output == u8"中文🙂\n");
     }
+    // Engine-generated error text is untrusted diagnostics, not model output.
+    for (const auto& code : {"authentication_failed", "future-private-error"}) {
+        ccode::EventReader rejected;
+        const auto errorEvent = ccode::Json{{"type", "assistant"}, {"error", code},
+            {"message", {{"content", ccode::Json::array({
+                {{"type", "text"}, {"text", "private-gateway-detail secret-token"}}
+            })}}}}.dump() + "\n";
+        const auto expected = std::string(code) == "authentication_failed"
+            ? "[E_GATEWAY_AUTH: authentication failed]\n" : "[E_ENGINE: request failed]\n";
+        assert(rejected.Feed(errorEvent) == expected);
+        assert(rejected.failed);
+        // A contradictory success result must not erase an earlier error.
+        rejected.Feed("{\"type\":\"result\",\"subtype\":\"success\"}\n");
+        rejected.Finish();
+        assert(rejected.failed);
+    }
     ccode::EventReader badShape;
     ExpectError(badShape, "{\"type\":42}\n", "E_PROTOCOL_SCHEMA");
     // After any invalid event, later input must not revive the failed turn.

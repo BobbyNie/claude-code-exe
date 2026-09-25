@@ -82,7 +82,7 @@ def check_unauthorized(executable):
             assert len(messages) == 1, "401 must not replay the model request"
             terminal = result.stdout + result.stderr
             assert private_marker not in terminal and token not in terminal, "Gateway details leaked to terminal"
-            assert "E_" in terminal, "Failure needs a neutral diagnostic"
+            assert "E_GATEWAY_AUTH" in terminal, "401 needs a neutral authentication diagnostic"
             assert not list(workspace.iterdir()), "Rejected request changed workspace"
             assert not list(program.rglob("*.jsonl")), "History leaked into program directory"
             print("PASS: actual engine HTTP 401 fails without model-request replay, workspace writes or terminal secret disclosure")

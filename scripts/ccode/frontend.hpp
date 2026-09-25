@@ -43,6 +43,15 @@ class EventReader {
             return "";
         }
         if (type == "assistant") {
+            // SDK assistant errors can embed raw gateway bodies in text blocks.
+            // Classify only the structured field; never display those blocks.
+            if (event.contains("error") && !event.at("error").is_null()) {
+                const auto error = event.at("error").get<std::string>();
+                failed = true;
+                return error == "authentication_failed"
+                    ? "[E_GATEWAY_AUTH: authentication failed]\n"
+                    : "[E_ENGINE: request failed]\n";
+            }
             std::string output;
             const auto& content = event.at("message").at("content");
             if (!content.is_array()) throw ProtocolError("E_PROTOCOL");
@@ -67,7 +76,7 @@ class EventReader {
         if (type == "result") {
             if (complete) throw ProtocolError("E_PROTOCOL");
             complete = true;
-            failed = event.value("is_error", false) || event.value("subtype", std::string()) != "success";
+            failed = failed || event.value("is_error", false) || event.value("subtype", std::string()) != "success";
             if (event.contains("permission_denials") && !event["permission_denials"].empty())
                 return "[Some tool requests were denied]\n";
             return failed ? "[E_ENGINE: turn failed]\n" : "";

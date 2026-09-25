@@ -779,3 +779,17 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - 環境測試先在 MAX_RETRIES=0 斷言 RED，修復後六組本機 C++ 與 20 項 Python
   GREEN；包含呼叫者用中性別名嘗試覆寫的案例。真實兩版本引擎的 401 行為仍待
   Windows CI 證明，設定存在不等於引擎端到端已合格。整體仍未放行。
+
+### A18/A19 不重放通過至下一斷言，修復錯誤事件內容外洩
+
+- `1389662` / `36166994169` 兩版本不再逾時，依測試斷言順序，非零退出及
+  僅一次模型請求已通過；均在 Gateway details leaked to terminal 失敗。
+  不能把這次結果寫成 gateway 驗收成功。
+- 核對官方 SDK 的 AssistantMessage.error 型別（authentication_failed 等）：
+  https://github.com/anthropics/claude-agent-sdk-python/blob/main/src/claude_agent_sdk/types.py
+  前端先識別結構化 error，不把錯誤事件 content 當作一般模型文字輸出；
+  authentication_failed 對應 E_GATEWAY_AUTH，其餘未知錯誤使用固定 E_ENGINE。
+  不解析或轉印原始 gateway 訊息，後續 success result 也不得清除既有失敗狀態。
+- 新測試先因原始錯誤文字外洩而 RED，修復後六組 C++、20 項 Python GREEN。
+  401 整合斷言加強為必須出現 E_GATEWAY_AUTH，Windows 真實事件相容及遮罩
+  仍待下一輪驗證。本機單測不替代端到端，整體仍未放行。
