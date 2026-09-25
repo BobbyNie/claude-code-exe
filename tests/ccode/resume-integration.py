@@ -811,6 +811,38 @@ def verify(executable, previous_executable=None):
             assert json.loads((cross_data / "active-profile.json").read_text(encoding="utf-8")) == final_pointer
             print("PASS: incompatible actual engine refuses selected profile; moved program preserves workspace identity, resumed history, and separate data")
 
+            # Move the entire external data root without editing native history or receipts.
+            requests.clear()
+            data_before_move = profile_bytes(cross_data)
+            old_data = cross_data
+            cross_data = executable.parent / "搬移 external data"
+            shutil.move(str(old_data), cross_data)
+            assert not old_data.exists()
+            assert profile_bytes(cross_data) == data_before_move
+            cross_env["CCODE_DATA_DIR"] = str(cross_data)
+            cross_offline["CCODE_DATA_DIR"] = str(cross_data)
+            assert cross_command(relocated_binary, "--workspace-id", offline=True).stdout.strip() == identity_before_move
+            assert cross_session in cross_command(relocated_binary, "--sessions", offline=True).stdout
+            assert not requests
+            cross_command(relocated_binary, "--resume", cross_session, "--print", "after external data relocation")
+            assert len(requests) == 1
+            resumed_history = json.dumps(requests[0].get("messages", [])[:-1])
+            assert history_markers[0] in resumed_history
+            assert "after actual version rollback" in resumed_history
+            assert "after program directory relocation" in resumed_history
+            assert newer_marker not in resumed_history
+            assert not old_data.exists(), "Relocation must not recreate the old data root"
+            assert profile_bytes(relocated_directory) == program_before
+            for preserved in (next_profile, cross_preserved, old_data / "profile", cross_source):
+                relative = preserved.relative_to(old_data)
+                expected = {name[len(relative.as_posix()) + 1:]: content
+                    for name, content in data_before_move.items()
+                    if name.startswith(relative.as_posix() + "/")}
+                assert profile_bytes(cross_data / relative) == expected
+            assert json.loads((cross_data / "active-profile.json").read_text(encoding="utf-8")) == final_pointer
+            print("PASS: relocated external data root preserves workspace identity, actual resumed history, backups and program separation")
+
+
 
 
 
