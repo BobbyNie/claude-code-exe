@@ -1080,3 +1080,17 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   不放寬產品／oracle 的 bytes 要求。Windows 修正後回歸待驗。
 - long-workspace `108232898299`、`108232898430` 仍 WinError 267，整體
   failure。不得將通過的工具步驟等同本輪全部原生與 portable 案例通過。
+
+### 固定 bytes Windows 回歸及 console 停滯再次出現
+
+- `7d579ce` / `36184360358` 已等待至終態並讀取日誌。兩版本 Python 27 項、
+  native runtime／resume、portable 步驟通過；換行 fixture 修正已在 Windows
+  驗證。兩版本一般／case／junction 的跨工具 rename 均明確 PASS。
+- 2.1.221 `108234057952` 主測試全部成功；2.1.282 `108234058157` 在首個
+  permission allow 案例失敗：No real permission prompt，poll=None，兩條
+  captured pipe 空白，console 空白；kill 後 wait 15 秒仍逾時，frontend.lock
+  WinError 32。與較早 deny 案例不同，此次沒有先前提示留屏；不得把停滯僅
+  歸咎於舊 console 畫面。現有證據不足以確定卡在哪個啟動／清理階段。
+- cross-version `108237019701` 實際舊→新→舊成功。long-workspace 兩版本
+  仍在 CreateProcess WinError 267；整體 failure。下一步需蒐集進程／執行緒
+  等待證據以定位 console 停滯，而不是加重試或將此類失敗忽略。
