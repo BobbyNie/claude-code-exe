@@ -187,13 +187,32 @@ int main() {
     assert(pendingRejected);
     assert(readAll(registry) == saved && readAll(candidate) == interrupted);
     // Explicit preservation permits retry; never silently delete or reuse it.
-    const auto archived = root / "preserved-workspace-update";
-    fs::rename(candidate, archived);
+    const std::string recoveryId = "92345678-1234-1234-1234-123456789abc";
+    const auto archived = ccode::ArchiveWorkspacePending(registry.parent_path(), recoveryId);
+    assert(archived == registry.parent_path() / "workspace-recovery" / recoveryId / "pending.json");
     const auto third = ccode::ResolveWorkspace(registry, root / "third");
     assert(ccode::ValidSessionId(third) && third != first && third != other);
     assert(readAll(archived) == interrupted && !fs::exists(candidate));
     assert(ccode::ResolveWorkspace(registry, root) == first);
     assert(ccode::ResolveWorkspace(registry, root / "other") == other);
+    // Recovery failures preserve both committed and interrupted evidence.
+    const auto afterRetry = readAll(registry);
+    auto expectRecoveryError = [&](const std::string& requested, const std::string& expected) {
+        bool rejected = false;
+        try { ccode::ArchiveWorkspacePending(registry.parent_path(), requested); }
+        catch (const std::runtime_error& error) { rejected = error.what() == expected; }
+        assert(rejected && readAll(registry) == afterRetry);
+    };
+    expectRecoveryError(recoveryId, "E_WORKSPACE_PENDING_MISSING");
+    { std::ofstream out(candidate, std::ios::binary); out << interrupted; }
+    expectRecoveryError("../escape", "E_WORKSPACE_RECOVERY_ID");
+    expectRecoveryError(recoveryId, "E_WORKSPACE_RECOVERY_EXISTS");
+    assert(readAll(candidate) == interrupted && readAll(archived) == interrupted);
+    fs::remove(candidate);
+    fs::create_directory(candidate);
+    expectRecoveryError("82345678-1234-1234-1234-123456789abc", "E_WORKSPACE_PENDING_INVALID");
+    assert(fs::is_directory(candidate));
+    fs::remove(candidate);
     // Restore the initial committed registry for the independent link test.
     { std::ofstream out(registry, std::ios::binary); out << saved; }
     auto victim = root / "must-preserve.txt";

@@ -31,6 +31,33 @@ inline std::string NewWorkspaceId() {
     }
     return id;
 }
+// Caller holds the profile lock. Preserve opaque interrupted bytes without
+// parsing, merging, or changing the committed workspace identity registry.
+inline std::filesystem::path ArchiveWorkspacePending(const std::filesystem::path& profile,
+                                                     const std::string& recoveryId) {
+    namespace fs = std::filesystem;
+    if (!ValidSessionId(recoveryId)) throw std::runtime_error("E_WORKSPACE_RECOVERY_ID");
+    const auto pending = NativeIoPath(profile / "workspaces.json.new");
+    const auto status = fs::symlink_status(pending);
+    if (!fs::exists(status)) throw std::runtime_error("E_WORKSPACE_PENDING_MISSING");
+    if (fs::is_symlink(status) || !fs::is_regular_file(status))
+        throw std::runtime_error("E_WORKSPACE_PENDING_INVALID");
+    const auto archive = NativeIoPath(profile / "workspace-recovery");
+    const auto directory = archive / recoveryId;
+    const auto archiveStatus = fs::symlink_status(archive);
+    if (fs::exists(archiveStatus) && (fs::is_symlink(archiveStatus) || !fs::is_directory(archiveStatus)))
+        throw std::runtime_error("E_WORKSPACE_RECOVERY_INVALID");
+    if (fs::exists(fs::symlink_status(directory))) throw std::runtime_error("E_WORKSPACE_RECOVERY_EXISTS");
+    try {
+        fs::create_directories(archive);
+        if (!fs::create_directory(directory)) throw std::runtime_error("E_WORKSPACE_RECOVERY_EXISTS");
+        fs::rename(pending, directory / "pending.json");
+    } catch (const fs::filesystem_error&) {
+        throw std::runtime_error("E_WORKSPACE_RECOVERY_WRITE");
+    }
+    return profile / "workspace-recovery" / recoveryId / "pending.json";
+}
+
 // Caller holds the profile lock. This registry is persistent identity metadata,
 // not a substitute for authoritative engine transcripts. Runtime paths never
 // participate in identity. Relocating the workspace itself needs explicit migration.

@@ -206,7 +206,7 @@ int PermissionServer() {
     return 0;
 }
 struct Options {
-    bool print = false, sessions = false, resumePicker = false, latest = false, workspaceId = false, snapshotProfile = false, allSessions = false, archivePending = false;
+    bool print = false, sessions = false, resumePicker = false, latest = false, workspaceId = false, snapshotProfile = false, allSessions = false, archivePending = false, archiveWorkspacePending = false;
     fs::path data;
     std::string prompt, session, stageSnapshot, validateCandidate, activateCandidate, rollbackSnapshot, validateRollback, activateRollback;
     std::vector<std::wstring> engine;
@@ -243,6 +243,10 @@ Options Parse(int argc, wchar_t** argv, const fs::path& module) {
             if (!ccode::ValidSessionId(options.activateRollback)) throw std::runtime_error("E_ROLLBACK_DATA");
         }
         else if (!literal && arg == L"--stage-profile") options.stageSnapshot = Utf8(next());
+        else if (!literal && arg == L"--archive-workspace-pending") {
+            if (options.archiveWorkspacePending) throw std::runtime_error("E_ARGUMENT");
+            options.archiveWorkspacePending = true;
+        }
         else if (!literal && arg == L"--archive-activation-pending") options.archivePending = true;
         else if (!literal && arg == L"--activate-profile") options.activateCandidate = Utf8(next());
         else if (!literal && arg == L"--all-sessions") options.allSessions = true;
@@ -313,6 +317,12 @@ Options Parse(int argc, wchar_t** argv, const fs::path& module) {
         !options.session.empty() || !options.stageSnapshot.empty() || !options.validateCandidate.empty() ||
         !options.activateCandidate.empty() || !options.rollbackSnapshot.empty() || !options.validateRollback.empty() ||
         !options.prompt.empty() || !options.engine.empty())) throw std::runtime_error("E_ARGUMENT");
+    if (options.archiveWorkspacePending && (options.print || options.sessions || options.resumePicker ||
+        options.latest || options.workspaceId || options.allSessions || options.archivePending || options.snapshotProfile ||
+        !options.session.empty() || !options.stageSnapshot.empty() || !options.validateCandidate.empty() ||
+        !options.activateCandidate.empty() || !options.rollbackSnapshot.empty() || !options.validateRollback.empty() ||
+        !options.activateRollback.empty() || !options.prompt.empty() || !options.engine.empty()))
+        throw std::runtime_error("E_ARGUMENT");
     options.data = fs::absolute(options.data).lexically_normal();
     return options;
 }
@@ -470,6 +480,7 @@ int Main(int argc, wchar_t** argv) {
             "  --validate-profile ID  Verify candidate (--resume ID or --all-sessions)\n"
             "  --all-sessions         Verify every top-level session in its workspace\n"
             "  --archive-activation-pending  Preserve interrupted activation evidence\n"
+            "  --archive-workspace-pending   Preserve interrupted workspace identity evidence\n"
             "  --activate-profile ID  Activate a fully verified candidate\n"
             "  --activate-rollback ID Commit a fully verified rollback\n"
             "  --allowedTools RULE    Explicit tool permission rule\n"
@@ -505,6 +516,12 @@ int Main(int argc, wchar_t** argv) {
     fs::create_directories(profile);
     Handle lock(CreateFileW((profile / L"frontend.lock").c_str(), GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (!lock.valid()) throw std::runtime_error("E_PROFILE_BUSY");
+    if (options.archiveWorkspacePending) {
+        const auto recoveryId = ccode::NewWorkspaceId();
+        ccode::ArchiveWorkspacePending(profile, recoveryId);
+        std::cout << recoveryId << '\n';
+        return 0;
+    }
     if (!options.rollbackSnapshot.empty()) {
         const auto rollbackId = ccode::NewWorkspaceId();
         const auto preservationId = ccode::NewWorkspaceId();

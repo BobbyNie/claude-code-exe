@@ -28,7 +28,13 @@ def check(executable):
         assert not any(name in result.stdout.lower() for name in ("claude", "anthropic"))
         assert not (root / "data").exists(), "Informational commands must not create profile data"
         test_id = "a2345678-1234-1234-1234-123456789abc"
-        for args in (("--validate-rollback",),
+        for args in (("--archive-workspace-pending", "--sessions"),
+                     ("--archive-workspace-pending", "--archive-activation-pending"),
+                     ("--archive-workspace-pending", "--snapshot-profile"),
+                     ("--archive-workspace-pending", "--model", "test"),
+                     ("--archive-workspace-pending", "--prepare-rollback", test_id),
+                     ("--archive-workspace-pending", "unexpected prompt"),
+                     ("--validate-rollback",),
                      ("--validate-rollback", test_id, "--sessions"),
                      ("--validate-rollback", test_id, "--resume", test_id),
                      ("--validate-rollback", test_id, "--all-sessions"),
@@ -147,8 +153,13 @@ def check(executable):
         assert blocked.returncode == 64 and blocked.stderr.strip() == "E_WORKSPACE_PENDING"
         assert not blocked.stdout and "private-marker" not in blocked.stderr
         assert pending.read_bytes() == pending_bytes and registry.read_bytes() == committed
-        archive = data / "preserved-workspace-update"
-        pending.rename(archive)
+        recovery = run("--data-dir", str(data), "--archive-workspace-pending")
+        assert recovery.returncode == 0, recovery.stderr
+        recovery_id = str(uuid.UUID(recovery.stdout.strip()))
+        archive = data / "profile" / "workspace-recovery" / recovery_id / "pending.json"
+        assert registry.read_bytes() == committed and archive.read_bytes() == pending_bytes
+        missing = run("--data-dir", str(data), "--archive-workspace-pending")
+        assert missing.returncode == 64 and missing.stderr.strip() == "E_WORKSPACE_PENDING_MISSING"
         retried = register_new_workspace()
         assert retried.returncode == 0 and str(uuid.UUID(retried.stdout.strip())) != workspace_id
         assert archive.read_bytes() == pending_bytes and not pending.exists()

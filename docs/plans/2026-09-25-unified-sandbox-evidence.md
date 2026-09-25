@@ -1191,3 +1191,16 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   拒絕且不洩漏 pending 內容、手動保存後可重試。該實際命令驗收待 CI。
 - 這是特定中斷殘留的保全，不等同斷電／磁碟滿全矩陣完成；也沒有新增自動
   合併或宣稱已完成工作區搬移遷移。保存動作目前由操作員明確執行。
+
+### 工作區中斷登記的公開封存命令
+
+- 新增 --archive-workspace-pending，持有既有 data-root／profile 排他鎖後，
+  將 workspaces.json.new 原樣封存至 profile/workspace-recovery/<UUID>/pending.json。
+  只輸出 recovery UUID；不解析／合併 pending，不修改已提交 registry，不需
+  API 憑證或啟動引擎。拒絕与正常回合、其他維護動作及引擎參數混用。
+- TDD：先缺封存介面 RED，實作後正常封存／再登記 GREEN；另以缺檔、無效
+  recovery ID、既存目的地及非普通檔案注入 RED，再加入中性分類拒絕使 GREEN。
+  原身份、pending 與已封存 bytes 均檢查保全；不覆寫既存恢復證據。
+- 六組 C++、Python 29 通過／1 Windows 專用跳過。Windows portable 驗收
+  已改為呼叫公開命令而非測試自行 rename，並覆蓋混用參數及再次封存缺檔。
+  真實 Windows 結果待 CI，不把本機 helper 測試当成完整產品驗收。
