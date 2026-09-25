@@ -70,7 +70,9 @@ try {
 
     $env:BUN_BE_BUN = '1'
     try {
-        Invoke-ExpectExit -Arguments @((Join-Path $PSScriptRoot '../../tests/ccode/runtime-paths.js')) -Expected 0
+        $fixture = Join-Path $testRoot 'runtime-paths.js'
+        Copy-Item (Join-Path $PSScriptRoot '../../tests/ccode/runtime-paths.js') $fixture
+        Invoke-ExpectExit -Arguments @($fixture) -Expected 0
     }
     finally {
         Remove-Item Env:BUN_BE_BUN -ErrorAction SilentlyContinue
