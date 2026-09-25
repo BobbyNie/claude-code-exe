@@ -1424,3 +1424,19 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   檢查通過。Windows 分支未執行，不宣稱已驗證 Windows 崩潰持久性。
 - 此變更只處理候選收據配置時的覆寫；rollback-validation 的寫入仍需獨立
   TDD 驗證。rename 前並發替換、完整斷電／磁碟滿恢復矩陣仍非已完成項目。
+
+### 回退驗證收據：保留探測期間出現的 pending 證據
+
+- 使用另一個正式 PrepareProfileRollback 建立的候選，在第一個歷史 probe
+  寫入 rollback-validation.json.pending。舊程式在兩個 probe 完成後截斷、
+  移走該檔，於原 bytes 保留斷言實際 RED；不是只測 helper 是否存在。
+- 回退收據改用與候選收據相同的獨占建立原語，碰到既有 pending 回報
+  E_ROLLBACK_WRITE。原證據完整保留、不產生 rollback-validation.json；
+  已完成的內層 validation.json 保留，不自動刪證據或重試。
+- 另驗證只有內層收據不能啟用回退：ActivateProfileRollback 拒絕，整個
+  候選檔案集合／內容、active pointer、目前 profile 與 preservation snapshot
+  均保持不變。另一個乾淨候選的原完整驗證／啟用回歸仍通過。
+- 六組 C++ 本機回歸通過；Python 47 項中 46 通過、1 Windows 專用跳過；
+  diff 檢查通過。這不替代 Windows 實際引擎、磁碟滿、斷電或並發替換驗收。
+- 再查 Actions：最新可見仍是 36192868765、SHA 454abc2 的 terminal failure，
+  沒有新 Windows 結果。本輪未推送／重跑，不以歷史付款錯誤推斷當前帳戶狀態。

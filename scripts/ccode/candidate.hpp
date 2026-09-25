@@ -461,10 +461,7 @@ inline Json ValidateProfileRollback(const std::filesystem::path& data, const std
     guard();
     const Json result = {{"schema", 1}, {"plan", plan}, {"validation", receipt}};
     const auto pending = SnapshotIoPath(candidate / "rollback-validation.json.pending");
-    std::ofstream output(pending, std::ios::binary);
-    output << result.dump(2) << '\n';
-    output.close();
-    if (!output) throw std::runtime_error("E_ROLLBACK_WRITE");
+    WriteCandidateEvidence(pending, result.dump(2) + "\n", "E_ROLLBACK_WRITE");
     guard();
     fs::rename(pending, SnapshotIoPath(candidate / "rollback-validation.json"));
     return result;

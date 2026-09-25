@@ -680,6 +680,44 @@ int main() try {
         assert(Read(changedPath) == changed.dump());
         Write(changedPath, original);
     }
+    // A different prepared candidate isolates the failed publication evidence.
+    const std::string lateRollbackId = "11111111-1111-4111-8111-111111111111";
+    const std::string latePreservationId = "22222222-2222-4222-8222-222222222222";
+    const std::string lateVerificationId = "33333333-3333-4333-8333-333333333333";
+    ccode::PrepareProfileRollback(activationRoot, historyId, lateRollbackId,
+        latePreservationId, incompatibleEngine, testDigest);
+    const auto lateRollback = activationRoot / "rollback-candidates" / lateRollbackId;
+    const auto lateRollbackPending = lateRollback / "rollback-validation.json.pending";
+    bool lateRollbackRejected = false;
+    size_t lateRollbackProbes = 0;
+    try {
+        ccode::ValidateProfileRollback(activationRoot, lateRollbackId, lateVerificationId,
+            incompatibleEngine, testDigest,
+            [&](const fs::path&, const fs::path&, const std::string&, const std::string&) {
+                if (++lateRollbackProbes == 1)
+                    Write(lateRollbackPending, "retain interrupted rollback evidence");
+                return true;
+            });
+    } catch (const std::runtime_error& error) {
+        lateRollbackRejected = std::string(error.what()) == "E_ROLLBACK_WRITE";
+    }
+    assert(Read(lateRollbackPending) == "retain interrupted rollback evidence");
+    assert(lateRollbackRejected && lateRollbackProbes == 2);
+    assert(!fs::exists(lateRollback / "rollback-validation.json"));
+    assert(fs::exists(lateRollback / "validation.json"));
+    // A completed inner receipt alone cannot authorize the rollback.
+    const auto retainedEvidence = ccode::CandidateFiles(lateRollback, testDigest);
+    bool partialRollbackDenied = false;
+    try { ccode::ActivateProfileRollback(activationRoot, lateRollbackId, incompatibleEngine, testDigest); }
+    catch (const std::runtime_error& error) {
+        partialRollbackDenied = std::string(error.what()) == "E_CANDIDATE_DATA";
+    }
+    assert(partialRollbackDenied);
+    assert(ccode::CandidateFiles(lateRollback, testDigest) == retainedEvidence);
+    assert(Read(activationRoot / "active-profile.json") == secondPointerBytes);
+    assert(ccode::CandidateFiles(nextCandidate / "profile", testDigest) == currentFiles);
+    assert(ccode::VerifyProfileSnapshot(activationRoot / "snapshots" / latePreservationId,
+        testDigest)["files"] == currentFiles);
     size_t rollbackProbes = 0;
     const auto rollbackReceipt = ccode::ValidateProfileRollback(activationRoot, historyId,
         snapshotId, incompatibleEngine, testDigest,
