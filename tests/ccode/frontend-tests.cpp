@@ -69,6 +69,23 @@ int main() {
         ExpectError(invalidRegistry, duplicateDeclaration.substr(split), "E_TOOL_DUPLICATE_NAME");
         ExpectError(invalidRegistry, init, "E_PROTOCOL_FAILED");
     }
+    // A turn's declared tool registry cannot be replaced by another init.
+    const auto replacementInit = ccode::Json{{"type", "system"}, {"subtype", "init"},
+        {"session_id", "s2"}, {"tools", {"Bash"}}}.dump() + "\n";
+    for (const auto& secondInit : {init, replacementInit}) {
+        for (size_t split = 0; split < secondInit.size(); ++split) {
+            ccode::EventReader repeatedInit;
+            repeatedInit.Feed(init);
+            assert(repeatedInit.Feed(secondInit.substr(0, split)).empty());
+            ExpectError(repeatedInit, secondInit.substr(split), "E_PROTOCOL_ORDER");
+            assert(repeatedInit.session == "s1");
+            ExpectError(repeatedInit, wire, "E_PROTOCOL_FAILED");
+        }
+    }
+    ccode::EventReader completedBeforeInit;
+    completedBeforeInit.Feed("{\"type\":\"result\",\"subtype\":\"success\"}\n");
+    ExpectError(completedBeforeInit, init, "E_PROTOCOL_ORDER");
+    ExpectError(completedBeforeInit, wire, "E_PROTOCOL_FAILED");
     auto tool = [](const std::string& name, const std::string& id, const ccode::Json& input) {
         return ccode::Json{{"type", "assistant"}, {"message", {{"content", ccode::Json::array({
             {{"type", "tool_use"}, {"name", name}, {"id", id}, {"input", input}}

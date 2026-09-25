@@ -34,6 +34,10 @@ class EventReader {
         // Do not render error fields or rely on a particular delay/category.
         if (type == "system" && event.value("subtype", std::string()) == "api_retry")
             throw ProtocolError("E_GATEWAY_RETRY");
+        // Initialization fixes the registry for this turn. Reject a replacement
+        // before it can mutate the session identity or registered tool names.
+        if (type == "system" && event.value("subtype", std::string()) == "init" &&
+            (toolRegistryReceived || complete)) throw ProtocolError("E_PROTOCOL_ORDER");
         if (event.contains("session_id")) session = event.at("session_id").get<std::string>();
         if (type == "system" && event.value("subtype", std::string()) == "init") {
             const auto& tools = event.at("tools");
