@@ -897,3 +897,14 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - 前一輪 `42c71b8` / `36172601161` 已完成：新版仍有同樣的兩次請求紅燈，
   但跨版本 job 成功，兩個 long-workspace job 都實際執行並報 WinError 267。
   證明獨立驗收調度已生效，並未以跳過其他門檻遮蔽整體失敗。
+
+### A10/A11 補完整工具參數、缺 block 終止事件的端到端邊界
+
+- 前輪 EOF 案例的 input_json_delta 本身不是完整 JSON，不能因此宣稱已覆蓋
+  「參數已完整但 block／message 未終止」。新增正常 HTTP EOF 案例：Write
+  已明確批准、參數是完整合法 JSON，但不送 content_block_stop、message_delta
+  或 message_stop；仍要求一次模型請求、非零退出、中性錯誤、無工作區寫入及遮罩。
+- fixture 事件產生器測試先 RED（缺少介面），最小實作後驗證完整 JSON 案例
+  確實缺三個終止事件，原有不完整 JSON 案例仍無法解析。23 項 Python、語法及
+  diff 檢查 GREEN。這是 fixture 的紅綠測試，不是產品端到端通過；Windows
+  結果待新 run。沒有改產品邏輯或放寬任何既有驗收標準。

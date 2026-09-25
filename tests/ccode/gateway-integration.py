@@ -10,7 +10,24 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
-def check_rejection(executable, status_code, error_type, diagnostic, stream_cut=False, graceful_eof=False):
+def unfinished_tool_events(model, target, marker, complete_arguments=False):
+    arguments = json.dumps({"file_path": target, "content": marker})
+    if not complete_arguments:
+        arguments = arguments[:-2]
+    return [
+        ("message_start", {"message": {
+            "id": "msg_cut", "type": "message", "role": "assistant",
+            "model": model, "content": [], "stop_reason": None,
+            "usage": {"input_tokens": 10, "output_tokens": 0}}}),
+        ("content_block_start", {"index": 0, "content_block": {
+            "type": "tool_use", "id": "tool_cut", "name": "Write", "input": {}}}),
+        ("content_block_delta", {"index": 0, "delta": {
+            "type": "input_json_delta", "partial_json": arguments}}),
+    ]
+
+
+def check_rejection(executable, status_code, error_type, diagnostic, stream_cut=False,
+                    graceful_eof=False, complete_arguments=False):
     with tempfile.TemporaryDirectory(prefix="ccode-gateway-") as folder:
         root = Path(folder).resolve()
         program = root / "program"
@@ -36,18 +53,8 @@ def check_rejection(executable, status_code, error_type, diagnostic, stream_cut=
                 if stream_cut and path == "/v1/messages":
                     request = json.loads(body)
                     assert request.get("stream"), "Fixture requires a streaming request"
-                    partial = json.dumps({"file_path": str(workspace / "must-not-exist.txt"),
-                                          "content": private_marker})[:-2]
-                    events = [
-                        ("message_start", {"message": {
-                            "id": "msg_cut", "type": "message", "role": "assistant",
-                            "model": request["model"], "content": [], "stop_reason": None,
-                            "usage": {"input_tokens": 10, "output_tokens": 0}}}),
-                        ("content_block_start", {"index": 0, "content_block": {
-                            "type": "tool_use", "id": "tool_cut", "name": "Write", "input": {}}}),
-                        ("content_block_delta", {"index": 0, "delta": {
-                            "type": "input_json_delta", "partial_json": partial}}),
-                    ]
+                    events = unfinished_tool_events(request["model"],
+                        str(workspace / "must-not-exist.txt"), private_marker, complete_arguments)
                     payload = "".join(f"event: {kind}\ndata: {json.dumps(dict(value, type=kind))}\n\n"
                                       for kind, value in events).encode()
                     self.send_response(200)
@@ -137,7 +144,8 @@ def check_rejection(executable, status_code, error_type, diagnostic, stream_cut=
             assert diagnostic in terminal, f"HTTP {status_code} needs its neutral diagnostic"
             assert not list(workspace.iterdir()), "Rejected request changed workspace"
             assert not list(program.rglob("*.jsonl")), "History leaked into program directory"
-            scenario = ("unfinished tool stream at clean HTTP EOF" if graceful_eof
+            scenario = ("complete tool JSON without block termination at clean HTTP EOF" if complete_arguments
+                        else "unfinished tool stream at clean HTTP EOF" if graceful_eof
                         else "truncated tool stream" if stream_cut else f"HTTP {status_code}")
             print(f"PASS: actual engine {scenario} fails without model-request replay, workspace writes or terminal secret disclosure")
         finally:
@@ -152,3 +160,4 @@ if __name__ == "__main__":
     check_rejection(executable, 429, "rate_limit_error", "E_GATEWAY_RATE_LIMIT")
     check_rejection(executable, 200, None, "E_", stream_cut=True)
     check_rejection(executable, 200, None, "E_", stream_cut=True, graceful_eof=True)
+    check_rejection(executable, 200, None, "E_", stream_cut=True, graceful_eof=True, complete_arguments=True)
