@@ -108,6 +108,11 @@ try {
         (Join-Path $PSScriptRoot "..\..\tests\ccode\native-tests.cpp") "/Fe:$nativeTests"
     Invoke-Checked $nativeTests
 
+    $profileTests = Join-Path $work "ccode-profile-tests.exe"
+    Invoke-Checked cl.exe /nologo /std:c++17 /O2 /EHsc `
+        (Join-Path $PSScriptRoot "..\..\tests\ccode\profile-tests.cpp") "/Fe:$profileTests"
+    Invoke-Checked $profileTests
+
     Write-Output "Compiling and running hook integration tests..."
     $hookTests = Join-Path $work "ccode-hook-tests.exe"
     Invoke-Checked cl.exe /nologo /std:c++17 /O2 /EHsc `

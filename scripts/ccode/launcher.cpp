@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "common.hpp"
+#include "profile.hpp"
 
 namespace fs = std::filesystem;
 
@@ -182,6 +183,18 @@ int wmain(int argc, wchar_t** argv) {
     fs::create_directories(profile / L"roaming");
     fs::create_directories(profile / L"local");
     fs::create_directories(profile / L"temp");
+    try {
+        const auto restored = ccode::RestoreLegacyProfile(profile / L"home");
+        if (restored.copied || restored.skipped) {
+            std::wcerr << L"Profile recovery: copied " << restored.copied
+                       << L" missing files; kept/skipped " << restored.skipped
+                       << L" existing or linked entries. Original .cc data retained.\n";
+        }
+    } catch (const std::exception&) {
+        std::wcerr << L"Unable to finish legacy profile recovery. Original .cc data retained; "
+                      L"check permissions and free disk space before restarting.\n";
+        return 74;
+    }
     SetEnvironmentVariableW(L"HOME", (profile / L"home").c_str());
     SetEnvironmentVariableW(L"USERPROFILE", (profile / L"home").c_str());
     SetEnvironmentVariableW(L"APPDATA", (profile / L"roaming").c_str());
