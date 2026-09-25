@@ -1275,3 +1275,14 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   long-workspace `108261108989`、`108261109011` 實際仍 WinError 267，
   整體 failure。沒有 DIAGNOSTIC timeout 快照，不能藉此聲稱前輪 unavailable
   或先前 console 停滯的根因已確定／已修復。新增 TLS 門檻不在本 run 範圍。
+
+### TLS 新門檻被 GitHub Actions 帳戶限制阻擋，未執行
+
+- `454abc2` / `36192868765` 立即終態 failure，所有 jobs 都沒有 steps；
+  `gh run view --log-failed` 回報 log not found。已查閱新版 job
+  `108261875239` 的 check-run annotation：帳戶近期付款失敗或需要提高
+  spending limit，job 未啟動。annotation 沒有區分這兩種原因，不能自行推斷。
+- 這是 Actions 帳戶可用性阻擋，不是 TLS 測試 RED／GREEN；所有新 Windows
+  案例均未執行。既有本機 TLS fixture GREEN 不替代兩版本引擎驗收。
+  需帳戶擁有者確認 Billing & plans 並恢復 runner 可用性；不自行更改計費、
+  不盲目 rerun，也不削減測試範圍。完整目標仍實施中、未放行。
