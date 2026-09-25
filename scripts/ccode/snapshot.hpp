@@ -68,7 +68,8 @@ inline std::filesystem::path CreateProfileSnapshot(const std::filesystem::path& 
             const auto hash = digest(item.second);
             operation = "source-size";
             const auto size = fs::file_size(item.second);
-            const auto destination = copied / fs::u8path(item.first);
+            // Manifest names use /; extended Windows I/O requires native separators.
+            const auto destination = SnapshotIoPath(copied / fs::u8path(item.first));
             operation = "create-parent";
             fs::create_directories(destination.parent_path());
             operation = "copy-file";

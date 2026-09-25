@@ -199,3 +199,9 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   同一來源／副本 hash、禁止覆寫及 symlink 檢查均保留；新增長路徑候選副本檢查。
   本機六組 C++、八項 Python 測試通過，Windows 結果待驗；此切片不等同
   整個產品所有長路徑／UNC／junction 已驗收。
+
+- `7ed7122` / `36135633536` 尚未轉綠：既有短路徑 profile 測試在 copy-file
+  回報 system:123。檢查發現 manifest 的 `/` 相對名稱加入 extended-length
+  目的地後未轉成 Windows 原生分隔符；補在最終 I/O 邊界正規化分隔符，
+  不更改 manifest 格式。既有短路徑及新長路徑測試全部保留，本機回歸通過，
+  Windows 再驗中。
