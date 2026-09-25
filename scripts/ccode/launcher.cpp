@@ -3,6 +3,8 @@
 #include <windows.h>
 #include <bcrypt.h>
 #include <atomic>
+#include <climits>
+#include <cwchar>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -132,6 +134,22 @@ fs::path PrepareRuntime(const fs::path& directory, const Json& metadata) {
 }
 bool AskPermission(const Json& args) {
     if (Env(L"CCODE_INTERACTIVE") != L"1") return false;
+    // The engine may launch MCP workers in a separate hidden console. Never ask
+    // for approval there: explicitly use the foreground frontend's console.
+    const auto owner = Env(L"CCODE_FRONTEND_PID");
+    if (owner.empty() || owner.find_first_not_of(L"0123456789") != std::wstring::npos) return false;
+    wchar_t* end = nullptr;
+    const auto pid = wcstoul(owner.c_str(), &end, 10);
+    if (!pid || *end || pid == ULONG_MAX) return false;
+    const HANDLE standard[] = {GetStdHandle(STD_INPUT_HANDLE), GetStdHandle(STD_OUTPUT_HANDLE),
+                               GetStdHandle(STD_ERROR_HANDLE)};
+    FreeConsole();
+    const bool attached = AttachConsole(static_cast<DWORD>(pid)) != FALSE;
+    // Attaching a console must not replace the MCP JSON-RPC pipe handles.
+    SetStdHandle(STD_INPUT_HANDLE, standard[0]);
+    SetStdHandle(STD_OUTPUT_HANDLE, standard[1]);
+    SetStdHandle(STD_ERROR_HANDLE, standard[2]);
+    if (!attached) return false;
     Handle input(CreateFileW(L"CONIN$", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
                              nullptr, OPEN_EXISTING, 0, nullptr));
     Handle output(CreateFileW(L"CONOUT$", GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
@@ -211,6 +229,7 @@ std::vector<wchar_t> ChildEnvironment(const fs::path& profile, bool interactive)
     for (auto cursor = block; *cursor; cursor += wcslen(cursor) + 1) source.emplace_back(cursor);
     FreeEnvironmentStringsW(block);
     source.push_back(interactive ? L"CCODE_INTERACTIVE=1" : L"CCODE_INTERACTIVE=0");
+    source.push_back(L"CCODE_FRONTEND_PID=" + std::to_wstring(GetCurrentProcessId()));
     auto entries = ccode::BuildEnvironment(source, profile);
     std::vector<wchar_t> result;
     for (auto& entry : entries) { result.insert(result.end(), entry.begin(), entry.end()); result.push_back(0); }
