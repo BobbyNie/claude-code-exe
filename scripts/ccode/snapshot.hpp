@@ -4,20 +4,9 @@
 #include <map>
 
 namespace ccode {
-// Use extended-length paths only for local filesystem I/O. Do not alter stored
-// relative names, engine cwd, or the caller-visible snapshot/candidate path.
+// Retain the snapshot API while sharing native I/O conversion with history readers.
 inline std::filesystem::path SnapshotIoPath(const std::filesystem::path& path) {
-#ifdef _WIN32
-    auto absolute = std::filesystem::absolute(path).lexically_normal();
-    absolute.make_preferred();
-    const auto value = absolute.native();
-    if (value.rfind(L"\\\\?\\", 0) == 0) return absolute;
-    if (value.rfind(L"\\\\.\\", 0) == 0) throw std::runtime_error("E_SNAPSHOT_LOCATION");
-    if (value.rfind(L"\\\\", 0) == 0) return std::filesystem::path(L"\\\\?\\UNC\\" + value.substr(2));
-    return std::filesystem::path(L"\\\\?\\" + value);
-#else
-    return path;
-#endif
+    return NativeIoPath(path);
 }
 using SnapshotDigest = std::function<std::string(const std::filesystem::path&)>;
 // Caller holds the exclusive profile lock for the entire operation. A snapshot

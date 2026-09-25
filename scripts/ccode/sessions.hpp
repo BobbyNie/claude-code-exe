@@ -1,6 +1,7 @@
 #pragma once
 #include "frontend.hpp"
 #include "common.hpp"
+#include "filesystem.hpp"
 #include <filesystem>
 #include <fstream>
 #include <vector>
@@ -32,9 +33,10 @@ inline std::vector<Session> ListSessions(const std::filesystem::path& projects,
                                        const std::filesystem::path& workspace) {
     namespace fs = std::filesystem;
     std::vector<Session> result;
-    if (!fs::exists(projects)) return result;
+    const auto ioProjects = NativeIoPath(projects);
+    if (!fs::exists(ioProjects)) return result;
     // Read the authoritative transcripts, never a second mutable session database.
-    for (const auto& project : fs::directory_iterator(projects)) {
+    for (const auto& project : fs::directory_iterator(ioProjects)) {
         if (project.is_symlink() || !project.is_directory()) continue;
         for (const auto& file : fs::directory_iterator(project.path())) {
             if (file.is_symlink() || !file.is_regular_file() || file.path().extension() != ".jsonl") continue;
