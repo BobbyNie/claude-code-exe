@@ -24,14 +24,16 @@ int main() {
         assert(output == u8"中文🙂\n");
     }
     // Engine-generated error text is untrusted diagnostics, not model output.
-    for (const auto& code : {"authentication_failed", "future-private-error"}) {
+    for (const auto& code : {"authentication_failed", "rate_limit", "future-private-error"}) {
         ccode::EventReader rejected;
         const auto errorEvent = ccode::Json{{"type", "assistant"}, {"error", code},
             {"message", {{"content", ccode::Json::array({
                 {{"type", "text"}, {"text", "private-gateway-detail secret-token"}}
             })}}}}.dump() + "\n";
         const auto expected = std::string(code) == "authentication_failed"
-            ? "[E_GATEWAY_AUTH: authentication failed]\n" : "[E_ENGINE: request failed]\n";
+            ? "[E_GATEWAY_AUTH: authentication failed]\n"
+            : std::string(code) == "rate_limit" ? "[E_GATEWAY_RATE_LIMIT: request rate limited]\n"
+            : "[E_ENGINE: request failed]\n";
         assert(rejected.Feed(errorEvent) == expected);
         assert(rejected.failed);
         // A contradictory success result must not erase an earlier error.

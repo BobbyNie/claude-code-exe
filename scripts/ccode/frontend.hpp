@@ -50,6 +50,7 @@ class EventReader {
                 failed = true;
                 return error == "authentication_failed"
                     ? "[E_GATEWAY_AUTH: authentication failed]\n"
+                    : error == "rate_limit" ? "[E_GATEWAY_RATE_LIMIT: request rate limited]\n"
                     : "[E_ENGINE: request failed]\n";
             }
             std::string output;

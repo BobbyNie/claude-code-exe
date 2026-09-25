@@ -793,3 +793,18 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - 新測試先因原始錯誤文字外洩而 RED，修復後六組 C++、20 項 Python GREEN。
   401 整合斷言加強為必須出現 E_GATEWAY_AUTH，Windows 真實事件相容及遮罩
   仍待下一輪驗證。本機單測不替代端到端，整體仍未放行。
+
+### HTTP 401 真實引擎驗收 GREEN；追加 429 分類案例
+
+- `7afab7c` / `36167769785` 兩版本 jobs `108179588875`（2.1.282）及
+  `108179589344`（2.1.221）成功；已讀取實際日誌，均輸出 HTTP 401 PASS。
+  斷言涵蓋非零退出、一次模型請求、E_GATEWAY_AUTH、假 token／gateway 私有
+  標記不出現在終端、工作區無寫入及程式區無 JSONL。只證明本機 fixture 的 401，
+  不代表真實企業 gateway 或所有敏感內容儲存邊界已驗收。
+- cross-version `108181267182` 成功，實際日誌確認舊→新→舊及程式／資料根
+  搬移續接仍通過。long-workspace `108181267322`、`108181267328` 仍為
+  WinError 267，整體 workflow failure，未放行。
+- 下一個垂直切片為 HTTP 429：沿用完整斷言，fixture 回 rate_limit_error 並帶
+  Retry-After: 1，必須只發一次請求且輸出 E_GATEWAY_RATE_LIMIT。前端分類
+  測試先 RED，加入固定中性分類後六組 C++、20 項 Python、語法與 diff 檢查
+  GREEN。兩版本實際 429 行為待 Windows CI，沒有提前標為通過。

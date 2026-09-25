@@ -10,7 +10,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
-def check_unauthorized(executable):
+def check_rejection(executable, status_code, error_type, diagnostic):
     with tempfile.TemporaryDirectory(prefix="ccode-gateway-") as folder:
         root = Path(folder).resolve()
         program = root / "program"
@@ -35,12 +35,14 @@ def check_unauthorized(executable):
                 if path == "/v1/messages/count_tokens":
                     status, response = 200, {"input_tokens": 100}
                 else:
-                    status, response = 401, {"type": "error", "error": {
-                        "type": "authentication_error", "message": private_marker}}
+                    status, response = status_code, {"type": "error", "error": {
+                        "type": error_type, "message": private_marker}}
                 payload = json.dumps(response).encode()
                 self.send_response(status)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(payload)))
+                if status == 429:
+                    self.send_header("Retry-After", "1")
                 self.end_headers()
                 self.wfile.write(payload)
 
@@ -79,13 +81,13 @@ def check_unauthorized(executable):
                 raise AssertionError("Gateway rejection timed out: " + json.dumps(diagnostics)) from None
             assert result.returncode != 0, (result.returncode, result.stdout, result.stderr)
             messages = [body for path, body in requests if path == "/v1/messages"]
-            assert len(messages) == 1, "401 must not replay the model request"
+            assert len(messages) == 1, f"HTTP {status_code} must not replay the model request"
             terminal = result.stdout + result.stderr
             assert private_marker not in terminal and token not in terminal, "Gateway details leaked to terminal"
-            assert "E_GATEWAY_AUTH" in terminal, "401 needs a neutral authentication diagnostic"
+            assert diagnostic in terminal, f"HTTP {status_code} needs its neutral diagnostic"
             assert not list(workspace.iterdir()), "Rejected request changed workspace"
             assert not list(program.rglob("*.jsonl")), "History leaked into program directory"
-            print("PASS: actual engine HTTP 401 fails without model-request replay, workspace writes or terminal secret disclosure")
+            print(f"PASS: actual engine HTTP {status_code} fails without model-request replay, workspace writes or terminal secret disclosure")
         finally:
             server.shutdown()
             server.server_close()
@@ -93,4 +95,6 @@ def check_unauthorized(executable):
 
 
 if __name__ == "__main__":
-    check_unauthorized(Path(sys.argv[1]).resolve())
+    executable = Path(sys.argv[1]).resolve()
+    check_rejection(executable, 401, "authentication_error", "E_GATEWAY_AUTH")
+    check_rejection(executable, 429, "rate_limit_error", "E_GATEWAY_RATE_LIMIT")
