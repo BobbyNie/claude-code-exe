@@ -152,6 +152,17 @@ def check(executable):
             assert "private-history-marker" not in result.stdout + result.stderr
             assert transcript.read_bytes() == saved
         print("PASS: corrupt history metadata is classified without disclosure or transcript changes")
+        valid_event = {"type": "user", "sessionId": session_id, "cwd": str(root),
+                       "isSidechain": False, "message": {"content": "private-history-marker"}}
+        for tail in (b'{truncated-private-marker', b'[]\n', b'{broken}\n'):
+            saved = (json.dumps(valid_event) + "\n").encode("utf-8") + tail
+            transcript.write_bytes(saved)
+            result = run("--data-dir", str(history_data), "--sessions")
+            assert result.returncode == 64 and result.stderr.strip() == "E_SESSION_DATA", result
+            assert "private-history-marker" not in result.stdout + result.stderr
+            assert "truncated-private-marker" not in result.stdout + result.stderr
+            assert transcript.read_bytes() == saved
+        print("PASS: malformed history tails are classified without disclosure or transcript changes")
         # Backup works without loading or repairing malformed history. The live
         # profile lock is excluded; all other bytes are independently hashed.
         profile = history_data / "profile"

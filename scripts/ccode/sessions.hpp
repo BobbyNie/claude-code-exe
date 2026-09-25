@@ -43,11 +43,15 @@ inline std::vector<Session> ListSessions(const std::filesystem::path& projects,
             auto id = file.path().stem().string();
             if (!ValidSessionId(id)) continue;
             std::ifstream input(file.path());
+            if (!input) throw std::runtime_error("E_SESSION_DATA");
+            bool discovered = false;
             std::string line;
             while (std::getline(input, line)) {
-                if (line.size() > 16 * 1024 * 1024) break;
+                if (line.size() > 16 * 1024 * 1024)
+                    throw std::runtime_error("E_SESSION_DATA");
                 auto event = Json::parse(line, nullptr, false);
-                if (event.is_discarded() || !event.is_object()) continue;
+                if (event.is_discarded() || !event.is_object())
+                    throw std::runtime_error("E_SESSION_DATA");
                 // Do not let malformed identity metadata become a generic local
                 // error (or an apparently empty history). Never include its value.
                 if (event.contains("type") && !event["type"].is_string())
@@ -60,6 +64,7 @@ inline std::vector<Session> ListSessions(const std::filesystem::path& projects,
                 if (event.value("isSidechain", false)) continue;
                 if (event.value("sessionId", std::string()) != id || !event.contains("cwd")) continue;
                 if (!SameWorkspace(fs::u8path(event.at("cwd").get<std::string>()), workspace)) break;
+                if (discovered) continue;
                 std::string title = "Saved session";
                 if (event.contains("message") && event["message"].contains("content") &&
                     event["message"]["content"].is_string())
@@ -69,8 +74,9 @@ inline std::vector<Session> ListSessions(const std::filesystem::path& projects,
                 if (event.contains("version") && event["version"].is_string())
                     version = event["version"].get<std::string>();
                 result.push_back({id, title, version, file.last_write_time()});
-                break;
+                discovered = true;
             }
+            if (input.bad()) throw std::runtime_error("E_SESSION_DATA");
         }
     }
     std::sort(result.begin(), result.end(), [](const Session& a, const Session& b) {

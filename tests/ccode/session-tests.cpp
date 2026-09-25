@@ -15,7 +15,7 @@ int main() {
     { std::ofstream out(project / (id + ".jsonl"));
       out << ccode::Json{{"type", "user"}, {"sessionId", id}, {"cwd", root.u8string()},
         {"isSidechain", false}, {"version", "2.1.221"}, {"message", {{"role", "user"}, {"content", "hello history"}}}}.dump() << '\n';
-      out << "{truncated"; }
+      }
     auto sessions = ccode::ListSessions(root / "projects", root);
     assert(sessions.size() == 1 && sessions[0].id == id);
     assert(sessions[0].title == "hello history");
@@ -107,6 +107,20 @@ int main() {
             classified = std::string(error.what()) == "E_SESSION_DATA";
         }
         assert(classified);
+        std::ifstream input(transcript, std::ios::binary);
+        assert(std::string(std::istreambuf_iterator<char>(input), {}) == bytes);
+    }
+    // Valid first-event metadata must not hide a corrupt later record.
+    for (const auto& tail : {std::string("{truncated-private-marker"),
+                             std::string("[]\n"), std::string("{broken}\n")}) {
+        const auto bytes = validEvent.dump() + "\n" + tail;
+        { std::ofstream out(transcript, std::ios::binary); out << bytes; }
+        bool rejected = false;
+        try { ccode::ListSessions(root / "projects", root); }
+        catch (const std::runtime_error& error) {
+            rejected = std::string(error.what()) == "E_SESSION_DATA";
+        }
+        assert(rejected);
         std::ifstream input(transcript, std::ios::binary);
         assert(std::string(std::istreambuf_iterator<char>(input), {}) == bytes);
     }

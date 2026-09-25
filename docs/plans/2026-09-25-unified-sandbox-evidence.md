@@ -944,3 +944,16 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - cross-version `108206719485` 成功，已核實舊→新→舊 PASS。兩個
   long-workspace jobs `108206719510`、`108206719532` 仍是 WinError 267，
   整體 failure，未放行。沒有用 junction 別名把長 cwd 門檻改成短 cwd。
+
+### A13 損壞末行不可被第一筆有效 user 隱藏
+
+- session discovery 原本找到第一筆有效 user 即停止，且跳過無效 JSON；新增
+  有效 user 後接截斷 JSON、非 object JSON、損壞完整行的測試，先在拒絕斷言
+  RED。改成繼續掃描並以 E_SESSION_DATA 拒絕，保留第一筆摘要；讀取失敗與
+  超限行亦不再靜默當成正常歷史。原測試曾明確容許截斷末行，現改為獨立
+  正常歷史 fixture 加上述拒絕案例，不再把損壞檔列為正常 discovered。
+- 三案例逐位元組確認來源不變；新增 Windows 公共 --sessions 驗收，要求
+  exit 64、只有中性錯誤、無私有歷史輸出及原檔不變。本機六組 C++、24 項
+  Python、語法與 diff 檢查通過；Windows 結果待 CI。
+- 此切片採保守整次列表拒絕，尚非逐會話 unavailable 展示、引擎相容性判定
+  或完整損壞恢復流程。長 cwd、企業端點等完整門檻保持未放行。
