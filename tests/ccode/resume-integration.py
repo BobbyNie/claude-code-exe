@@ -164,6 +164,43 @@ def verify(executable):
         assert has_history(continued, ["legacy-resume-marker-7391", first, second]), "Continue lost saved turns"
         assert all(path.read_bytes() == saved for path, saved in originals.items()), "Legacy source changed"
         print("PASS: restart and continue load both saved turns without modifying legacy source")
+        def profile_bytes(folder):
+            return {path.relative_to(folder).as_posix(): path.read_bytes()
+                    for path in folder.rglob("*") if path.is_file() and path.name != "frontend.lock"}
+
+        active_before = profile_bytes(profile)
+        backup = subprocess.run([str(executable), "--snapshot-profile"], cwd=executable.parent,
+                                env=env, capture_output=True, text=True, encoding="utf-8", timeout=30)
+        assert backup.returncode == 0, backup.stderr
+        snapshot_id = str(uuid.UUID(backup.stdout.strip()))
+        snapshot = profile.parent / "snapshots" / snapshot_id
+        snapshot_before = profile_bytes(snapshot)
+        staged = subprocess.run([str(executable), "--stage-profile", snapshot_id], cwd=executable.parent,
+                                env=env, capture_output=True, text=True, encoding="utf-8", timeout=30)
+        assert staged.returncode == 0, staged.stderr
+        candidate_id = str(uuid.UUID(staged.stdout.strip()))
+        candidate = profile.parent / "candidates" / candidate_id
+        candidate_before = profile_bytes(candidate / "profile")
+        assert candidate_before == active_before, "Candidate is not an exact profile copy"
+        requests.clear()
+        candidate_prompt = "isolated-candidate-resume-marker-1749"
+        restored = subprocess.run([str(executable), "--data-dir", str(candidate),
+                                   "--resume", session, "--print", candidate_prompt],
+                                  cwd=executable.parent, env=env, capture_output=True,
+                                  text=True, encoding="utf-8", timeout=60)
+        assert restored.returncode == 0, restored.stdout + restored.stderr
+        assert "resume-test-ok" in restored.stdout
+        assert has_history(candidate_prompt, ["legacy-resume-marker-7391", first, second, continued]), \
+            "Candidate engine request lost historical context"
+        assert profile_bytes(profile) == active_before, "Candidate validation changed active profile"
+        assert profile_bytes(snapshot) == snapshot_before, "Candidate validation changed backup"
+        candidate_after = profile_bytes(candidate / "profile")
+        assert any(candidate_prompt.encode() in content for name, content in candidate_after.items()
+                   if name.endswith(".jsonl")), "Restored turn was not persisted in candidate"
+        assert json.loads((candidate / "candidate.json").read_text(encoding="utf-8"))["state"] == "staged"
+        assert not (profile.parent / "active-profile.json").exists()
+        print("PASS: actual engine resumes isolated candidate history while active profile and backup remain byte-identical")
+
 
     finally:
         server.shutdown()
