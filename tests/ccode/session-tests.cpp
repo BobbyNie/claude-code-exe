@@ -1,4 +1,5 @@
 #include "../../scripts/ccode/sessions.hpp"
+#include "../../scripts/ccode/snapshot.hpp"
 #include "../../scripts/ccode/workspaces.hpp"
 #include "../../scripts/ccode/session-index.hpp"
 #include <cassert>
@@ -19,6 +20,18 @@ int main() {
     assert(sessions.size() == 1 && sessions[0].id == id);
     assert(sessions[0].title == "hello history");
     assert(ccode::ListSessions(root / "projects", root / "other").empty());
+    // Existing transcripts beyond MAX_PATH must not silently disappear on restart.
+    // Only the transcript exceeds 260; enumeration parents remain short enough.
+    const auto longProjects = root / "long-projects";
+    const auto longProject = longProjects / std::string(230 - longProjects.wstring().size(), 'x');
+    fs::create_directories(ccode::SnapshotIoPath(longProject));
+    const auto longTranscript = longProject / (id + ".jsonl");
+    assert(longProject.wstring().size() < 260 && longTranscript.wstring().size() > 260);
+    fs::copy_file(project / (id + ".jsonl"), ccode::SnapshotIoPath(longTranscript));
+    std::cout << "Checking session discovery with transcript beyond 260 characters" << std::endl;
+    auto longSessions = ccode::ListSessions(longProjects, root);
+    assert(longSessions.size() == 1 && longSessions[0].id == id);
+    fs::remove_all(ccode::SnapshotIoPath(longProjects));
     assert(!ccode::ValidSessionId("../../escape"));
     assert(!ccode::ValidSessionId("123"));
     // The frontend cache follows persistent workspace identity, while the native

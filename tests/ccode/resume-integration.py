@@ -338,6 +338,7 @@ def verify(executable):
         other_workspace = executable.parent / "second 工作區"
         other_workspace.mkdir()
         real_sessions = set()
+        workspace_sessions = {}
         for workspace, marker in zip((executable.parent, other_workspace), history_markers):
             created = subprocess.run([str(executable), "--print", marker], cwd=workspace,
                                      env=all_env, capture_output=True, text=True, encoding="utf-8", timeout=60)
@@ -348,6 +349,7 @@ def verify(executable):
             match = re.search(r"(?m)^\d+\. ([0-9a-f-]{36})  ", listed_all.stdout)
             assert match, listed_all.stdout
             real_sessions.add(str(uuid.UUID(match[1])))
+            workspace_sessions[workspace] = str(uuid.UUID(match[1]))
         assert len(real_sessions) == 2
         all_profile = all_data / "profile"
         active_all_before = profile_bytes(all_profile)
@@ -641,9 +643,10 @@ def verify(executable):
         assert profile_bytes(foreign_candidate / "profile") == foreign_before
         assert profile_bytes(foreign_data / "snapshots" / preservation_id / "profile") == foreign_before
         assert profile_bytes(old_source) == old_source_before and not requests
-        restarted = foreign_command("--sessions")
-        assert restarted.returncode == 0, restarted
-        for session_id in real_sessions:
+        for workspace, session_id in workspace_sessions.items():
+            restarted = subprocess.run([str(executable), "--sessions"], cwd=workspace,
+                env=foreign_env, capture_output=True, text=True, encoding="utf-8", timeout=60)
+            assert restarted.returncode == 0, restarted
             assert session_id in restarted.stdout, restarted
         assert not requests
         print("PASS: public rollback activation selects verified history on restart without API and preserves newer active data")
