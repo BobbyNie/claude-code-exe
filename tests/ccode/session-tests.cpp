@@ -73,6 +73,7 @@ int main() {
     fs::create_directories(ccode::NativeIoPath(longNative));
     fs::copy_file(project / (id + ".jsonl"), ccode::NativeIoPath(longNative / (id + ".jsonl")));
     std::cout << "Checking workspace identity and rebuilt index beyond 260 characters" << std::endl;
+    try {
     const auto longIdentity = ccode::ResolveWorkspace(longProfile / "workspaces.json", root);
     assert(ccode::ValidSessionId(longIdentity));
     const auto longListed = ccode::ListWorkspaceSessions(longProfile, root);
@@ -84,6 +85,10 @@ int main() {
     assert(ccode::ResolveWorkspace(longProfile / "workspaces.json", root) == longIdentity);
     assert(ccode::ListWorkspaceSessions(longProfile, root).size() == 1);
     assert(fs::exists(longIndex));
+    } catch (const std::exception& error) {
+        std::cerr << "Long profile identity/index failure: " << error.what() << std::endl;
+        return 1;
+    }
     fs::remove_all(ccode::NativeIoPath(root / std::string(150, 'p')));
     // Corrupt identity metadata must fail with a neutral, stable classification,
     // never disappear as an empty history or expose a JSON-library exception.
