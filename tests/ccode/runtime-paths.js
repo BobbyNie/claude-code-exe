@@ -30,4 +30,12 @@ assert.match(child.stdout, /ccode-path-marker/);
 fs.unlinkSync(filename);
 fs.rmdirSync(tasks);
 console.log('ccode runtime path tests passed');
+
+// Bun must be able to respawn the official payload, just as Grep/Glob do.
+const payload = path.join(path.dirname(process.argv[2]), 'aa-runtime.bin');
+const version = spawnSync(payload, ['--version'], { encoding: 'utf8', timeout: 15000 });
+assert.ifError(version.error);
+assert.equal(version.status, 0, version.stderr);
+assert.match(version.stdout, /Claude Code/);
+console.log('ccode runtime respawn test passed');
 // Keep the DLL loaded until process exit: its hooks cannot be unloaded safely.
