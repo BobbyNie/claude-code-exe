@@ -38,7 +38,8 @@ int main() {
     try { ccode::ResolveWorkspace(registry, root); }
     catch (const std::runtime_error& error) { corrupt = std::string(error.what()) == "E_WORKSPACE_DATA"; }
     assert(corrupt && readAll(registry) == "{broken");
-    { std::ofstream out(registry); out << saved; }
+    { std::ofstream out(registry, std::ios::binary); out << saved; }
+    assert(readAll(registry) == saved);
     fs::create_directories(root / "third");
     auto candidate = registry; candidate += ".new";
     auto victim = root / "must-preserve.txt";
@@ -49,7 +50,9 @@ int main() {
         bool rejected = false;
         try { ccode::ResolveWorkspace(registry, root / "third"); }
         catch (const std::runtime_error& error) { rejected = std::string(error.what()) == "E_WORKSPACE_WRITE"; }
-        assert(rejected && readAll(victim) == "original" && readAll(registry) == saved);
+        assert(rejected);
+        assert(readAll(victim) == "original");
+        assert(readAll(registry) == saved);
         fs::remove(candidate);
     }
     fs::remove_all(root);
