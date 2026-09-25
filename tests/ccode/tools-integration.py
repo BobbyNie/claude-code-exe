@@ -14,9 +14,19 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
-def check(executable):
+def check(executable, short_path=False):
     with tempfile.TemporaryDirectory(prefix="ccode-tools-") as temporary:
-        root = Path(temporary)
+        root = Path(temporary).resolve()
+        if short_path:
+            import ctypes
+            buffer = ctypes.create_unicode_buffer(32768)
+            get_short = ctypes.windll.kernel32.GetShortPathNameW
+            get_short.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint32]
+            get_short.restype = ctypes.c_uint32
+            count = get_short(str(root), buffer, len(buffer))
+            assert 0 < count < len(buffer), "Unable to prepare 8.3 path case"
+            root = Path(buffer.value)
+            assert "~" in str(root), "Runner must support 8.3 names for this acceptance case"
         app_dir = root / "portable app 中文"
         workspace = root / "workspace 中文 with spaces"
         data = root / "persistent data"
@@ -123,35 +133,17 @@ def check(executable):
             assert result.returncode == 0, (result.returncode, result.stdout, result.stderr, received)
             assert "tools-acceptance-complete" in result.stdout, result.stdout
             assert len(received) == len(plan), received
-            if any(block.get("is_error") for block in received.values()):
-                print("Frontend tool results:", json.dumps(received, ensure_ascii=True), flush=True)
-                # Differential diagnosis only: never a production fallback. Identical fake API,
-                # workspace and profile environment, using the unmodified embedded engine.
-                payload = next(app_dir.glob("runtime/*/engine.exe"))
-                native_env = env.copy()
-                profile = data / "profile"
-                native_env.update(ANTHROPIC_AUTH_TOKEN=env["A_AUTH_TOKEN"],
-                                  ANTHROPIC_BASE_URL=env["A_BASE_URL"],
-                                  HOME=str(profile / "home"), USERPROFILE=str(profile / "home"),
-                                  APPDATA=str(profile / "roaming"), LOCALAPPDATA=str(profile / "local"),
-                                  TEMP=str(profile / "temp"), TMP=str(profile / "temp"),
-                                  CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1", DISABLE_AUTOUPDATER="1")
-                debug = root / "native-debug.txt"
-                saved_results = received.copy()
-                received.clear()
-                native = subprocess.run([str(payload), "--print", "--output-format", "stream-json", "--verbose",
-                                         "--allowedTools", "Write,Edit,Read,Grep,Glob,Bash", "--debug-file", str(debug)],
-                                        input="Exercise fixture tools.", cwd=workspace, env=native_env,
-                                        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
-                print("Native comparison exit:", native.returncode, flush=True)
-                print("Native tool results:", json.dumps(received, ensure_ascii=True), flush=True)
-                if debug.exists():
-                    lines = [line for line in debug.read_text(encoding="utf-8", errors="replace").splitlines()
-                             if "permission" in line.lower() or "allowedtools" in line.lower()]
-                    print("Fixture-only native permission diagnostics:",
-                          json.dumps(lines[-30:], ensure_ascii=True), flush=True)
-                received.clear()
-                received.update(saved_results)
+            if short_path:
+                # Native engines deliberately require approval for suspicious 8.3 paths.
+                # The frontend must preserve this policy, not silently auto-approve it.
+                for i in (0, 5):
+                    assert received[f"acceptance_{i}"].get("is_error"), received
+                    assert "did not approve" in received[f"acceptance_{i}"]["content"], received
+                assert not target.exists(), "Denied write unexpectedly changed the workspace"
+                assert not (workspace / "runtime tasks/probe.txt").exists()
+                assert "Some tool requests were denied" in result.stdout
+                print("PASS: 8.3 path policy requires approval; noninteractive deny has no write side effects")
+                return
             for i, (name, _) in enumerate(plan):
                 assert not received[f"acceptance_{i}"].get("is_error"), (name, received[f"acceptance_{i}"])
             for i, marker in [(2, "marker-after"), (3, "marker-after"),
@@ -170,4 +162,6 @@ def check(executable):
 
 
 if __name__ == "__main__":
-    check(Path(sys.argv[1]).resolve())
+    executable = Path(sys.argv[1]).resolve()
+    check(executable)
+    check(executable, short_path=True)
