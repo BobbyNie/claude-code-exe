@@ -1,9 +1,14 @@
-// Run inside the injected official payload with BUN_BE_BUN=1; no API calls.
+// Load the production isolation DLL into Bun to exercise its filesystem APIs.
+// Official compiled payloads may disable BUN_BE_BUN, so use a pinned test Bun.
+const { dlopen } = require('bun:ffi');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
+console.log('Loading isolation DLL for filesystem regression');
+const isolation = dlopen(process.argv[2], {});
+console.log('Creating the session tasks directory');
 const tasks = path.join(process.env.TEMP, 'claude', 'D--tt', 'session', 'tasks');
 fs.mkdirSync(tasks, { recursive: true });
 fs.mkdirSync(tasks, { recursive: true });
@@ -21,3 +26,4 @@ assert.match(child.stdout, /ccode-path-marker/);
 fs.unlinkSync(filename);
 fs.rmdirSync(tasks);
 console.log('ccode runtime path tests passed');
+// Keep the DLL loaded until process exit: its hooks cannot be unloaded safely.

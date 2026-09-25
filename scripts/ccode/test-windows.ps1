@@ -68,14 +68,17 @@ try {
         throw "Forbidden filesystem names were created: $($forbiddenNames.FullName -join ', ')"
     }
 
-    $env:BUN_BE_BUN = '1'
+    $savedTemp = $env:TEMP
     try {
         $fixture = Join-Path $testRoot 'runtime-paths.js'
         Copy-Item (Join-Path $PSScriptRoot '../../tests/ccode/runtime-paths.js') $fixture
-        Invoke-ExpectExit -Arguments @($fixture) -Expected 0
+        $env:TEMP = Join-Path $testRoot 'data/cc/profile/temp'
+        $hookPath = Join-Path $testRoot 'data/cc/runtime/cc-runtime.dll'
+        python -c 'import subprocess,sys; sys.exit(subprocess.run(sys.argv[1:], timeout=30).returncode)' (Get-Command bun).Source $fixture $hookPath
+        if ($LASTEXITCODE -ne 0) { throw 'Bun runtime filesystem regression failed' }
     }
     finally {
-        Remove-Item Env:BUN_BE_BUN -ErrorAction SilentlyContinue
+        $env:TEMP = $savedTemp
     }
 }
 finally {
