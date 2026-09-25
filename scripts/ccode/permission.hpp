@@ -12,7 +12,16 @@ inline Json PermissionDecision(const Json& args, bool allow) {
 }
 inline Json PermissionRpc(const Json& request, const std::function<bool(const Json&)>& approve) {
     if (!request.is_object() || !request.contains("id")) return nullptr;
+    // Only correlatable integer/string IDs may reach an approval prompt.
+    // Never echo malformed IDs (which may contain arbitrary private objects).
+    if (!request["id"].is_string() && !request["id"].is_number_integer())
+        return {{"jsonrpc", "2.0"}, {"id", nullptr},
+            {"error", {{"code", -32600}, {"message", "Invalid request"}}}};
     Json response = {{"jsonrpc", "2.0"}, {"id", request["id"]}};
+    if (!request.contains("jsonrpc") || request["jsonrpc"] != "2.0") {
+        response["error"] = {{"code", -32600}, {"message", "Invalid request"}};
+        return response;
+    }
     const auto method = request.value("method", std::string());
     if (method == "initialize") {
         response["result"] = {{"protocolVersion", "2024-11-05"},

@@ -1217,3 +1217,16 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   實際兩版本升級回退。long-workspace `108255080193`、`108255080231`
   仍 WinError 267，兩輪整體皆 failure。兩輪無 DIAGNOSTIC 停滯快照；
   不宣稱間歇停滯已修復，也不將這兩個切片等同完整中斷／災難恢復驗收。
+
+### A12 權限請求先驗證 RPC 外層
+
+- 權限入口原先只要求存在 id，未驗證 jsonrpc 即可呼叫批准 callback。現在
+  只允許 jsonrpc="2.0" 及可關聯的整數／字串 ID 進入批准流程；其他請求
+  回報 -32600、不產生 permission decision，無效 ID 不原樣回傳私人物件。
+  無 ID 的通知仍不呼叫批准。這是入口驗證，不是間歇 console 停滯修復。
+- TDD：先用錯誤／缺失版本重現 callback 被呼叫的 RED，再加入驗證使 GREEN；
+  再以 null／布林／小數／陣列／物件 ID 重現 RED，最小修復後 GREEN。
+  正常整數／字串 ID 各只批准一次，保留原工具參數；正常拒絕測試保留。
+- 六組 C++ 通過；Python 29 通過、1 Windows 專用跳過。portable 新增
+  真實權限 worker 的批次無效請求案例及不回顯私人 ID 斷言。Windows 真實
+  引擎 allow／deny／cancel 相容性與新 worker 案例待本輪 CI，不能沿用舊結果。

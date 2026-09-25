@@ -105,6 +105,23 @@ def check(executable):
         request = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {
             "name": "approve", "arguments": {"tool_name": "Write", "input": {
                 "file_path": "unapproved.txt", "content": "must not write"}}}}
+        invalid_requests = []
+        for version in (None, 2, "1.0"):
+            invalid_requests.append(dict(request, jsonrpc=version))
+        invalid_requests.append({key: value for key, value in request.items() if key != "jsonrpc"})
+        for invalid_id in (None, True, 1.5, [1], {"private": "permission-private-marker"}):
+            invalid_requests.append(dict(request, id=invalid_id))
+        invalid_wire = "".join(json.dumps(item) + "\n" for item in invalid_requests)
+        invalid_worker = subprocess.run([str(app), "--ccode-permission-server"], env=env,
+                                        cwd=root, input=invalid_wire, text=True,
+                                        encoding="utf-8", capture_output=True, timeout=10)
+        assert invalid_worker.returncode == 0
+        invalid_responses = [json.loads(line) for line in invalid_worker.stdout.splitlines()]
+        assert len(invalid_responses) == len(invalid_requests)
+        for response in invalid_responses:
+            assert response["error"]["code"] == -32600 and "result" not in response
+        assert "permission-private-marker" not in invalid_worker.stdout + invalid_worker.stderr
+        print("PASS: real permission worker rejects malformed RPC envelopes without permission decisions or private ID disclosure")
         for owner in ("", "0", "not-a-pid", "999999999999999999999", "4294967294"):
             worker_env = dict(env, CCODE_INTERACTIVE="1", CCODE_FRONTEND_PID=owner)
             result = subprocess.run([str(app), "--ccode-permission-server"], env=worker_env,
