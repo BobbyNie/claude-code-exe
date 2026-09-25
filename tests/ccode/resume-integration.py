@@ -414,6 +414,36 @@ def verify(executable):
         assert profile_bytes(profile) == active_before and profile_bytes(snapshot) == snapshot_before
         assert not (all_data / "active-profile.json").exists()
         print("PASS: all-session candidate validation restores two real sessions in distinct workspaces with complete SHA256-bound receipt and unchanged source")
+        requests.clear()
+        activation_args = [str(executable), "--activate-profile", all_id]
+        conflict = all_profile / "after-validation.txt"
+        conflict.write_text("preserve later source data", encoding="utf-8")
+        blocked = subprocess.run(activation_args, cwd=executable.parent, env=all_env,
+                                 capture_output=True, text=True, encoding="utf-8", timeout=60)
+        assert blocked.returncode == 64 and blocked.stderr.strip() == "E_SOURCE_CHANGED", blocked
+        assert conflict.read_text(encoding="utf-8") == "preserve later source data"
+        assert not (all_data / "active-profile.json").exists() and not requests
+        conflict.unlink()
+        activated = subprocess.run(activation_args, cwd=executable.parent, env=all_env,
+                                   capture_output=True, text=True, encoding="utf-8", timeout=60)
+        assert activated.returncode == 0, activated
+        pointer = json.loads((all_data / "active-profile.json").read_text(encoding="utf-8"))
+        assert pointer["candidateId"] == all_id and pointer["verificationId"] == all_receipt["verificationId"]
+        assert not requests and not (all_data / "active-profile.json.pending").exists()
+        assert profile_bytes(all_profile) == active_all_before
+        assert profile_bytes(all_snapshot) == all_snapshot_before
+        for workspace, marker in zip((executable.parent, other_workspace), history_markers):
+            resumed = subprocess.run([str(executable), "--continue", "--print", "after activation"],
+                                     cwd=workspace, env=all_env, capture_output=True, text=True,
+                                     encoding="utf-8", timeout=60)
+            assert resumed.returncode == 0, resumed
+            assert marker in json.dumps(requests[-1].get("messages", [])), "Activated profile lost native history"
+        assert profile_bytes(all_profile) == active_all_before
+        assert profile_bytes(all_snapshot) == all_snapshot_before
+        assert profile_bytes(all_frozen / "profile") == all_saved
+        assert profile_bytes(all_root / "profile") != all_saved, "New turns must write selected live profile"
+        print("PASS: activation rejects changed source, commits verified pointer without API, and restarts both workspaces with preserved history and unchanged backups")
+
 
     finally:
         server.shutdown()

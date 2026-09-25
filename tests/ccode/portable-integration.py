@@ -28,7 +28,10 @@ def check(executable):
         assert not any(name in result.stdout.lower() for name in ("claude", "anthropic"))
         assert not (root / "data").exists(), "Informational commands must not create profile data"
         test_id = "a2345678-1234-1234-1234-123456789abc"
-        for args in (("--all-sessions",),
+        for args in (("--activate-profile", test_id, "--sessions"),
+                     ("--activate-profile", test_id, "--model", "test"),
+                     ("--activate-profile", test_id, "--snapshot-profile"),
+                     ("--all-sessions",),
                      ("--validate-profile", test_id),
                      ("--validate-profile", test_id, "--all-sessions", "--resume", test_id),
                      ("--validate-profile", test_id, "--all-sessions", "--print")):

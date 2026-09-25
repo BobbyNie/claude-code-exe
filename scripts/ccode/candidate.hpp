@@ -1,6 +1,10 @@
 #pragma once
 #include "snapshot.hpp"
 #include "workspaces.hpp"
+#ifndef _WIN32
+#include <fcntl.h>
+#include <unistd.h>
+#endif
 
 namespace ccode {
 // This is local integrity evidence, not an authenticated security boundary.
@@ -311,6 +315,54 @@ inline std::filesystem::path ResolveActiveProfile(const std::filesystem::path& d
     } catch (const std::exception&) {
         throw std::runtime_error("E_ACTIVE_PROFILE");
     }
+}
+
+// Caller holds data-root, active-profile and candidate-profile exclusive locks.
+// Pending evidence is never silently reused. The pointer is the commit record;
+// candidate metadata stays staged so there is no second non-atomic state change.
+inline void ActivateProfileCandidate(const std::filesystem::path& data, const std::string& id,
+    const Json& engine, const SnapshotDigest& digest) {
+    namespace fs = std::filesystem;
+    if (!ValidSessionId(id)) throw std::runtime_error("E_CANDIDATE_DATA");
+    const auto active = ResolveActiveProfile(data, engine);
+    const auto candidate = data / "candidates" / id;
+    if (active.lexically_normal() == (candidate / "profile").lexically_normal())
+        throw std::runtime_error("E_ACTIVATION_ALREADY_ACTIVE");
+    for (const auto& directory : {data / "candidates", candidate, candidate / "profile"}) {
+        const auto status = fs::symlink_status(SnapshotIoPath(directory));
+        if (fs::is_symlink(status) || !fs::is_directory(status)) throw std::runtime_error("E_CANDIDATE_DATA");
+    }
+    const auto metadata = ReadCandidateDocument(candidate / "candidate.json");
+    if (!metadata.contains("sourceSnapshotId") || !metadata["sourceSnapshotId"].is_string() ||
+        !ValidSessionId(metadata["sourceSnapshotId"].get<std::string>())) throw std::runtime_error("E_CANDIDATE_DATA");
+    const auto receipt = VerifyCandidateActivation(candidate,
+        data / "snapshots" / metadata["sourceSnapshotId"].get<std::string>(), active, data / "verified", engine, digest);
+    Json state = {{"schema", 1}};
+    for (const auto* key : {"candidateId", "verificationId", "sourceSnapshotId", "engine", "adapter"})
+        state[key] = receipt[key];
+    const auto bytes = state.dump(2) + "\n";
+    const auto pending = SnapshotIoPath(data / "active-profile.json.pending");
+    const auto pointer = SnapshotIoPath(data / "active-profile.json");
+#ifdef _WIN32
+    HANDLE file = CreateFileW(pending.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) throw std::runtime_error("E_ACTIVATION_PENDING");
+    DWORD written = 0;
+    const bool saved = WriteFile(file, bytes.data(), static_cast<DWORD>(bytes.size()), &written, nullptr) &&
+        written == bytes.size() && FlushFileBuffers(file);
+    CloseHandle(file);
+    if (!saved) throw std::runtime_error("E_ACTIVATION_WRITE");
+    if (!MoveFileExW(pending.c_str(), pointer.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+        throw std::runtime_error("E_ACTIVATION_WRITE");
+#else
+    const int file = ::open(pending.c_str(), O_WRONLY | O_CREAT | O_EXCL, 0600);
+    if (file < 0) throw std::runtime_error("E_ACTIVATION_PENDING");
+    const bool saved = ::write(file, bytes.data(), bytes.size()) == static_cast<ssize_t>(bytes.size()) && ::fsync(file) == 0;
+    const int closed = ::close(file);
+    if (!saved || closed != 0) throw std::runtime_error("E_ACTIVATION_WRITE");
+    std::error_code error;
+    fs::rename(pending, pointer, error);
+    if (error) throw std::runtime_error("E_ACTIVATION_WRITE");
+#endif
 }
 
 }

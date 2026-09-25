@@ -72,3 +72,18 @@ ccode.exe --data-dir DATA --validate-profile CANDIDATE_ID --all-sessions
 此範圍不是「所有功能相容」：巢狀子代理資料會隨 profile 保留，但不宣稱已獨立
 恢復每個子代理；技能／MCP、目錄 ACL、搬移、版本回退及企業端點仍須各自驗收。
 候選仍為 staged，這個命令不切換 active profile。
+
+## 啟用已驗證候選（Windows 回歸待驗）
+
+`ccode.exe --data-dir DATA --activate-profile CANDIDATE_ID` 僅接受全頂層會話驗證
+回執，不與會話／模型／快照／驗證操作混用，不需要 API 請求。啟用時在資料根、
+來源及候選的獨占鎖內重新核對來源快照、候選回執、引擎版本與 SHA-256。
+來源已變更則 `E_SOURCE_CHANGED`，必須從新來源重新備份及驗證，不自動合併。
+
+指標經同目錄 `active-profile.json.pending` 寫入及 flush 後替換正式指標。
+既有 pending 會使本次啟用停止，不覆寫中斷證據；目前沒有自動 pending 清理／
+恢復指令。原 profile、來源快照與 verified 凍結副本都保留，後續會話寫入所選
+候選的 live profile。指標是唯一啟用提交記錄，candidate metadata 保持 staged。
+
+這不表示已實作跨引擎回滾、斷電耐久保證或細粒度並發。不要手工編寫指標來繞過
+啟用驗證；引擎不相容時停止，不自動退回其他資料。完整回滾及故障驗收仍待完成。

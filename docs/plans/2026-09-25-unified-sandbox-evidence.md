@@ -375,3 +375,17 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - 本機六組 C++、14 項 Python、語法與 diff 檢查通過。Windows 公共 CLI 新增
   損壞指標拒絕且不建立 fallback profile 案例，尚待驗證。
 - 尚無公開啟用指令／原子指標寫入或回滾；不能手工建立指標代替完整啟用流程。
+
+## 原子啟用命令切片（Windows 待驗）
+
+- 新增 --activate-profile ID，拒絕混合其他操作。持有資料根／來源／候選鎖時
+  呼叫完整啟用關卡；指標使用獨占建立 pending、寫入及 flush，再同目錄替換。
+  Windows 使用 MoveFileExW(REPLACE_EXISTING | WRITE_THROUGH)，沒有第二個
+  metadata 狀態寫入；指標為提交記錄。保留來源、備份及回執。
+- TDD：啟用與重新選取案例先因 ActivateProfileCandidate 缺失編譯紅燈，
+  完成後通過。另驗證 pending 已存在時拒絕並保留內容／無正式指標。
+- 本機六組 C++、14 項 Python 通過；新增 Windows 公共案例包括來源變更拒絕、
+  零 API 啟用、指標身份、两工作區重啟續接包含歷史、僅 live 候選寫入、
+  原來源與備份不變。Windows 案例尚待 CI，不以本機 callback 代替真引擎證據。
+- 尚未實作跨引擎回滾、pending 恢復、磁碟滿／強制中斷完整故障注入及並發細化；
+  不宣稱斷電耐久性或完整遷移驗收。上一輪讀取指標 CI 36143176156 查核時仍在執行。

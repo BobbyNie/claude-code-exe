@@ -208,7 +208,7 @@ int PermissionServer() {
 struct Options {
     bool print = false, sessions = false, resumePicker = false, latest = false, workspaceId = false, snapshotProfile = false, allSessions = false;
     fs::path data;
-    std::string prompt, session, stageSnapshot, validateCandidate;
+    std::string prompt, session, stageSnapshot, validateCandidate, activateCandidate;
     std::vector<std::wstring> engine;
 };
 Options Parse(int argc, wchar_t** argv, const fs::path& module) {
@@ -228,6 +228,7 @@ Options Parse(int argc, wchar_t** argv, const fs::path& module) {
         else if (!literal && arg == L"--workspace-id") options.workspaceId = true;
         else if (!literal && arg == L"--snapshot-profile") options.snapshotProfile = true;
         else if (!literal && arg == L"--stage-profile") options.stageSnapshot = Utf8(next());
+        else if (!literal && arg == L"--activate-profile") options.activateCandidate = Utf8(next());
         else if (!literal && arg == L"--all-sessions") options.allSessions = true;
         else if (!literal && arg == L"--validate-profile") options.validateCandidate = Utf8(next());
         else if (!literal && (arg == L"--resume" || arg == L"-r")) {
@@ -260,6 +261,13 @@ Options Parse(int argc, wchar_t** argv, const fs::path& module) {
             throw std::runtime_error("E_ARGUMENT");
         for (size_t i = 0; i < options.engine.size(); i += 2)
             if (options.engine[i] != L"--model") throw std::runtime_error("E_ARGUMENT");
+    }
+    if (!options.activateCandidate.empty()) {
+        if (!ccode::ValidSessionId(options.activateCandidate)) throw std::runtime_error("E_CANDIDATE_DATA");
+        if (options.print || options.sessions || options.resumePicker || options.latest || options.workspaceId ||
+            options.snapshotProfile || options.allSessions || !options.session.empty() || !options.stageSnapshot.empty() ||
+            !options.validateCandidate.empty() || !options.prompt.empty() || !options.engine.empty())
+            throw std::runtime_error("E_ARGUMENT");
     }
     options.data = fs::absolute(options.data).lexically_normal();
     return options;
@@ -406,6 +414,7 @@ int Main(int argc, wchar_t** argv) {
             "  --stage-profile ID     Copy verified snapshot to isolated candidate\n"
             "  --validate-profile ID  Verify candidate (--resume ID or --all-sessions)\n"
             "  --all-sessions         Verify every top-level session in its workspace\n"
+            "  --activate-profile ID  Activate a fully verified candidate\n"
             "  --allowedTools RULE    Explicit tool permission rule\n"
             "  --settings PATH        Engine settings file\n"
             "  --mcp-config PATH      Additional tool servers\n"
@@ -432,6 +441,22 @@ int Main(int argc, wchar_t** argv) {
     fs::create_directories(profile);
     Handle lock(CreateFileW((profile / L"frontend.lock").c_str(), GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (!lock.valid()) throw std::runtime_error("E_PROFILE_BUSY");
+    if (!options.activateCandidate.empty()) {
+        const auto candidate = options.data / L"candidates" / Wide(options.activateCandidate);
+        const auto candidateProfile = candidate / L"profile";
+        if (profile.lexically_normal() == candidateProfile.lexically_normal())
+            throw std::runtime_error("E_ACTIVATION_ALREADY_ACTIVE");
+        for (const auto& directory : {options.data / L"candidates", candidate, candidateProfile}) {
+            const auto status = fs::symlink_status(ccode::SnapshotIoPath(directory));
+            if (fs::is_symlink(status) || !fs::is_directory(status)) throw std::runtime_error("E_CANDIDATE_DATA");
+        }
+        Handle candidateLock(CreateFileW(ccode::SnapshotIoPath(candidateProfile / L"frontend.lock").c_str(),
+            GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+        if (!candidateLock.valid()) throw std::runtime_error("E_PROFILE_BUSY");
+        ccode::ActivateProfileCandidate(options.data, options.activateCandidate, selectedEngine, FileDigest);
+        std::cout << "Activated profile: " << options.activateCandidate << '\n';
+        return 0;
+    }
     if (!options.stageSnapshot.empty()) {
         const auto id = ccode::NewWorkspaceId();
         ccode::StageProfileCandidate(options.data / L"snapshots" / Wide(options.stageSnapshot),

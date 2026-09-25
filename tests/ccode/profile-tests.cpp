@@ -379,6 +379,26 @@ int main() try {
     try { ccode::ResolveActiveProfile(selectionRoot, engine); }
     catch (const std::runtime_error& error) { missingActive = std::string(error.what()) == "E_ACTIVE_PROFILE"; }
     assert(missingActive);
+    const auto activationRoot = root / "activation";
+    fs::create_directories(activationRoot / "candidates");
+    fs::create_directories(activationRoot / "snapshots");
+    fs::create_directories(activationRoot / "verified");
+    fs::copy(inventoryProfile, activationRoot / "profile", fs::copy_options::recursive);
+    fs::copy(allCandidate, activationRoot / "candidates" / historyId, fs::copy_options::recursive);
+    fs::copy(allSnapshot, activationRoot / "snapshots" / historyId, fs::copy_options::recursive);
+    fs::copy(root / "all-verified" / snapshotId, activationRoot / "verified" / snapshotId, fs::copy_options::recursive);
+    const auto beforeActivation = ccode::CandidateFiles(activationRoot / "profile", testDigest);
+    Write(activationRoot / "active-profile.json.pending", "interrupted evidence");
+    bool pendingRejected = false;
+    try { ccode::ActivateProfileCandidate(activationRoot, historyId, engine, testDigest); }
+    catch (const std::runtime_error& error) { pendingRejected = std::string(error.what()) == "E_ACTIVATION_PENDING"; }
+    assert(pendingRejected && !fs::exists(activationRoot / "active-profile.json"));
+    assert(Read(activationRoot / "active-profile.json.pending") == "interrupted evidence");
+    fs::remove(activationRoot / "active-profile.json.pending");
+    ccode::ActivateProfileCandidate(activationRoot, historyId, engine, testDigest);
+    assert(ccode::ResolveActiveProfile(activationRoot, engine) == activationRoot / "candidates" / historyId / "profile");
+    assert(ccode::CandidateFiles(activationRoot / "profile", testDigest) == beforeActivation);
+    assert(!fs::exists(activationRoot / "active-profile.json.pending"));
     auto partialReceipt = allReceipt;
     partialReceipt["sessions"].erase(1);
     Write(allCandidate / "validation.json", partialReceipt.dump());
