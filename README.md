@@ -135,11 +135,13 @@ ccode-portable/
 
 先退出所有 ccode 会话，备份 `data\cc\profile\`，然后替换 `ccode.exe` 并重新启动。新版使用 `aa-runtime.exe`；旧的 `aa-runtime.bin` 不再使用，可以保留。不要为修复工具错误而删除整个 profile。
 
-旧版可能将 `profile\home\.claude` 和 `.claude.json` 实际写成 `.cc` 和 `.cc.json`。新版保留官方文件名；若要沿用旧配置和会话，请在备份后将这些旧文件复制到对应的官方名称。若新旧两份都存在，先检查并合并需要的配置，不要覆盖新数据。工作目录中的旧 `.cc` / `CC.md` 也可能需要人工核对；封装不会递归改名项目文件。
+旧版可能将 `profile\home\.claude` 和 `.claude.json` 实际写成 `.cc` 和 `.cc.json`。新版启动时会一次性将旧 profile 中缺少的文件复制到对应的官方名称，包括 `projects` 中的历史 session；不会覆盖已有文件，也不会删除旧数据。复制保留文件时间，跳过符号链接，完成后写入 `profile\home\.cc-profile-restored-v1` 标记，避免后续启动重新恢复你主动删除的 session。若新旧两份同名 session 都存在，以当前文件为准，旧版本保留供人工核对。复制失败会停止启动并提示检查权限与磁盘空间。工作目录中的旧 `.cc` / `CC.md` 仍需人工核对；封装不会递归改名项目文件。
+
+若 `/resume` 仍找不到历史，请核对运行的是 `ccode.exe` 还是单独安装的 `claude`，以及是否移动了 exe 却没有一起移动 `data\cc`。普通安装和便携版使用不同的用户目录。请在原来的项目目录启动；也可以用 `ccode.exe --resume <session-id>` 明确指定历史记录。外部设置的 `CLAUDE_CONFIG_DIR` 会优先于默认 profile，恢复上述目录并不能自动恢复那个自定义位置的历史。
 
 已确认的旧版问题：部分 Win32 文件 API 改写路径，而 Bun 的其他查询及子进程使用原路径，导致第二次递归创建 `temp\claude\...\tasks` 报 `EEXIST`；将官方可执行文件改名为 `.bin` 则会令 Bun 的子进程查找报 `ENOENT`，即使文件确实存在。新版移除了文件系统 API 改写，并保留 `.exe` 扩展名。
 
-Windows 回归测试会加载实际隔离 DLL，检查重复创建目录、文件读写/列举及跨进程访问，并从 Bun 启动官方 payload 的 `--version` 和内建 ripgrep 内容搜索/文件列举模式（`argv0="rg"`）。测试安装目录含空格，无需有效 API 凭证；这不等同于完整的联网模型会话测试。
+Windows 回归测试会加载实际隔离 DLL，检查重复创建目录、文件读写/列举及跨进程访问，并从 Bun 启动官方 payload 的 `--version` 和内建 ripgrep 内容搜索/文件列举模式（`argv0="rg"`）。另用本机假 API 验证官方 `--resume` 发送的上下文包含从旧 profile 恢复的历史消息。测试安装目录含空格，无需有效 API 凭证；这不等同于真实服务端模型或交互式 `/resume` 选择器测试。
 
 ### 安全与故障排查
 
