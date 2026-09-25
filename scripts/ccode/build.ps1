@@ -11,7 +11,7 @@ $ProgressPreference = "SilentlyContinue"
 
 $baseUrl = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/$Version"
 $work = Join-Path ([System.IO.Path]::GetTempPath()) "ccode-build-$([Guid]::NewGuid().ToString('N'))"
-$payload = Join-Path $work "aa-runtime.bin"
+$payload = Join-Path $work "aa-runtime.exe"
 $hook = Join-Path $work "cc-runtime.dll"
 $manifestPath = Join-Path $work "manifest.json"
 $resourceScript = Join-Path $work "ccode.rc"

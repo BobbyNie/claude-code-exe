@@ -120,7 +120,7 @@ ccode-portable/
 └── data/
     └── cc/
         ├── runtime/
-        │   ├── aa-runtime.bin
+        │   ├── aa-runtime.exe
         │   └── cc-runtime.dll
         └── profile/
             ├── home/

@@ -136,7 +136,7 @@ int wmain(int argc, wchar_t** argv) {
     const fs::path exeDir = fs::path(module).parent_path();
     const fs::path root = exeDir / L"data" / L"cc";
     const fs::path runtime = root / L"runtime";
-    const fs::path payload = runtime / L"aa-runtime.bin";
+    const fs::path payload = runtime / L"aa-runtime.exe";
     const fs::path hook = runtime / L"cc-runtime.dll";
 
     if (argc == 2 && std::wstring(argv[1]) == L"--ccode-self-test") {
