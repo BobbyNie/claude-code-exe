@@ -970,3 +970,17 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - long-workspace `108211831496`、`108211831561` 均失敗；實際 traceback
   在 Python subprocess 的 `_winapi.CreateProcess` 回報 WinError 267，
   尚未啟動前端。整體 workflow failure，完整方案仍未放行。
+
+### A13 逐會話不可用狀態與續接拒絕
+
+- 延續上一輪損壞檢查：若已由原生有效 user 記錄確認工作區歸屬，再遇損壞，
+  公共列表保留 ID 並標示 unavailable／E_SESSION_DATA，摘要替換成中性文字；
+  可重建索引保存同一狀態。不能確認歸屬的損壞仍整次拒絕，不猜測或修復來源。
+- --resume ID、--continue 選到已知不可用會話時拒絕；picker 不改變目前選擇，
+  清楚回報不可用。continue 不靜默跳到較舊會話。discovered 仍不是已驗證相容。
+- TDD：混合正常／損壞原生歷史測試先因缺可用性介面 RED，實作後驗證正常
+  會話仍存在、損壞會話拒絕、索引可用性及原始 bytes 不變。六組 C++、24 項
+  Python、語法／diff 本機通過；Windows 新增列表、指定／最新續接拒絕及
+  picker 拒絕不發 API、健康會話實際兩輪上下文續接案例，結果待 CI。
+- 公共 --sessions 對已知歸屬損壞的預期從 exit 64 改為成功列出不可用狀態；
+  不是略過損壞或放寬續接門檻。嚴格 discovery 原測試與未知身份錯誤仍保留。

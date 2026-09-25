@@ -179,6 +179,26 @@ def verify(executable, previous_executable=None):
             assert json.loads(index_path.read_text(encoding="utf-8")) == index
             assert all(path.read_bytes() == saved for path, saved in native_files.items())
         print("PASS: workspace UUID session index rebuilds from unchanged native history, never stale cache")
+        damaged_id = str(uuid.uuid4())
+        damaged_path = next(iter(native_files)).parent / (damaged_id + ".jsonl")
+        damaged_bytes = (json.dumps({"type": "user", "sessionId": damaged_id,
+            "cwd": str(executable.parent), "message": {"content": "private-damaged-title"}})
+            + "\n{truncated-private-marker").encode("utf-8")
+        damaged_path.write_bytes(damaged_bytes)
+        mixed_list = subprocess.run([str(executable), "--sessions"], cwd=executable.parent,
+            env=env, capture_output=True, text=True, encoding="utf-8", timeout=30)
+        assert mixed_list.returncode == 0, mixed_list.stderr
+        assert damaged_id in mixed_list.stdout and "[unavailable: E_SESSION_DATA]" in mixed_list.stdout
+        assert "private-damaged-title" not in mixed_list.stdout
+        damaged_selection = re.search(r"(?m)^(\d+)\. " + re.escape(damaged_id) + r"  ", mixed_list.stdout)
+        selection = re.search(r"(?m)^(\d+)\. " + re.escape(session) + r"  ", mixed_list.stdout)
+        assert selection and damaged_selection
+        requests.clear()
+        refused = subprocess.run([str(executable), "--resume"], cwd=executable.parent,
+            env=env, input=f"{damaged_selection[1]}\n/exit\n", capture_output=True,
+            text=True, encoding="utf-8", timeout=60)
+        assert refused.returncode == 0 and "E_SESSION_DATA" in refused.stdout, refused
+        assert "Selected " + damaged_id not in refused.stdout and not requests
         first = "picker-first-turn-marker-4816"
         second = "picker-second-turn-marker-8527"
         requests.clear()
@@ -203,6 +223,9 @@ def verify(executable, previous_executable=None):
         assert has_history(first, ["legacy-resume-marker-7391"]), "Picker lost historical context"
         assert has_history(second, ["legacy-resume-marker-7391", first]), "Second turn lost session context"
         print("PASS: public history picker resumes real engine and preserves context across two turns")
+        assert damaged_path.read_bytes() == damaged_bytes
+        damaged_path.unlink()  # Remove this fixture before unrelated migration acceptance.
+        print("PASS: unavailable session cannot be selected; healthy history still resumes actual context without changing damaged bytes")
         requests.clear()
         continued = "continue-after-restart-marker-9638"
         result = subprocess.run([str(executable), "--continue", "--print", continued],

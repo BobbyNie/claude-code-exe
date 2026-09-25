@@ -63,6 +63,35 @@ int main() {
     fs::remove(indexPath);
     assert(ccode::ListWorkspaceSessions(indexedProfile, root).size() == 1);
     assert(loadIndex() == index);
+    // A known workspace's damaged session remains visible but cannot resume;
+    // healthy sessions remain discoverable and the cache reflects native state.
+    const std::string damagedId = "abcdefab-1234-1234-1234-123456789abc";
+    const auto damaged = source.parent_path() / (damagedId + ".jsonl");
+    const auto damagedBytes = ccode::Json{{"type", "user"}, {"sessionId", damagedId},
+        {"cwd", root.u8string()}, {"message", {{"content", "private damaged title"}}}}.dump()
+        + "\n{truncated-private-marker";
+    { std::ofstream output(damaged, std::ios::binary); output << damagedBytes; }
+    auto mixed = ccode::ListWorkspaceSessions(indexedProfile, root);
+    assert(mixed.size() == 2);
+    for (const auto& item : mixed) {
+        if (item.id == damagedId) {
+            assert(item.availability == "unavailable");
+            assert(item.title == "Unavailable session");
+            bool refused = false;
+            try { ccode::RequireAvailableSession(mixed, damagedId); }
+            catch (const std::runtime_error& error) { refused = std::string(error.what()) == "E_SESSION_DATA"; }
+            assert(refused);
+        } else {
+            assert(item.id == id && item.availability == "discovered");
+            ccode::RequireAvailableSession(mixed, id);
+        }
+    }
+    const auto mixedIndex = loadIndex();
+    for (const auto& entry : mixedIndex["sessions"])
+        if (entry["id"] == damagedId) assert(entry["availability"] == "unavailable");
+    { std::ifstream input(damaged, std::ios::binary);
+      assert(std::string(std::istreambuf_iterator<char>(input), {}) == damagedBytes); }
+    fs::remove(damaged);
     fs::remove(source);
     assert(ccode::ListWorkspaceSessions(indexedProfile, root).empty());
     assert(loadIndex()["sessions"].empty());

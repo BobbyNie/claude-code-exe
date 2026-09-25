@@ -19,6 +19,7 @@ struct Session {
     std::string id, title;
     std::string engineVersion;
     std::filesystem::file_time_type modified;
+    std::string availability = "discovered";
 };
 inline bool SameWorkspace(const std::filesystem::path& a, const std::filesystem::path& b) {
     auto left = std::filesystem::weakly_canonical(a).wstring();
@@ -30,7 +31,8 @@ inline bool SameWorkspace(const std::filesystem::path& a, const std::filesystem:
 #endif
 }
 inline std::vector<Session> ListSessions(const std::filesystem::path& projects,
-                                       const std::filesystem::path& workspace) {
+                                       const std::filesystem::path& workspace,
+                                       bool includeUnavailable = false) {
     namespace fs = std::filesystem;
     std::vector<Session> result;
     const auto ioProjects = NativeIoPath(projects);
@@ -46,42 +48,56 @@ inline std::vector<Session> ListSessions(const std::filesystem::path& projects,
             if (!input) throw std::runtime_error("E_SESSION_DATA");
             bool discovered = false;
             std::string line;
-            while (std::getline(input, line)) {
-                if (line.size() > 16 * 1024 * 1024)
-                    throw std::runtime_error("E_SESSION_DATA");
-                auto event = Json::parse(line, nullptr, false);
-                if (event.is_discarded() || !event.is_object())
-                    throw std::runtime_error("E_SESSION_DATA");
-                // Do not let malformed identity metadata become a generic local
-                // error (or an apparently empty history). Never include its value.
-                if (event.contains("type") && !event["type"].is_string())
-                    throw std::runtime_error("E_SESSION_DATA");
-                if (event.value("type", std::string()) != "user") continue;
-                if ((event.contains("isSidechain") && !event["isSidechain"].is_boolean()) ||
-                    (event.contains("sessionId") && !event["sessionId"].is_string()) ||
-                    (event.contains("cwd") && !event["cwd"].is_string()))
-                    throw std::runtime_error("E_SESSION_DATA");
-                if (event.value("isSidechain", false)) continue;
-                if (event.value("sessionId", std::string()) != id || !event.contains("cwd")) continue;
-                if (!SameWorkspace(fs::u8path(event.at("cwd").get<std::string>()), workspace)) break;
-                if (discovered) continue;
-                std::string title = "Saved session";
-                if (event.contains("message") && event["message"].contains("content") &&
-                    event["message"]["content"].is_string())
-                    title = ConsoleText(event["message"]["content"].get<std::string>());
-                std::replace(title.begin(), title.end(), '\n', ' ');
-                std::string version;
-                if (event.contains("version") && event["version"].is_string())
-                    version = event["version"].get<std::string>();
-                result.push_back({id, title, version, file.last_write_time()});
-                discovered = true;
+            try {
+                while (std::getline(input, line)) {
+                    if (line.size() > 16 * 1024 * 1024)
+                        throw std::runtime_error("E_SESSION_DATA");
+                    auto event = Json::parse(line, nullptr, false);
+                    if (event.is_discarded() || !event.is_object())
+                        throw std::runtime_error("E_SESSION_DATA");
+                    // Do not let malformed identity metadata become a generic local
+                    // error (or an apparently empty history). Never include its value.
+                    if (event.contains("type") && !event["type"].is_string())
+                        throw std::runtime_error("E_SESSION_DATA");
+                    if (event.value("type", std::string()) != "user") continue;
+                    if ((event.contains("isSidechain") && !event["isSidechain"].is_boolean()) ||
+                        (event.contains("sessionId") && !event["sessionId"].is_string()) ||
+                        (event.contains("cwd") && !event["cwd"].is_string()))
+                        throw std::runtime_error("E_SESSION_DATA");
+                    if (event.value("isSidechain", false)) continue;
+                    if (event.value("sessionId", std::string()) != id || !event.contains("cwd")) continue;
+                    if (!SameWorkspace(fs::u8path(event.at("cwd").get<std::string>()), workspace)) break;
+                    if (discovered) continue;
+                    std::string title = "Saved session";
+                    if (event.contains("message") && event["message"].contains("content") &&
+                        event["message"]["content"].is_string())
+                        title = ConsoleText(event["message"]["content"].get<std::string>());
+                    std::replace(title.begin(), title.end(), '\n', ' ');
+                    std::string version;
+                    if (event.contains("version") && event["version"].is_string())
+                        version = event["version"].get<std::string>();
+                    result.push_back({id, title, version, file.last_write_time()});
+                    discovered = true;
+                }
+                if (input.bad()) throw std::runtime_error("E_SESSION_DATA");
+            } catch (const std::runtime_error& error) {
+                // Only identity established from a valid native user record can
+                // associate damaged history with this workspace. Never guess.
+                if (!includeUnavailable || !discovered || std::string(error.what()) != "E_SESSION_DATA")
+                    throw;
+                result.back().availability = "unavailable";
+                result.back().title = "Unavailable session";
             }
-            if (input.bad()) throw std::runtime_error("E_SESSION_DATA");
         }
     }
     std::sort(result.begin(), result.end(), [](const Session& a, const Session& b) {
         return a.modified > b.modified;
     });
     return result;
+}
+inline void RequireAvailableSession(const std::vector<Session>& sessions, const std::string& id) {
+    for (const auto& session : sessions)
+        if (session.id == id && session.availability != "discovered")
+            throw std::runtime_error("E_SESSION_DATA");
 }
 }

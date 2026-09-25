@@ -8,12 +8,12 @@ inline std::vector<Session> ListWorkspaceSessions(const std::filesystem::path& p
                                                  const std::filesystem::path& workspace) {
     namespace fs = std::filesystem;
     const auto identity = ResolveWorkspace(profile / "workspaces.json", workspace);
-    auto sessions = ListSessions(profile / "home" / ".claude" / "projects", workspace);
+    auto sessions = ListSessions(profile / "home" / ".claude" / "projects", workspace, true);
     Json entries = Json::array();
     for (const auto& session : sessions) {
         entries.push_back({{"id", session.id}, {"summary", session.title},
             {"modified", session.modified.time_since_epoch().count()},
-            {"engineVersion", session.engineVersion}, {"availability", "discovered"}});
+            {"engineVersion", session.engineVersion}, {"availability", session.availability}});
     }
     // 'discovered' does not promise compatibility or a successfully resumed turn.
     const Json document = {{"schema", 1}, {"workspaceId", identity}, {"sessions", entries}};

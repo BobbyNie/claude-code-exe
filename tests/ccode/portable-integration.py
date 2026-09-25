@@ -158,11 +158,15 @@ def check(executable):
             saved = (json.dumps(valid_event) + "\n").encode("utf-8") + tail
             transcript.write_bytes(saved)
             result = run("--data-dir", str(history_data), "--sessions")
-            assert result.returncode == 64 and result.stderr.strip() == "E_SESSION_DATA", result
+            assert result.returncode == 0 and not result.stderr, result
+            assert session_id in result.stdout and "[unavailable: E_SESSION_DATA]" in result.stdout
             assert "private-history-marker" not in result.stdout + result.stderr
             assert "truncated-private-marker" not in result.stdout + result.stderr
+            for resume in (("--resume", session_id), ("--continue",)):
+                rejected = run("--data-dir", str(history_data), *resume, "--print", "No replay")
+                assert rejected.returncode == 64 and rejected.stderr.strip() == "E_SESSION_DATA", rejected
             assert transcript.read_bytes() == saved
-        print("PASS: malformed history tails are classified without disclosure or transcript changes")
+        print("PASS: malformed history tails remain visible as unavailable and cannot resume; original bytes preserved")
         # Backup works without loading or repairing malformed history. The live
         # profile lock is excluded; all other bytes are independently hashed.
         profile = history_data / "profile"

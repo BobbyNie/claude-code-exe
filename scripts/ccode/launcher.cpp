@@ -428,7 +428,8 @@ int RunTurn(const fs::path& module, const fs::path& payload, const fs::path& pro
 void PrintSessions(const std::vector<ccode::Session>& sessions) {
     if (sessions.empty()) std::cout << "No saved sessions for this workspace.\n";
     for (size_t i = 0; i < sessions.size(); ++i)
-        std::cout << i + 1 << ". " << sessions[i].id << "  " << sessions[i].title << '\n';
+        std::cout << i + 1 << ". " << sessions[i].id << "  " << sessions[i].title
+                  << (sessions[i].availability == "discovered" ? "" : " [unavailable: E_SESSION_DATA]") << '\n';
 }
 void PickSession(const fs::path& profile, std::string& session) {
     auto sessions = ccode::ListWorkspaceSessions(profile, fs::current_path());
@@ -440,6 +441,10 @@ void PickSession(const fs::path& profile, std::string& session) {
     try {
         size_t end = 0, index = std::stoul(answer, &end);
         if (end != answer.size() || !index || index > sessions.size()) throw std::runtime_error("bad index");
+        if (sessions[index - 1].availability != "discovered") {
+            std::cout << "E_SESSION_DATA: selected session is unavailable.\n";
+            return;
+        }
         session = sessions[index - 1].id;
         std::cout << "Selected " << session << '\n';
     } catch (...) { std::cout << "Invalid selection.\n"; }
@@ -602,6 +607,7 @@ int Main(int argc, wchar_t** argv) {
         if (sessions.empty()) throw std::runtime_error("E_NO_SESSION");
         options.session = sessions.front().id;
     }
+    ccode::RequireAvailableSession(sessions, options.session);
     if (!ccode::HasApiCredential(Env(L"A_API_KEY"), Env(L"A_AUTH_TOKEN"))) throw std::runtime_error("E_CREDENTIAL: set A_AUTH_TOKEN or A_API_KEY");
     if (!ccode::IsValidGatewayUrl(Env(L"A_BASE_URL"))) throw std::runtime_error("E_GATEWAY: set A_BASE_URL");
     if (options.print && options.resumePicker) throw std::runtime_error("E_SESSION_ID");
