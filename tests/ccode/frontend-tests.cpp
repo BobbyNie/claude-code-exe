@@ -13,6 +13,35 @@ int main() {
     // Protocol errors are stable neutral codes, never parser diagnostics containing input.
     ccode::EventReader invalidJson;
     ExpectError(invalidJson, "{secret-token:bad}\n", "E_PROTOCOL_JSON");
+    // A last-key-wins parser must not turn a failed result into success.
+    const std::string ambiguousResult =
+        "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":true,\"is_error\":false}\n";
+    for (size_t split = 0; split < ambiguousResult.size(); ++split) {
+        ccode::EventReader ambiguous;
+        assert(ambiguous.Feed(ambiguousResult.substr(0, split)).empty());
+        ExpectError(ambiguous, ambiguousResult.substr(split), "E_PROTOCOL_DUPLICATE_KEY");
+        assert(!ambiguous.complete);
+        ExpectError(ambiguous, "{\"type\":\"result\",\"subtype\":\"success\"}\n", "E_PROTOCOL_FAILED");
+    }
+    // Nested and escaped spellings are the same decoded key, not distinct fields.
+    for (const std::string event : {
+        R"({"type":"assistant","message":{"content":[{"type":"text","text":"hidden","text":"private-output"}]}})",
+        R"({"type":"assistant","message":{"content":[{"type":"text","text":"hidden","\u0074ext":"private-output"}]}})",
+        R"({"type":"system","subtype":"init","session_id":"old","session_id":"new","tools":[]})"}) {
+        const auto line = event + "\n";
+        for (size_t split = 0; split < line.size(); ++split) {
+            ccode::EventReader nested("expected-session");
+            assert(nested.Feed(line.substr(0, split)).empty());
+            ExpectError(nested, line.substr(split), "E_PROTOCOL_DUPLICATE_KEY");
+            assert(nested.session == "expected-session" && !nested.complete);
+        }
+    }
+    // Key reuse in sibling objects and later events is legal.
+    ccode::EventReader scopedKeys;
+    const auto siblings = std::string(R"({"type":"assistant","message":{"content":[{"type":"text","text":"one"},{"type":"text","text":"two"}]}})") + "\n";
+    assert(scopedKeys.Feed(siblings + siblings) == "one\ntwo\none\ntwo\n");
+    scopedKeys.Feed("{\"type\":\"result\",\"subtype\":\"success\"}\n");
+    scopedKeys.Finish();
     // Every byte boundary, including within UTF-8, must preserve a complete event.
     const std::string wire = u8"{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"中文🙂\"}]}}\n"
         "{\"type\":\"result\",\"subtype\":\"success\"}\n";

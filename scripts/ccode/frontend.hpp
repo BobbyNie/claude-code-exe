@@ -3,6 +3,7 @@
 #include <set>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace ccode {
 using Json = nlohmann::json;
@@ -118,7 +119,18 @@ public:
                 pending.append(bytes, offset, count);
                 if (end == std::string::npos) break;
                 if (!pending.empty() && pending != "\r") {
-                    auto event = Json::parse(pending, nullptr, false);
+                    // Detect decoded duplicate keys before Event can update turn
+                    // state. Each object has its own scope, including array items.
+                    std::vector<std::set<std::string>> objectKeys;
+                    const auto uniqueKeys = [&](int, Json::parse_event_t kind, Json& value) {
+                        if (kind == Json::parse_event_t::object_start) objectKeys.emplace_back();
+                        else if (kind == Json::parse_event_t::object_end) objectKeys.pop_back();
+                        else if (kind == Json::parse_event_t::key &&
+                            !objectKeys.back().insert(value.get<std::string>()).second)
+                            throw ProtocolError("E_PROTOCOL_DUPLICATE_KEY");
+                        return true;
+                    };
+                    auto event = Json::parse(pending, uniqueKeys, false);
                     if (event.is_discarded()) throw ProtocolError("E_PROTOCOL_JSON");
                     output += Event(event);
                 }

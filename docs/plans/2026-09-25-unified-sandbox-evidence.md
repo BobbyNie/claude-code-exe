@@ -1457,3 +1457,20 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - 此原語不保證防止同身份惡意替換 pending，也未提供 directory fsync 的
   斷電持久性。POSIX 若發布後移除 pending 失敗，會保留兩項並報錯；不得
   因這一發布衝突案例通過而將完整更新／回退故障矩陣標成完成。
+
+### A10／A11 串流 JSON：拒絕同一物件的重複欄位
+
+- 原事件解析器採最後欄位值：同一 result 先 is_error=true 再 false 會被接受。
+  新增 EventReader public Feed 測試，逐 byte 分片要求拒絕，舊實作在 rejected
+  斷言實際 RED。這是前端事件解析的重現，不是實際上游引擎輸出此事件的證據。
+- 在完整 JSON 行的解析 callback 逐物件追蹤已解碼 key，遇到重複欄位回報
+  E_PROTOCOL_DUPLICATE_KEY，於 Event 改動 turn 狀態之前停止。錯誤不包含 key
+  或原始內容，後續 Feed 不能恢復該 reader；不挑選第一或最後欄位值。
+- 測試覆蓋 result、巢狀文字、Unicode escape 同名 key、重複 session_id 的
+  每個 byte 分片點，要求 session／complete 不變。不同兄弟物件及後續事件
+  重用相同 key 仍正常；既有 UTF-8、工具註冊與事件順序回歸不變。
+- 六組 C++ 本機回歸通過。前端另以 AddressSanitizer／UndefinedBehaviorSanitizer
+  執行通過。Python 原執行 handle 中斷後已不存在，重新執行取得 47 項中
+  46 通過、1 Windows 專用跳過；diff 檢查通過。
+- Windows 原生測試及真實引擎回歸尚未執行。此檢查只拒絕前端收到的歧義
+  事件，不代表能撤銷引擎已執行的工具副作用，也不等於企業 gateway 全面驗收。
