@@ -565,6 +565,30 @@ def verify(executable):
         assert foreign_pointer_path.read_bytes() == pointer_before and not requests
         runtime_refused = foreign_command("--sessions")
         assert runtime_refused.returncode == 64 and runtime_refused.stderr.strip() == "E_ACTIVE_PROFILE", runtime_refused
+        # An older source is explicitly chosen; recent active history remains preserved.
+        old_source = foreign_data / "snapshots" / all_snapshot_id
+        old_source_before = profile_bytes(old_source)
+        assert profile_bytes(old_source / "profile") != foreign_before
+        prepared = foreign_command("--prepare-rollback", all_snapshot_id)
+        assert prepared.returncode == 0, prepared
+        plan = json.loads(prepared.stdout)
+        assert plan["schema"] == 1 and plan["state"] == "prepared"
+        rollback_id = str(uuid.UUID(plan["candidateId"]))
+        preservation_id = str(uuid.UUID(plan["preservationSnapshotId"]))
+        assert plan["sourceSnapshotId"] == all_snapshot_id
+        assert plan["priorActivePointer"] == foreign_pointer
+        assert plan["targetEngine"] == json.loads(repeated_pointer)["engine"]
+        assert plan["adapter"] == "stream-json-v1"
+        rollback_candidate = foreign_data / "rollback-candidates" / rollback_id
+        assert json.loads((rollback_candidate / "rollback.json").read_text(encoding="utf-8")) == plan
+        assert profile_bytes(rollback_candidate / "profile") == profile_bytes(old_source / "profile")
+        assert profile_bytes(foreign_data / "snapshots" / preservation_id / "profile") == foreign_before
+        assert profile_bytes(foreign_candidate / "profile") == foreign_before
+        assert profile_bytes(old_source) == old_source_before
+        assert foreign_pointer_path.read_bytes() == pointer_before and not requests
+        assert not (foreign_data / "candidates" / rollback_id).exists()
+        assert not (rollback_candidate / "validation.json").exists()
+        print("PASS: explicit rollback preparation preserves latest active data and pointer, isolates old snapshot, and needs no API")
         foreign_receipt["verificationId"] = str(uuid.uuid4())
         foreign_receipt_path.write_text(json.dumps(foreign_receipt), encoding="utf-8")
         snapshots_before_refusal = profile_bytes(foreign_data / "snapshots")
