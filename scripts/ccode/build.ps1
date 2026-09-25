@@ -12,12 +12,11 @@ $ProgressPreference = "SilentlyContinue"
 $baseUrl = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/$Version"
 $work = Join-Path ([System.IO.Path]::GetTempPath()) "ccode-build-$([Guid]::NewGuid().ToString('N'))"
 $payload = Join-Path $work "aa-runtime.exe"
-$hook = Join-Path $work "cc-runtime.dll"
+$metadataPath = Join-Path $work "package.json"
 $manifestPath = Join-Path $work "manifest.json"
 $resourceScript = Join-Path $work "ccode.rc"
 $resourceObject = Join-Path $work "ccode.res"
 $output = Join-Path (Resolve-Path $OutputDir) "ccode.exe"
-$minHookVersion = "1.3.4"
 $locationPushed = $false
 
 function Invoke-Checked {
@@ -49,76 +48,30 @@ try {
         throw "Official payload SHA256 mismatch. Expected $expected, got $actual"
     }
 
-    Write-Output "Building the isolation layer with pinned MinHook $minHookVersion..."
-    $minHookZip = Join-Path $work "minhook.zip"
-    Invoke-WebRequest `
-        -Uri "https://github.com/TsudaKageyu/minhook/archive/refs/tags/v$minHookVersion.zip" `
-        -OutFile $minHookZip `
-        -UseBasicParsing
-    Expand-Archive -Path $minHookZip -DestinationPath $work
-    $minHook = Join-Path $work "minhook-$minHookVersion"
-
-    $minHookSources = @(
-        (Join-Path $minHook "src\buffer.c"),
-        (Join-Path $minHook "src\hook.c"),
-        (Join-Path $minHook "src\trampoline.c"),
-        (Join-Path $minHook "src\hde\hde64.c")
-    )
-    $isolationObject = Join-Path $work "isolation.obj"
-    $isolationArgs = @(
-        "/nologo", "/std:c++17", "/O2", "/EHsc", "/c", "/DUNICODE", "/D_UNICODE",
-        "/I$PSScriptRoot", "/I$(Join-Path $minHook 'include')", "/I$(Join-Path $minHook 'src')",
-        "/Fo:$isolationObject", (Join-Path $PSScriptRoot "hook.cpp")
-    )
-    Invoke-Checked cl.exe @isolationArgs
-
-    $minHookObjects = @()
-    foreach ($source in $minHookSources) {
-        $objectName = "minhook-$([System.IO.Path]::GetFileNameWithoutExtension($source)).obj"
-        $objectPath = Join-Path $work $objectName
-        Invoke-Checked cl.exe /nologo /O2 /c `
-            "/I$(Join-Path $minHook 'include')" "/I$(Join-Path $minHook 'src')" `
-            "/Fo:$objectPath" $source
-        $minHookObjects += $objectPath
-    }
-
-    $linkArgs = @("/nologo", "/LD", "/Fe:$hook", $isolationObject) +
-        $minHookObjects + @("/link", "ws2_32.lib")
-    Invoke-Checked cl.exe @linkArgs
-
-    Write-Output "Embedding the verified payload and isolation layer as RCDATA resources..."
+    Write-Output "Embedding verified engine and version metadata..."
+    @{ version = $Version; sha256 = $actual } | ConvertTo-Json -Compress |
+        Set-Content -Path $metadataPath -Encoding utf8NoBOM
     $payloadRc = $payload.Replace('\', '\\')
-    $hookRc = $hook.Replace('\', '\\')
+    $metadataRc = $metadataPath.Replace('\', '\\')
     @"
 101 RCDATA "$payloadRc"
-102 RCDATA "$hookRc"
+102 RCDATA "$metadataRc"
 "@ | Set-Content -Path $resourceScript -Encoding ASCII
     Invoke-Checked rc.exe /nologo "/fo$resourceObject" $resourceScript
 
     $launcherArgs = @(
-        "/nologo", "/std:c++17", "/O2", "/EHsc", "/DUNICODE", "/D_UNICODE",
+        "/nologo", "/std:c++17", "/O2", "/EHsc", "/MT", "/utf-8", "/DUNICODE", "/D_UNICODE",
         (Join-Path $PSScriptRoot "launcher.cpp"), $resourceObject,
-        "/Fe:$output", "/link", "/SUBSYSTEM:CONSOLE"
+        "/Fe:$output", "/link", "bcrypt.lib", "/SUBSYSTEM:CONSOLE"
     )
     Invoke-Checked cl.exe @launcherArgs
 
-    Write-Output "Compiling and running native isolation tests..."
-    $nativeTests = Join-Path $work "ccode-native-tests.exe"
-    Invoke-Checked cl.exe /nologo /std:c++17 /O2 /EHsc `
-        (Join-Path $PSScriptRoot "..\..\tests\ccode\native-tests.cpp") "/Fe:$nativeTests"
-    Invoke-Checked $nativeTests
-
-    $profileTests = Join-Path $work "ccode-profile-tests.exe"
-    Invoke-Checked cl.exe /nologo /std:c++17 /O2 /EHsc `
-        (Join-Path $PSScriptRoot "..\..\tests\ccode\profile-tests.cpp") "/Fe:$profileTests"
-    Invoke-Checked $profileTests
-
-    Write-Output "Compiling and running hook integration tests..."
-    $hookTests = Join-Path $work "ccode-hook-tests.exe"
-    Invoke-Checked cl.exe /nologo /std:c++17 /O2 /EHsc `
-        (Join-Path $PSScriptRoot "..\..\tests\ccode\hook-integration-tests.cpp") `
-        "/Fe:$hookTests"
-    Invoke-Checked $hookTests $hook
+    foreach ($suite in @("native", "profile", "environment", "frontend", "session", "permission")) {
+        $testExe = Join-Path $work "ccode-$suite-tests.exe"
+        Invoke-Checked cl.exe /nologo /std:c++17 /O2 /EHsc /MT /utf-8 `
+            (Join-Path $PSScriptRoot "..\..\tests\ccode\$suite-tests.cpp") "/Fe:$testExe"
+        Invoke-Checked $testExe
+    }
 
     $info = Get-Item $output
     if ($info.Length -le (Get-Item $payload).Length) {

@@ -29,7 +29,7 @@ jobs:
       - name: Build reported runtime version
         shell: pwsh
         run: ./scripts/ccode/build.ps1 -Version '${{ matrix.version }}' -OutputDir .
-      - name: Test injected runtime
+      - name: Test native runtime and resume
         shell: pwsh
         run: |
           python -m unittest discover -s tests -v

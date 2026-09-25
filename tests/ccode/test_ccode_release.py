@@ -40,11 +40,11 @@ class CcodeReleaseTests(unittest.TestCase):
         self.assertIn("manifest.json", build)
         self.assertIn("Get-FileHash", build)
         self.assertIn("aa-runtime.exe", build)
-        self.assertIn("cc-runtime.dll", build)
+        self.assertNotIn("cc-runtime.dll", build)
         self.assertIn("RCDATA", build)
         self.assertIn("ccode.exe", build)
-        self.assertIn("hook-integration-tests.cpp", build)
-        self.assertIn('"isolation.obj"', build)
+        self.assertNotIn("MinHook", build)
+        self.assertIn("package.json", build)
 
 
 if __name__ == "__main__":

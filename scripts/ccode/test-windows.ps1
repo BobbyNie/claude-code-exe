@@ -50,7 +50,7 @@ try {
 
     $env:A_AUTH_TOKEN = "test-only-token"
     Remove-Item Env:A_BASE_URL -ErrorAction SilentlyContinue
-    Invoke-ExpectExit -Arguments @("--version") -Expected 64
+    Invoke-ExpectExit -Arguments @("--version") -Expected 0
 
     $env:A_BASE_URL = "http://gateway.example.test"
     Invoke-ExpectExit -Arguments @("login") -Expected 64
@@ -69,9 +69,9 @@ try {
     python $resumeFixture prepare $testExe
     if ($LASTEXITCODE -ne 0) { throw 'Unable to prepare legacy resume fixture' }
 
-    & $testExe --version
+    & $testExe --sessions
     if ($LASTEXITCODE -ne 0) {
-        throw "The embedded official payload failed its injected --version smoke test"
+        throw "The frontend failed its session discovery smoke test"
     }
     if (-not (Test-Path (Join-Path $currentProject 'old-session.jsonl'))) {
         throw 'Upgrade lost access to legacy .cc session transcripts'
@@ -90,8 +90,8 @@ try {
         $fixture = Join-Path $testRoot 'runtime-paths.js'
         Copy-Item (Join-Path $PSScriptRoot '../../tests/ccode/runtime-paths.js') $fixture
         $env:TEMP = Join-Path $testRoot 'data/cc/profile/temp'
-        $hookPath = Join-Path $testRoot 'data/cc/runtime/cc-runtime.dll'
-        python -c 'import subprocess,sys; sys.exit(subprocess.run(sys.argv[1:], timeout=60).returncode)' (Get-Command bun).Source $fixture $hookPath
+        $payloadPath = (Get-ChildItem (Join-Path $testRoot 'runtime') -Filter engine.exe -Recurse | Select-Object -First 1).FullName
+        python -c 'import subprocess,sys; sys.exit(subprocess.run(sys.argv[1:], timeout=60).returncode)' (Get-Command bun).Source $fixture $payloadPath
         if ($LASTEXITCODE -ne 0) { throw 'Bun runtime filesystem regression failed' }
     }
     finally {
