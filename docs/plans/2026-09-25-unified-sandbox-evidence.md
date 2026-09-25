@@ -808,3 +808,16 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   Retry-After: 1，必須只發一次請求且輸出 E_GATEWAY_RATE_LIMIT。前端分類
   測試先 RED，加入固定中性分類後六組 C++、20 項 Python、語法與 diff 檢查
   GREEN。兩版本實際 429 行為待 Windows CI，沒有提前標為通過。
+
+### HTTP 429 Windows GREEN；啟動不完整工具串流驗收
+
+- `09a8a43` / `36168642003` 兩版本 jobs `108182481596`、`108182482137`
+  成功；已讀取實際日誌確認 HTTP 401 與 429 均 PASS，後者含 Retry-After: 1、
+  一次請求、E_GATEWAY_RATE_LIMIT、非零退出、無工作區寫入及終端私有內容遮罩。
+- cross-version `108184292666` 成功；long-workspace `108184292755`、
+  `108184292775` 仍 WinError 267。整體 workflow failure，不代表全量放行。
+- A10/A18 下一案例使用真實引擎且明確批准 Write；fixture 發出 tool_use 開始及
+  未完成的 input_json_delta 後，在承諾的 Content-Length 結束之前關閉連線。
+  測試要求確實送出截斷資料、非零退出、一次模型請求、中性錯誤、無工作區
+  寫入及終端遮罩，不能因未批准工具而假通過。此輪僅加入驗收測試，沒有產品
+  修復，不宣稱 RED→GREEN；Windows 實際結果待確認，細分斷流分類仍未完成。
