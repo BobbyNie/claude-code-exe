@@ -1,0 +1,33 @@
+name: Test ccode Windows runtime
+
+on:
+  push:
+    branches: ['codex/fix-ccode-runtime-paths']
+  pull_request:
+    paths: ['scripts/ccode/**', 'tests/ccode/**', '.github/workflows/test-ccode.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Build reported runtime version
+        shell: pwsh
+        run: ./scripts/ccode/build.ps1 -Version '2.1.221' -OutputDir .
+      - name: Test injected runtime
+        shell: pwsh
+        run: |
+          python -m unittest discover -s tests -v
+          if ($LASTEXITCODE -ne 0) { throw 'Python tests failed' }
+          ./scripts/ccode/test-windows.ps1 -Executable ./ccode.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ccode-windows-tested
+          path: ccode.exe

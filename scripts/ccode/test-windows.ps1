@@ -67,6 +67,14 @@ try {
     if ($forbiddenNames) {
         throw "Forbidden filesystem names were created: $($forbiddenNames.FullName -join ', ')"
     }
+
+    $env:BUN_BE_BUN = '1'
+    try {
+        Invoke-ExpectExit -Arguments @((Join-Path $PSScriptRoot '../../tests/ccode/runtime-paths.js')) -Expected 0
+    }
+    finally {
+        Remove-Item Env:BUN_BE_BUN -ErrorAction SilentlyContinue
+    }
 }
 finally {
     if ($locationPushed) {
