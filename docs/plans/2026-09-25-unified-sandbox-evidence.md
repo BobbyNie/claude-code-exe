@@ -621,3 +621,17 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   snapshots 與 frozen checkpoint 必須不變；無憑證提交階段零 API。
 - 新增案例本機 Python 語法、19 項回歸及 diff 檢查通過；Windows 待下一輪 run。
   故障注入為真實檔案替換失敗，不等同磁碟滿或斷電。整體仍未放行。
+
+### 回退故障與實際續接 Windows 結果／真正跨版本驗收接線
+
+- `7af0fef` / `36155207524` completed/success，兩版本所有步驟成功。
+  已讀取 `2.1.282` job `108137937932` 與 `2.1.221` job `108137938108`，
+  均有 rollback rejects newer writes / Windows replacement failure / resumes
+  both real sessions PASS。此證據不涵蓋磁碟滿或斷電。
+- 新增依賴兩個成功建置 artifacts 的獨立 Windows cross-version job，直接使用
+  真正 `2.1.221` 與 `2.1.282` 封裝檔，不改寫版本 metadata、指標或驗證回執。
+- 案例：舊版建立會話及快照 → 新版全會話驗證、啟用並寫入新輪次 → 舊版準備、
+  驗證及明確回退 → 舊版恢復原 session。核對引擎版本及不同 SHA、原歷史標記、
+  新版輪次確實落盤且完整保全，舊快照、舊 profile、新版 active 前後不變。
+- 本機 Python 語法、19 項回歸及 diff 檢查通過；真正跨版本結果尚待 Windows。
+  模型回覆仍使用本機假 API，不能替代企業 gateway／乾淨端點驗收；整體未放行。

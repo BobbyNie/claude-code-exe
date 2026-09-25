@@ -73,7 +73,7 @@ def fixture_answer(messages, history_markers, probe_reply_correct=True):
     return recovered[0] if probe_reply_correct and len(recovered) == 1 else "history-verification-failed"
 
 
-def verify(executable):
+def verify(executable, previous_executable=None):
     requests = []
     probe_reply_correct = True
     history_markers = ["legacy-resume-marker-7391", "second-workspace-marker-6842"]
@@ -698,6 +698,73 @@ def verify(executable):
         assert foreign_pointer_path.read_bytes() == committed_pointer_bytes
         print("PASS: rollback rejects newer writes, preserves Windows replacement failure evidence, archives before retry, and resumes both real sessions")
 
+        if previous_executable is not None:
+            # Actual two-version lifecycle: no rewritten engine metadata or receipts.
+            cross_data = executable.parent / "cross version data"
+            cross_env = dict(env, CCODE_DATA_DIR=str(cross_data))
+            cross_offline = {key: value for key, value in cross_env.items()
+                             if not key.startswith(("A_", "ANTHROPIC_", "CLAUDE_"))}
+            def cross_command(binary, *arguments, offline=False):
+                result = subprocess.run([str(binary), *arguments], cwd=executable.parent,
+                    env=cross_offline if offline else cross_env, capture_output=True,
+                    text=True, encoding="utf-8", timeout=120)
+                assert result.returncode == 0, result
+                return result
+            assert "engine 2.1.221" in cross_command(previous_executable, "--version", offline=True).stdout
+            assert "engine 2.1.282" in cross_command(executable, "--version", offline=True).stdout
+            cross_command(previous_executable, "--print", history_markers[0])
+            old_listing = cross_command(previous_executable, "--sessions", offline=True)
+            old_match = re.search(r"(?m)^\d+\. ([0-9a-f-]{36})  ", old_listing.stdout)
+            assert old_match, old_listing
+            cross_session = str(uuid.UUID(old_match[1]))
+            source_id = str(uuid.UUID(cross_command(previous_executable, "--snapshot-profile", offline=True).stdout.strip()))
+            cross_source = cross_data / "snapshots" / source_id
+            cross_source_bytes = profile_bytes(cross_source)
+            legacy_bytes = profile_bytes(cross_data / "profile")
+            next_candidate = str(uuid.UUID(cross_command(executable, "--stage-profile", source_id, offline=True).stdout.strip()))
+            requests.clear()
+            cross_command(executable, "--validate-profile", next_candidate, "--all-sessions")
+            assert len(requests) == 1 and history_markers[0] in json.dumps(requests[0].get("messages", [])[:-1])
+            requests.clear()
+            cross_command(executable, "--activate-profile", next_candidate, offline=True)
+            assert not requests
+            next_pointer = json.loads((cross_data / "active-profile.json").read_text(encoding="utf-8"))
+            assert next_pointer["engine"]["version"] == "2.1.282"
+            newer_marker = "newer-engine-turn-preserved-4982"
+            cross_command(executable, "--resume", cross_session, "--print", newer_marker)
+            assert history_markers[0] in json.dumps(requests[-1].get("messages", [])[:-1])
+            next_profile = cross_data / "candidates" / next_candidate / "profile"
+            newer_bytes = profile_bytes(next_profile)
+            assert any(newer_marker.encode() in content for content in newer_bytes.values())
+            assert newer_bytes != legacy_bytes
+            requests.clear()
+            cross_plan = json.loads(cross_command(previous_executable, "--prepare-rollback", source_id, offline=True).stdout)
+            assert cross_plan["targetEngine"]["version"] == "2.1.221"
+            assert cross_plan["priorActivePointer"] == next_pointer
+            assert cross_plan["targetEngine"]["sha256"] != next_pointer["engine"]["sha256"]
+            cross_id = cross_plan["candidateId"]
+            cross_preserved = cross_data / "snapshots" / cross_plan["preservationSnapshotId"] / "profile"
+            assert profile_bytes(cross_preserved) == newer_bytes and not requests
+            cross_command(previous_executable, "--validate-rollback", cross_id)
+            assert len(requests) == 1
+            assert history_markers[0] in json.dumps(requests[0].get("messages", [])[:-1])
+            assert newer_marker not in json.dumps(requests[0].get("messages", []))
+            requests.clear()
+            cross_command(previous_executable, "--activate-rollback", cross_id, offline=True)
+            assert not requests
+            final_pointer = json.loads((cross_data / "active-profile.json").read_text(encoding="utf-8"))
+            assert final_pointer["engine"] == cross_plan["targetEngine"] and final_pointer["profileKind"] == "rollback"
+            cross_command(previous_executable, "--resume", cross_session, "--print", "after actual version rollback")
+            assert len(requests) == 1
+            assert history_markers[0] in json.dumps(requests[0].get("messages", [])[:-1])
+            assert newer_marker not in json.dumps(requests[0].get("messages", []))
+            assert profile_bytes(next_profile) == newer_bytes
+            assert profile_bytes(cross_preserved) == newer_bytes
+            assert profile_bytes(cross_data / "profile") == legacy_bytes
+            assert profile_bytes(cross_source) == cross_source_bytes
+            print("PASS: actual engines 2.1.221 -> 2.1.282 -> 2.1.221 preserve original history and newer data through verified rollback")
+
+
 
 
 
@@ -710,4 +777,7 @@ def verify(executable):
 
 if __name__ == "__main__":
     executable = Path(sys.argv[2]).resolve()
-    {"prepare": prepare, "verify": verify}[sys.argv[1]](executable)
+    if sys.argv[1] == "verify" and len(sys.argv) == 4:
+        verify(executable, Path(sys.argv[3]).resolve())
+    else:
+        {"prepare": prepare, "verify": verify}[sys.argv[1]](executable)

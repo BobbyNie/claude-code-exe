@@ -45,3 +45,25 @@ jobs:
         with:
           name: ccode-windows-tested-${{ matrix.version }}
           path: ccode.exe
+
+  cross-version:
+    needs: test
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ccode-windows-tested-2.1.221
+          path: cross/old
+      - uses: actions/download-artifact@v4
+        with:
+          name: ccode-windows-tested-2.1.282
+          path: cross/new
+      - name: Exercise actual upgrade and rollback between both engines
+        shell: pwsh
+        run: |
+          python tests/ccode/resume-integration.py prepare ./cross/new/ccode.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Cross-version fixture preparation failed' }
+          python tests/ccode/resume-integration.py verify ./cross/new/ccode.exe ./cross/old/ccode.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Actual cross-version rollback failed' }
