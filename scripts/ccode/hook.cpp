@@ -24,22 +24,6 @@ decltype(&SetEnvironmentVariableW) OriginalSetEnvironmentVariableW = nullptr;
 decltype(&SetEnvironmentVariableA) OriginalSetEnvironmentVariableA = nullptr;
 decltype(&getenv) OriginalGetEnv = nullptr;
 decltype(&_wgetenv) OriginalGetWEnv = nullptr;
-decltype(&CreateFileW) OriginalCreateFileW = nullptr;
-decltype(&CreateFileA) OriginalCreateFileA = nullptr;
-decltype(&CreateDirectoryW) OriginalCreateDirectoryW = nullptr;
-decltype(&CreateDirectoryA) OriginalCreateDirectoryA = nullptr;
-decltype(&DeleteFileW) OriginalDeleteFileW = nullptr;
-decltype(&DeleteFileA) OriginalDeleteFileA = nullptr;
-decltype(&RemoveDirectoryW) OriginalRemoveDirectoryW = nullptr;
-decltype(&RemoveDirectoryA) OriginalRemoveDirectoryA = nullptr;
-decltype(&MoveFileExW) OriginalMoveFileExW = nullptr;
-decltype(&MoveFileExA) OriginalMoveFileExA = nullptr;
-decltype(&GetFileAttributesW) OriginalGetFileAttributesW = nullptr;
-decltype(&GetFileAttributesA) OriginalGetFileAttributesA = nullptr;
-decltype(&GetFileAttributesExW) OriginalGetFileAttributesExW = nullptr;
-decltype(&GetFileAttributesExA) OriginalGetFileAttributesExA = nullptr;
-decltype(&FindFirstFileW) OriginalFindFirstFileW = nullptr;
-decltype(&FindFirstFileA) OriginalFindFirstFileA = nullptr;
 decltype(&GetAddrInfoW) OriginalGetAddrInfoW = nullptr;
 decltype(&getaddrinfo) OriginalGetAddrInfoA = nullptr;
 
@@ -187,90 +171,6 @@ wchar_t* __cdecl HookGetWEnv(const wchar_t* name) {
     return OriginalGetWEnv(mapped.c_str());
 }
 
-HANDLE WINAPI HookCreateFileW(LPCWSTR path, DWORD access, DWORD share, LPSECURITY_ATTRIBUTES security,
-                              DWORD creation, DWORD flags, HANDLE templateFile) {
-    const std::wstring rewritten = ccode::RewritePath(path ? path : L"");
-    return OriginalCreateFileW(rewritten.c_str(), access, share, security, creation, flags, templateFile);
-}
-
-HANDLE WINAPI HookCreateFileA(LPCSTR path, DWORD access, DWORD share, LPSECURITY_ATTRIBUTES security,
-                              DWORD creation, DWORD flags, HANDLE templateFile) {
-    const std::string rewritten = Narrow(ccode::RewritePath(Widen(path)));
-    return OriginalCreateFileA(rewritten.c_str(), access, share, security, creation, flags, templateFile);
-}
-
-BOOL WINAPI HookCreateDirectoryW(LPCWSTR path, LPSECURITY_ATTRIBUTES security) {
-    const std::wstring rewritten = ccode::RewritePath(path ? path : L"");
-    return OriginalCreateDirectoryW(rewritten.c_str(), security);
-}
-
-BOOL WINAPI HookCreateDirectoryA(LPCSTR path, LPSECURITY_ATTRIBUTES security) {
-    const std::string rewritten = Narrow(ccode::RewritePath(Widen(path)));
-    return OriginalCreateDirectoryA(rewritten.c_str(), security);
-}
-
-BOOL WINAPI HookDeleteFileW(LPCWSTR path) {
-    const std::wstring rewritten = ccode::RewritePath(path ? path : L"");
-    return OriginalDeleteFileW(rewritten.c_str());
-}
-
-BOOL WINAPI HookDeleteFileA(LPCSTR path) {
-    const std::string rewritten = Narrow(ccode::RewritePath(Widen(path)));
-    return OriginalDeleteFileA(rewritten.c_str());
-}
-
-BOOL WINAPI HookRemoveDirectoryW(LPCWSTR path) {
-    const std::wstring rewritten = ccode::RewritePath(path ? path : L"");
-    return OriginalRemoveDirectoryW(rewritten.c_str());
-}
-
-BOOL WINAPI HookRemoveDirectoryA(LPCSTR path) {
-    const std::string rewritten = Narrow(ccode::RewritePath(Widen(path)));
-    return OriginalRemoveDirectoryA(rewritten.c_str());
-}
-
-BOOL WINAPI HookMoveFileExW(LPCWSTR existing, LPCWSTR replacement, DWORD flags) {
-    const std::wstring from = ccode::RewritePath(existing ? existing : L"");
-    const std::wstring to = replacement ? ccode::RewritePath(replacement) : std::wstring();
-    return OriginalMoveFileExW(from.c_str(), replacement ? to.c_str() : nullptr, flags);
-}
-
-BOOL WINAPI HookMoveFileExA(LPCSTR existing, LPCSTR replacement, DWORD flags) {
-    const std::string from = Narrow(ccode::RewritePath(Widen(existing)));
-    const std::string to = replacement ? Narrow(ccode::RewritePath(Widen(replacement))) : std::string();
-    return OriginalMoveFileExA(from.c_str(), replacement ? to.c_str() : nullptr, flags);
-}
-
-DWORD WINAPI HookGetFileAttributesW(LPCWSTR path) {
-    const std::wstring rewritten = ccode::RewritePath(path ? path : L"");
-    return OriginalGetFileAttributesW(rewritten.c_str());
-}
-
-DWORD WINAPI HookGetFileAttributesA(LPCSTR path) {
-    const std::string rewritten = Narrow(ccode::RewritePath(Widen(path)));
-    return OriginalGetFileAttributesA(rewritten.c_str());
-}
-
-BOOL WINAPI HookGetFileAttributesExW(LPCWSTR path, GET_FILEEX_INFO_LEVELS level, LPVOID info) {
-    const std::wstring rewritten = ccode::RewritePath(path ? path : L"");
-    return OriginalGetFileAttributesExW(rewritten.c_str(), level, info);
-}
-
-BOOL WINAPI HookGetFileAttributesExA(LPCSTR path, GET_FILEEX_INFO_LEVELS level, LPVOID info) {
-    const std::string rewritten = Narrow(ccode::RewritePath(Widen(path)));
-    return OriginalGetFileAttributesExA(rewritten.c_str(), level, info);
-}
-
-HANDLE WINAPI HookFindFirstFileW(LPCWSTR path, LPWIN32_FIND_DATAW data) {
-    const std::wstring rewritten = ccode::RewritePath(path ? path : L"");
-    return OriginalFindFirstFileW(rewritten.c_str(), data);
-}
-
-HANDLE WINAPI HookFindFirstFileA(LPCSTR path, LPWIN32_FIND_DATAA data) {
-    const std::string rewritten = Narrow(ccode::RewritePath(Widen(path)));
-    return OriginalFindFirstFileA(rewritten.c_str(), data);
-}
-
 INT WSAAPI HookGetAddrInfoW(PCWSTR node, PCWSTR service, const ADDRINFOW* hints, PADDRINFOW* result) {
     wchar_t gateway[2048];
     const DWORD length = OriginalGetEnvironmentVariableW(L"A_BASE_URL", gateway, 2048);
@@ -312,22 +212,7 @@ bool InstallHooks() {
     ok &= Install(L"kernel32.dll", "SetEnvironmentVariableA", HookSetEnvironmentVariableA, &OriginalSetEnvironmentVariableA);
     ok &= Install(L"ucrtbase.dll", "getenv", HookGetEnv, &OriginalGetEnv);
     ok &= Install(L"ucrtbase.dll", "_wgetenv", HookGetWEnv, &OriginalGetWEnv);
-    ok &= Install(L"kernel32.dll", "CreateFileW", HookCreateFileW, &OriginalCreateFileW);
-    ok &= Install(L"kernel32.dll", "CreateFileA", HookCreateFileA, &OriginalCreateFileA);
-    ok &= Install(L"kernel32.dll", "CreateDirectoryW", HookCreateDirectoryW, &OriginalCreateDirectoryW);
-    ok &= Install(L"kernel32.dll", "CreateDirectoryA", HookCreateDirectoryA, &OriginalCreateDirectoryA);
-    ok &= Install(L"kernel32.dll", "DeleteFileW", HookDeleteFileW, &OriginalDeleteFileW);
-    ok &= Install(L"kernel32.dll", "DeleteFileA", HookDeleteFileA, &OriginalDeleteFileA);
-    ok &= Install(L"kernel32.dll", "RemoveDirectoryW", HookRemoveDirectoryW, &OriginalRemoveDirectoryW);
-    ok &= Install(L"kernel32.dll", "RemoveDirectoryA", HookRemoveDirectoryA, &OriginalRemoveDirectoryA);
-    ok &= Install(L"kernel32.dll", "MoveFileExW", HookMoveFileExW, &OriginalMoveFileExW);
-    ok &= Install(L"kernel32.dll", "MoveFileExA", HookMoveFileExA, &OriginalMoveFileExA);
-    ok &= Install(L"kernel32.dll", "GetFileAttributesW", HookGetFileAttributesW, &OriginalGetFileAttributesW);
-    ok &= Install(L"kernel32.dll", "GetFileAttributesA", HookGetFileAttributesA, &OriginalGetFileAttributesA);
-    ok &= Install(L"kernel32.dll", "GetFileAttributesExW", HookGetFileAttributesExW, &OriginalGetFileAttributesExW);
-    ok &= Install(L"kernel32.dll", "GetFileAttributesExA", HookGetFileAttributesExA, &OriginalGetFileAttributesExA);
-    ok &= Install(L"kernel32.dll", "FindFirstFileW", HookFindFirstFileW, &OriginalFindFirstFileW);
-    ok &= Install(L"kernel32.dll", "FindFirstFileA", HookFindFirstFileA, &OriginalFindFirstFileA);
+    // Preserve filesystem paths across Win32, NT APIs, and unhooked children.
     ok &= Install(L"ws2_32.dll", "GetAddrInfoW", HookGetAddrInfoW, &OriginalGetAddrInfoW);
     ok &= Install(L"ws2_32.dll", "getaddrinfo", HookGetAddrInfoA, &OriginalGetAddrInfoA);
     return ok && MH_EnableHook(MH_ALL_HOOKS) == MH_OK;

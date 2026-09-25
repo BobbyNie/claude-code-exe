@@ -51,26 +51,6 @@ inline bool HasApiCredential(const std::wstring& apiKey, const std::wstring& aut
     return !apiKey.empty() || !authToken.empty();
 }
 
-inline void ReplaceInsensitive(std::wstring& value, const std::wstring& needle,
-                               const std::wstring& replacement) {
-    size_t position = 0;
-    while (position < value.size()) {
-        const std::wstring lower = Lower(value);
-        const size_t found = lower.find(Lower(needle), position);
-        if (found == std::wstring::npos) {
-            return;
-        }
-        value.replace(found, needle.size(), replacement);
-        position = found + replacement.size();
-    }
-}
-
-inline std::wstring RewritePath(std::wstring path) {
-    ReplaceInsensitive(path, L"anthropic", L"aa");
-    ReplaceInsensitive(path, L"claude", L"cc");
-    return path;
-}
-
 inline bool IsValidGatewayUrl(const std::wstring& url) {
     return !url.empty();
 }

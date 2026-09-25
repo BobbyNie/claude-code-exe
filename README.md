@@ -108,7 +108,7 @@ ccode.exe "请解释当前项目的目录结构"
 
 ### 隔离行为与目录结构
 
-运行时会将以 `ANTHROPIC_` 开头的内部环境查询映射为 `A_` 前缀，将以 `CLAUDE_CODE_` 开头的内部查询映射为 `C_` 前缀；这些原始前缀不会写入 ccode 子进程环境。文件系统路径中的 `anthropic` 与 `claude` 会分别改写为 `aa` 与 `cc`。
+运行时会将以 `ANTHROPIC_` 开头的内部环境查询映射为 `A_` 前缀，将以 `CLAUDE_CODE_` 开头的内部查询映射为 `C_` 前缀；这些原始前缀不会写入 ccode 子进程环境。文件系统路径保持原样，不再对文件名做字符串替换；便携隔离由 `HOME`、`USERPROFILE`、`APPDATA`、`LOCALAPPDATA`、`TEMP` 和 `TMP` 的目录配置完成。这样 Bun 的 Win32/NT 文件查询与 Bash、搜索子进程能访问同一个实际路径。
 
 映射时会移除完整前缀，例如 `ANTHROPIC_AUTH_TOKEN` 应配置为 `A_AUTH_TOKEN`，`CLAUDE_CODE_SUBAGENT_MODEL` 应配置为 `C_SUBAGENT_MODEL`，不要写成 `C_CODE_SUBAGENT_MODEL`。ccode 同时映射逐项查询和环境区块枚举，以兼容会在启动时一次性读取全部环境变量的 runtime。
 

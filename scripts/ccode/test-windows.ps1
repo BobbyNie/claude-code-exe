@@ -61,13 +61,6 @@ try {
         throw "The embedded official payload failed its injected --version smoke test"
     }
 
-    $forbiddenNames = Get-ChildItem $testRoot -Recurse -Force | Where-Object {
-        $_.Name -match '(?i)anthropic|claude'
-    }
-    if ($forbiddenNames) {
-        throw "Forbidden filesystem names were created: $($forbiddenNames.FullName -join ', ')"
-    }
-
     $savedTemp = $env:TEMP
     try {
         $fixture = Join-Path $testRoot 'runtime-paths.js'

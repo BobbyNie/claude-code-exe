@@ -20,9 +20,6 @@ int main() {
     assert(HasApiCredential(L"compatibility-key", L""));
     assert(!HasApiCredential(L"", L""));
 
-    assert(RewritePath(L"data\\Claude\\settings.json") == L"data\\cc\\settings.json");
-    assert(RewritePath(L"DATA\\ANTHROPIC\\Claude") == L"DATA\\aa\\cc");
-    assert(!ContainsForbiddenText(RewritePath(L"data\\ANTHROPIC\\CLAUDE")));
 
     assert(IsValidGatewayUrl(L"https://gateway.example.test"));
     assert(IsValidGatewayUrl(L"https://api.deepseek.com/anthropic"));
