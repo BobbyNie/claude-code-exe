@@ -149,6 +149,21 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   SHA-256，結果待驗。這不是引擎驗證候選、active pointer、磁碟滿實測或完整遷移；
   `.pending` 失敗目錄保留於資料區，尚無自動清理／斷點恢復政策。
 
+- `9bedd2c` / `36133171241`：兩版本 Windows 在 profile C++ 測試以
+  `-1073740791` 結束，尚未執行 CLI 快照驗收，不能標記快照通過。
+  檢查 fixture 發現讀取 manifest 的串流在刪除暫存根目錄前未關閉；
+  `51a9ae9` 關閉該串流並補頂層例外診斷，本機測試通過，Windows run
+  `36133481798` 兩版本全部成功，日誌確認 SHA-256 獨立核對 PASS。
+  不修改產品邏輯或放寬原有斷言；紅燈排除後恢復候選實作。
+
+- 隔離候選切片：新增 `--stage-profile <snapshot-id>`。先驗 manifest schema、UUID、
+  相對路徑、檔案集合、大小及 SHA-256，再複製到獨立 staging；複本及來源再次核對後
+  才發布 `candidates/<id>`，candidate metadata 標記 staged 和來源 snapshot ID。
+  不修改 active profile／原快照，也不把 staged 當作引擎已驗證。
+  本機 TDD 捕捉缺失介面及 manifest UUID 與目錄身份不一致問題，修復後六組 C++、
+  八項 Python 回歸通過。Windows 新增完整副本核對及篡改／缺檔／多檔／穿越拒絕案例，
+  結果待驗。仍需實際引擎驗證歷史、可信驗證狀態與原子 active 切換／回滾。
+
 ## 下一批實施順序
 
 1. 驗證實際工具端到端，處理揭露的缺陷；補取消／權限／進程樹及路徑邊界。

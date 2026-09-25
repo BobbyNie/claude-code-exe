@@ -207,7 +207,7 @@ int PermissionServer() {
 struct Options {
     bool print = false, sessions = false, resumePicker = false, latest = false, workspaceId = false, snapshotProfile = false;
     fs::path data;
-    std::string prompt, session;
+    std::string prompt, session, stageSnapshot;
     std::vector<std::wstring> engine;
 };
 Options Parse(int argc, wchar_t** argv, const fs::path& module) {
@@ -226,6 +226,7 @@ Options Parse(int argc, wchar_t** argv, const fs::path& module) {
         else if (!literal && arg == L"--sessions") options.sessions = true;
         else if (!literal && arg == L"--workspace-id") options.workspaceId = true;
         else if (!literal && arg == L"--snapshot-profile") options.snapshotProfile = true;
+        else if (!literal && arg == L"--stage-profile") options.stageSnapshot = Utf8(next());
         else if (!literal && (arg == L"--resume" || arg == L"-r")) {
             if (i + 1 < argc && argv[i + 1][0] != L'-') options.session = Utf8(next());
             else options.resumePicker = true;
@@ -246,6 +247,7 @@ Options Parse(int argc, wchar_t** argv, const fs::path& module) {
             options.prompt += Utf8(arg);
         }
     }
+    if (!options.stageSnapshot.empty() && !ccode::ValidSessionId(options.stageSnapshot)) throw std::runtime_error("E_SNAPSHOT_ID");
     if (!options.session.empty() && !ccode::ValidSessionId(options.session)) throw std::runtime_error("E_SESSION_ID");
     options.data = fs::absolute(options.data).lexically_normal();
     return options;
@@ -383,6 +385,7 @@ int Main(int argc, wchar_t** argv) {
             "  --model NAME           Select a model\n"
             "  --workspace-id         Show persistent workspace identity\n"
             "  --snapshot-profile     Create verified backup; print snapshot ID\n"
+            "  --stage-profile ID     Copy verified snapshot to isolated candidate\n"
             "  --allowedTools RULE    Explicit tool permission rule\n"
             "  --settings PATH        Engine settings file\n"
             "  --mcp-config PATH      Additional tool servers\n"
@@ -404,6 +407,13 @@ int Main(int argc, wchar_t** argv) {
     fs::create_directories(profile);
     Handle lock(CreateFileW((profile / L"frontend.lock").c_str(), GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (!lock.valid()) throw std::runtime_error("E_PROFILE_BUSY");
+    if (!options.stageSnapshot.empty()) {
+        const auto id = ccode::NewWorkspaceId();
+        ccode::StageProfileCandidate(options.data / L"snapshots" / Wide(options.stageSnapshot),
+                                    options.data / L"candidates", id, FileDigest);
+        std::cout << id << '\n';
+        return 0;
+    }
     if (options.snapshotProfile) {
         const auto id = ccode::NewWorkspaceId();
         ccode::CreateProfileSnapshot(profile, options.data / L"snapshots", id, FileDigest);

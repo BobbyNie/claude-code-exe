@@ -110,6 +110,37 @@ int main() try {
     assert(Read(snapshot / "profile/home/history.jsonl") == "source transcript\n");
     const std::string retryId = "42345678-1234-1234-1234-123456789abc";
     assert(fs::exists(ccode::CreateProfileSnapshot(active, snapshots, retryId, fingerprint)));
+    // Stage only a fully verified backup, never mutate it or the active source.
+    const std::string verifiedId = "52345678-1234-1234-1234-123456789abc";
+    auto testDigest = [](const fs::path& path) {
+        return std::string(64, Read(path) == "source transcript\n" ? 'a' : 'b');
+    };
+    const auto verified = ccode::CreateProfileSnapshot(active, snapshots, verifiedId, testDigest);
+    const auto verifiedManifest = ccode::VerifyProfileSnapshot(verified, testDigest);
+    assert(verifiedManifest["snapshotId"] == verifiedId);
+    const std::string candidateId = "62345678-1234-1234-1234-123456789abc";
+    auto candidate = ccode::StageProfileCandidate(verified, root / "candidates", candidateId, testDigest);
+    assert(Read(candidate / "profile/home/history.jsonl") == "source transcript\n");
+    std::ifstream candidateInput(candidate / "candidate.json");
+    const auto metadata = ccode::Json::parse(candidateInput);
+    candidateInput.close();
+    assert(metadata["state"] == "staged" && metadata["sourceSnapshotId"] == verifiedId);
+    assert(!fs::exists(root / "active-profile.json"));
+    Write(verified / "profile/home/history.jsonl", "tampered");
+    bool tampered = false;
+    try { ccode::VerifyProfileSnapshot(verified, testDigest); }
+    catch (const std::runtime_error& error) { tampered = std::string(error.what()) == "E_SNAPSHOT_INTEGRITY"; }
+    assert(tampered);
+    assert(Read(candidate / "profile/home/history.jsonl") == "source transcript\n");
+    assert(Read(active / "home/history.jsonl") == "source transcript\n");
+    Write(verified / "profile/home/history.jsonl", "source transcript\n");
+    auto mismatched = verifiedManifest;
+    mismatched["snapshotId"] = candidateId;
+    Write(verified / "manifest.json", mismatched.dump());
+    bool wrongIdentity = false;
+    try { ccode::VerifyProfileSnapshot(verified, testDigest); }
+    catch (const std::runtime_error& error) { wrongIdentity = std::string(error.what()) == "E_SNAPSHOT_DATA"; }
+    assert(wrongIdentity);
     fs::remove_all(root);
     std::cout << "ccode profile recovery tests passed\n";
 } catch (const std::exception& error) {

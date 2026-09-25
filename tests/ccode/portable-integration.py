@@ -107,6 +107,43 @@ def check(executable):
         assert not (snapshot / "profile/frontend.lock").exists()
         assert not (history_data / "snapshots" / (backup_id + ".pending")).exists()
         print("PASS: locked profile snapshot preserves source bytes and independently verified SHA256 manifest")
+        staged = run("--data-dir", str(history_data), "--stage-profile", backup_id)
+        assert staged.returncode == 0, staged.stderr
+        candidate_id = str(uuid.UUID(staged.stdout.strip()))
+        candidate = history_data / "candidates" / candidate_id
+        metadata = json.loads((candidate / "candidate.json").read_text(encoding="utf-8"))
+        assert metadata == {"schema": 1, "candidateId": candidate_id,
+                            "sourceSnapshotId": backup_id, "state": "staged"}
+        for name, saved in before.items():
+            assert (candidate / "profile" / name).read_bytes() == saved
+            assert (snapshot / "profile" / name).read_bytes() == saved
+            assert (profile / name).read_bytes() == saved
+        assert not (history_data / "active-profile.json").exists()
+        candidates_before = set((history_data / "candidates").iterdir())
+        manifest_bytes = (snapshot / "manifest.json").read_bytes()
+        name = next(iter(before))
+        victim = snapshot / "profile" / name
+        saved = victim.read_bytes()
+        for damage in ("tamper", "missing", "extra", "traversal"):
+            if damage == "tamper":
+                victim.write_bytes(b"corrupted")
+            elif damage == "missing":
+                victim.unlink()
+            elif damage == "extra":
+                (snapshot / "profile/unexpected.bin").write_bytes(b"extra")
+            else:
+                invalid = json.loads(manifest_bytes)
+                invalid["files"]["../outside"] = {"sha256": "0" * 64, "size": 0}
+                (snapshot / "manifest.json").write_text(json.dumps(invalid), encoding="utf-8")
+            rejected = run("--data-dir", str(history_data), "--stage-profile", backup_id)
+            expected = "E_SNAPSHOT_DATA" if damage == "traversal" else "E_SNAPSHOT_INTEGRITY"
+            assert rejected.returncode == 64 and rejected.stderr.strip() == expected, (damage, rejected)
+            assert set((history_data / "candidates").iterdir()) == candidates_before
+            victim.write_bytes(saved)
+            (snapshot / "profile/unexpected.bin").unlink(missing_ok=True)
+            (snapshot / "manifest.json").write_bytes(manifest_bytes)
+        assert all((profile / name).read_bytes() == saved for name, saved in before.items())
+        print("PASS: isolated candidate matches verified snapshot; tampered, missing, extra and traversal data rejected")
         print("portable frontend integration passed")
 
 if __name__ == "__main__":
