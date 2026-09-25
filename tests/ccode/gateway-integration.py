@@ -10,7 +10,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
-def check_rejection(executable, status_code, error_type, diagnostic, stream_cut=False):
+def check_rejection(executable, status_code, error_type, diagnostic, stream_cut=False, graceful_eof=False):
     with tempfile.TemporaryDirectory(prefix="ccode-gateway-") as folder:
         root = Path(folder).resolve()
         program = root / "program"
@@ -52,8 +52,9 @@ def check_rejection(executable, status_code, error_type, diagnostic, stream_cut=
                                       for kind, value in events).encode()
                     self.send_response(200)
                     self.send_header("Content-Type", "text/event-stream")
-                    # Promise more bytes, then close before the arguments or turn end.
-                    self.send_header("Content-Length", str(len(payload) + 100))
+                    # Also exercise clean HTTP EOF with missing semantic end events:
+                    # a valid transport must not make partial tool arguments executable.
+                    self.send_header("Content-Length", str(len(payload) + (0 if graceful_eof else 100)))
                     self.end_headers()
                     self.wfile.write(payload)
                     self.wfile.flush()
@@ -118,7 +119,8 @@ def check_rejection(executable, status_code, error_type, diagnostic, stream_cut=
             assert diagnostic in terminal, f"HTTP {status_code} needs its neutral diagnostic"
             assert not list(workspace.iterdir()), "Rejected request changed workspace"
             assert not list(program.rglob("*.jsonl")), "History leaked into program directory"
-            scenario = "truncated tool stream" if stream_cut else f"HTTP {status_code}"
+            scenario = ("unfinished tool stream at clean HTTP EOF" if graceful_eof
+                        else "truncated tool stream" if stream_cut else f"HTTP {status_code}")
             print(f"PASS: actual engine {scenario} fails without model-request replay, workspace writes or terminal secret disclosure")
         finally:
             server.shutdown()
@@ -131,3 +133,4 @@ if __name__ == "__main__":
     check_rejection(executable, 401, "authentication_error", "E_GATEWAY_AUTH")
     check_rejection(executable, 429, "rate_limit_error", "E_GATEWAY_RATE_LIMIT")
     check_rejection(executable, 200, None, "E_", stream_cut=True)
+    check_rejection(executable, 200, None, "E_", stream_cut=True, graceful_eof=True)

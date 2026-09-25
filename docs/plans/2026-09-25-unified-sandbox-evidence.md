@@ -821,3 +821,16 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   測試要求確實送出截斷資料、非零退出、一次模型請求、中性錯誤、無工作區
   寫入及終端遮罩，不能因未批准工具而假通過。此輪僅加入驗收測試，沒有產品
   修復，不宣稱 RED→GREEN；Windows 實際結果待確認，細分斷流分類仍未完成。
+
+### A10/A18 截斷工具串流 Windows GREEN，補正常 HTTP EOF 邊界
+
+- `1cafc70` / `36169518496` 的兩版本 jobs `108185358073`（2.1.282）與
+  `108185358385`（2.1.221）成功；已讀取實際日誌，401、429 與 truncated tool
+  stream 均 PASS。已批准 Write、未完成參數、Content-Length 尚未滿足即斷線
+  的案例確認一次模型請求、非零退出、中性錯誤、無寫入與終端私有內容遮罩。
+- cross-version `108187637442` 成功；long-workspace `108187637534`、
+  `108187637631` 仍 WinError 267。整體 failure，A08 與其他放行門檻仍保留。
+- 新增不同故障邊界：HTTP Content-Length 精確且正常 EOF，但 SSE 缺少
+  content_block_stop、message_delta、message_stop，工具參數 JSON 仍未完成。
+  保持完全相同的批准、不重放、非零退出及無寫入斷言，以區分 HTTP 傳輸失敗
+  與協定未終止。此輪僅加驗收案例，結果待 Windows CI，不宣稱產品 RED→GREEN。
