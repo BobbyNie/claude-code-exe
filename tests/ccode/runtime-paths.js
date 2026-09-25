@@ -7,7 +7,11 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 console.log('Loading isolation DLL for filesystem regression');
-const isolation = dlopen(process.argv[2], {});
+const kernel = dlopen('kernel32.dll', {
+  LoadLibraryW: { args: ['ptr'], returns: 'ptr' },
+});
+assert.ok(kernel.symbols.LoadLibraryW(Buffer.from(process.argv[2] + '\0', 'utf16le')),
+  'production isolation DLL must load successfully');
 console.log('Creating the session tasks directory');
 const tasks = path.join(process.env.TEMP, 'claude', 'D--tt', 'session', 'tasks');
 fs.mkdirSync(tasks, { recursive: true });
