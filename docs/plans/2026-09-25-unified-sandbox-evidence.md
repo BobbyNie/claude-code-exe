@@ -908,3 +908,15 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   確實缺三個終止事件，原有不完整 JSON 案例仍無法解析。23 項 Python、語法及
   diff 檢查 GREEN。這是 fixture 的紅綠測試，不是產品端到端通過；Windows
   結果待新 run。沒有改產品邏輯或放寬任何既有驗收標準。
+
+### 完整 JSON、缺 block 終止事件：兩版本 Windows GREEN
+
+- `30c751e` / `36174265807` 已完成，已讀取實際日誌。2.1.282 job
+  `108200943088`、2.1.221 job `108200943572` 的新增「complete tool JSON
+  without block termination at clean HTTP EOF」均 PASS：已批准 Write、參數
+  JSON 完整合法但缺 block 終止，仍非零退出、只發一次模型請求、不寫入工作區，
+  並保留終端私有內容遮罩。原有四個 gateway 案例亦 PASS。
+- cross-version `108202893467` 成功，實際舊→新→舊及外置資料根搬移續接
+  PASS。long-workspace `108202893221`、`108202893301` 仍 WinError 267，
+  整體 failure，未放行。此結果僅補上述 block 終止邊界；不代表所有擴展、
+  網路、資料安全或目標企業端點驗收已完成。
