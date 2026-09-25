@@ -42,7 +42,7 @@ class EventReader {
             for (const auto& tool : tools) {
                 const auto name = tool.get<std::string>();
                 if (name.empty()) throw ProtocolError("E_TOOL_NAME");
-                registeredTools.insert(name);
+                if (!registeredTools.insert(name).second) throw ProtocolError("E_TOOL_DUPLICATE_NAME");
             }
             toolRegistryReceived = true;
             return "";

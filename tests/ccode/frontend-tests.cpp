@@ -61,6 +61,14 @@ int main() {
     ExpectError(invalidJson, wire, "E_PROTOCOL_FAILED");
     const auto init = ccode::Json{{"type", "system"}, {"subtype", "init"},
         {"session_id", "s1"}, {"tools", {"Read", "Write"}}}.dump() + "\n";
+    const auto duplicateDeclaration = ccode::Json{{"type", "system"}, {"subtype", "init"},
+        {"tools", {"Read", "Read"}}}.dump() + "\n";
+    for (size_t split = 0; split < duplicateDeclaration.size(); ++split) {
+        ccode::EventReader invalidRegistry;
+        assert(invalidRegistry.Feed(duplicateDeclaration.substr(0, split)).empty());
+        ExpectError(invalidRegistry, duplicateDeclaration.substr(split), "E_TOOL_DUPLICATE_NAME");
+        ExpectError(invalidRegistry, init, "E_PROTOCOL_FAILED");
+    }
     auto tool = [](const std::string& name, const std::string& id, const ccode::Json& input) {
         return ccode::Json{{"type", "assistant"}, {"message", {{"content", ccode::Json::array({
             {{"type", "tool_use"}, {"name", name}, {"id", id}, {"input", input}}
