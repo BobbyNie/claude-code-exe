@@ -10,6 +10,7 @@
 #include <iostream>
 #include <thread>
 #include "environment.hpp"
+#include "runtime-paths.hpp"
 #include "profile.hpp"
 #include "snapshot.hpp"
 #include "candidate.hpp"
@@ -133,6 +134,7 @@ fs::path PrepareRuntime(const fs::path& directory, const Json& metadata) {
     auto resource = Load(101);
     auto hash = Digest(resource);
     if (hash != metadata.at("sha256").get<std::string>()) throw std::runtime_error("E_CHECKSUM");
+    ccode::ValidateRuntimePaths(directory, hash);
     auto runtime = directory / L"runtime" / Wide(hash);
     fs::create_directories(runtime);
     Handle lock(CreateFileW((runtime / L"prepare.lock").c_str(), GENERIC_WRITE, 0, nullptr,

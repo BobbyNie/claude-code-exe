@@ -1364,3 +1364,21 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   1 Windows 專用跳過。這不是實際引擎解出／快取修復已通過的證據。
 - Windows 案例待 runner 可用後執行。既有 PrepareRuntime 邏輯未因測試而改動；
   也不把對內嵌 metadata 的一致性當成簽章信任、上游來源或再分發批准。
+
+### Runtime 解出路徑：拒絕連結及異常檔案類型
+
+- 檢查 PrepareRuntime 發現其原先直接開啟 engine.new，沒有先排除 symlink；
+  此為程式碼確認的跟隨連結風險，不宣稱已在 Windows 重現實際外部覆寫。
+- TDD 先新增原生路徑檢查測試並因缺 header RED，再實作 ValidateRuntimePaths
+  至 GREEN；以真正符號連結驗證 engine.new 被拒絕且外部 sentinel 保留。
+  另驗證 engine.exe 是目錄及非法 hash 拒絕。前端在建立 runtime、開啟 lock
+  或寫出候選之前調用檢查，錯誤為 E_RUNTIME_PATH。
+- runtime 根／hash 目錄及 prepare.lock、engine.exe、engine.new 均排除連結；
+  Windows 另排除 reparse point。未存在的項目正常允許，已有普通快取仍走
+  原有逐位元組核對及修復流程。不跟隨連結寫入不是同身份並發攻擊隔離，
+  檢查與開啟之間仍有 TOCTOU 邊界，不宣稱完整 OS 安全沙箱。
+- 新增 Windows 實際 CLI junction 案例：在臨時副本將 runtime 指向另一目錄，
+  要求 E_RUNTIME_PATH、零額外檔案及 sentinel 不變，再移除 junction 本身，
+  繼續健康解出及損壞快取修復驗收。該 Windows 案例尚未跑，不算通過。
+- 本機六組 C++ 全部通過；Python 47 項中 46 通過、1 Windows 專用跳過；
+  diff 檢查通過。沒有降低任何原有長 cwd、TLS、console 或正式交付門檻。

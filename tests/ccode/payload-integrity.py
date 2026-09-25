@@ -127,6 +127,24 @@ def check(executable):
         # A valid original must be extracted unchanged; a changed cached copy
         # must be replaced before actual engine execution, not merely trusted by name.
         candidate.write_bytes(source)
+        outside = root / 'outside-runtime'
+        outside.mkdir()
+        sentinel = outside / 'preserve.txt'
+        sentinel.write_bytes(b'outside-runtime-preservation')
+        junction = root / 'runtime'
+        linked = subprocess.run(['cmd.exe', '/d', '/c', 'mklink', '/J', str(junction), str(outside)],
+                                capture_output=True, timeout=10)
+        assert linked.returncode == 0, 'Cannot establish runtime junction acceptance fixture'
+        try:
+            rejected = subprocess.run([str(candidate), '--data-dir', str(data), '--print',
+                                       'integrity-test-only'], cwd=root, env=environment,
+                                      input=b'', capture_output=True, timeout=30)
+            assert rejected.returncode == 64, 'Runtime junction was not rejected'
+            assert rejected.stdout == b'' and rejected.stderr.strip() == b'E_RUNTIME_PATH'
+            assert list(outside.iterdir()) == [sentinel], 'Runtime junction target was modified'
+            assert sentinel.read_bytes() == b'outside-runtime-preservation'
+        finally:
+            os.rmdir(junction)  # Remove the junction itself, never its target contents.
         with rejecting_gateway() as gateway:
             environment['A_BASE_URL'] = gateway.url
             extracted = root / 'runtime' / metadata['sha256'] / 'engine.exe'
