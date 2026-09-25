@@ -38,14 +38,15 @@ assert.equal(version.status, 0, version.stderr);
 assert.match(version.stdout, /Claude Code/);
 console.log('ccode runtime respawn test passed');
 
-const grep = spawnSync(payload, ['--ripgrep', '--fixed-strings', '--', 'ccode-path-marker', filename], {
-  encoding: 'utf8', timeout: 15000,
+// Version 2.1.221 selects embedded ripgrep with argv0="rg", not a CLI flag.
+const grep = spawnSync(payload, ['--no-config', '--fixed-strings', '--', 'ccode-path-marker', filename], {
+  argv0: 'rg', encoding: 'utf8', timeout: 15000,
 });
 assert.ifError(grep.error);
 assert.equal(grep.status, 0, grep.stderr);
 assert.match(grep.stdout, /ccode-path-marker/);
-const glob = spawnSync(payload, ['--ripgrep', '--files', '--glob', '*.txt', tasks], {
-  encoding: 'utf8', timeout: 15000,
+const glob = spawnSync(payload, ['--no-config', '--files', '--glob', '*.txt', tasks], {
+  argv0: 'rg', encoding: 'utf8', timeout: 15000,
 });
 assert.ifError(glob.error);
 assert.equal(glob.status, 0, glob.stderr);
