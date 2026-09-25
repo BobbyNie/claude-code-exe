@@ -333,6 +333,46 @@ def verify(executable):
         all_result = subprocess.run([str(executable), "--validate-profile", all_id, "--all-sessions"],
                                     cwd=executable.parent, env=all_env, capture_output=True,
                                     text=True, encoding="utf-8", timeout=120)
+        if all_result.returncode != 0:
+            # Synthetic fixture diagnostics only: never print transcript/prompt contents.
+            diagnostics = {"api_requests": len(requests), "requests": [], "transcripts": []}
+            for request in requests:
+                messages = request.get("messages", [])
+                diagnostics["requests"].append({
+                    "history_markers": [marker in json.dumps(messages[:-1]) for marker in history_markers],
+                    "probe_last": bool(messages) and "For profile recovery verification" in json.dumps(messages[-1])})
+            candidate_profile = all_data / "candidates" / all_id / "profile"
+            for transcript in sorted((candidate_profile / "home/.claude/projects").glob("*/*.jsonl")):
+                info = {"known_id": transcript.stem in real_sessions, "records": []}
+                for line in transcript.read_text(encoding="utf-8").splitlines():
+                    try:
+                        event = json.loads(line)
+                    except ValueError:
+                        info["records"].append({"valid_json": False})
+                        continue
+                    if not isinstance(event, dict):
+                        info["records"].append({"object": False})
+                        continue
+                    if event.get("type") != "user":
+                        continue
+                    message = event.get("message")
+                    content = message.get("content") if isinstance(message, dict) else None
+                    text = content if isinstance(content, str) else "".join(
+                        block["text"] for block in content
+                        if isinstance(block, dict) and isinstance(block.get("text"), str)) if isinstance(content, list) else ""
+                    cwd = event.get("cwd")
+                    info["records"].append({
+                        "id_matches": event.get("sessionId") == transcript.stem,
+                        "cwd_known": isinstance(cwd, str) and any(
+                            os.path.normcase(str(Path(cwd).resolve())) == os.path.normcase(str(path.resolve()))
+                            for path in (executable.parent, other_workspace)),
+                        "sidechain": event.get("isSidechain"), "content_kind": type(content).__name__,
+                        "block_types": [block.get("type") if isinstance(block, dict) else "invalid"
+                                        for block in content] if isinstance(content, list) else [],
+                        "exact_markers": [text == marker for marker in history_markers],
+                        "probe": "For profile recovery verification" in text})
+                diagnostics["transcripts"].append(info)
+            print("ALL_SESSION_DIAGNOSTICS " + json.dumps(diagnostics), flush=True)
         assert all_result.returncode == 0, all_result
         assert "Verified candidate sessions: 2" in all_result.stdout
         assert not any(marker in all_result.stdout + all_result.stderr for marker in history_markers)
