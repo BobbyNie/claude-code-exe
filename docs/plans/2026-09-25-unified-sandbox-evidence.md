@@ -32,7 +32,7 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 | A09 | 基本工具 | tools-integration.py 驅動真實 Write/Edit/Read/Grep/Glob/Bash | 兩版本一般完整路徑工具成功與 8.3 短路徑拒絕已驗證；仍欠批准／取消、政策退出碼、實際 gateway 試運行 |
 | A10 | 串流 JSON | frontend-tests.cpp 每個文字 UTF-8 byte 分片點；穩定錯誤碼、失敗不可重啟 | `0097a5a` 補工具 JSON 每個 byte 分片點、無效 UTF-8、超限、缺終止／截斷後不可復活；仍欠大小邊界、斷流／故障端到端 |
 | A11 | 工具名稱 | init 宣告工具清單；空名、未知名、空／重複 ID、錯誤參數分類 | 缺終止事件、所有狀態轉移與新版本／擴展的真實事件相容 |
-| A12 | 權限 | PermissionRpc 預設拒絕；interactive console；Job Object | 批准、拒絕、等待中取消、前端異常退出真實子進程案例 |
+| A12 | 權限 | PermissionRpc 預設拒絕；interactive console；Job Object；`e22cd72` / `36124014490` 兩版本真實 Bash→PowerShell 後代在 Ctrl+Break／前端強制終止後退出，無延遲寫入 | 互動批准／拒絕、等待批准中取消；不能以工具執行中取消代替等待批准中取消 |
 | A13 | 歷史 | --sessions、--resume、--continue、/resume；fixture 驗證請求歷史標記 | 列表→選擇→續接 UI 路徑與多輪、損壞資料分類、穩定工作區 UUID |
 | A14 | 升級／搬移 | runtime 按 hash 分區；資料不綁 runtime hash | 引擎／profile 相容 manifest、重啟／搬移／更新／回退實測 |
 | A15 | 遷移 | 舊版 CopyMissing 保留來源及現有檔案；profile 測試 | 備份+hash、隔離候選、引擎驗證後原子切換、磁碟滿／中斷重試 |
@@ -76,7 +76,14 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   2. 8.3 短路徑需批准時，無互動批准必須拒絕 Write/Bash，磁碟不能出現寫入副作用。
   工具參數使用分片 SSE JSON。此 run 不證明真實模型／外部 gateway／其他 MCP 已驗收。
 - `0097a5a`：本機紅／綠驗證不完整／截斷資料流結束後不可被後續 input 復活；
-  Windows 最終回歸結果待後續 run 補記。
+  包含該修復的 `54a39e8` / `36123883791` Windows 兩版本回歸成功。
+
+- `e22cd72` / `36124014490`：Windows 兩引擎完整 job 均成功（2026-09-25）。
+  日誌均明確包含 cancel 與 crash 的 PASS。測試先等待真實 Bash 啟動的
+  PowerShell 寫出 PID，以程序 handle 確認存活，再分別發送 Ctrl+Break 或強制終止前端。
+  驗證後代 handle 在五秒內 signaled、取消退出碼 130 及 Cancelled 訊息、
+  延遲寫入檔案不存在。強制終止不依賴前端正常清理流程。
+  這證明本案例的真實後代回收；不證明所有擴展進程、互動批准流程或普通帳戶端點已驗收。
 
 ## 下一批實施順序
 
