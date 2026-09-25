@@ -42,6 +42,10 @@ jobs:
       - name: Exercise actual engine tools through the frontend
         shell: pwsh
         run: python tests/ccode/tools-integration.py ./ccode.exe
+      - name: Verify workspace aliases
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        shell: pwsh
+        run: python tests/ccode/tools-integration.py ./ccode.exe --workspace-aliases-only
       - name: Verify actual engine gateway rejection
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         shell: pwsh

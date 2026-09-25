@@ -70,7 +70,7 @@ def check_lifecycle(app, workspace, data, env, mode):
             kernel.FreeConsole()
 
 
-def check(executable, short_path=False, lifecycle=None, permission=None, long_workspace=False):
+def check(executable, short_path=False, lifecycle=None, permission=None, long_workspace=False, workspace_alias=None):
     with tempfile.TemporaryDirectory(prefix="ccode-tools-") as temporary:
         root = Path(temporary).resolve()
         if short_path:
@@ -91,6 +91,18 @@ def check(executable, short_path=False, lifecycle=None, permission=None, long_wo
         data = root / "persistent data"
         app_dir.mkdir()
         workspace.mkdir(parents=True)
+        physical_workspace = workspace
+        if workspace_alias == "case":
+            workspace = workspace.with_name(workspace.name.swapcase())
+            assert str(workspace) != str(physical_workspace)
+        elif workspace_alias == "junction":
+            workspace = root / "junction alias 中文"
+            junction = subprocess.run(["cmd.exe", "/d", "/c", "mklink", "/J",
+                                       str(workspace), str(physical_workspace)],
+                                      capture_output=True, timeout=15)
+            assert junction.returncode == 0, "Unable to create junction acceptance fixture"
+        if workspace_alias:
+            assert workspace.samefile(physical_workspace), "Alias is not the same directory"
         app = app_dir / "ccode.exe"
         shutil.copy2(executable, app)
         target = workspace / "claude-anthropic-original.txt"
@@ -219,6 +231,15 @@ def check(executable, short_path=False, lifecycle=None, permission=None, long_wo
             print("PASS: same-profile restart releases lock, lists history, executes Write, preserves prior transcripts")
 
         try:
+            original_identity = None
+            registry_before = None
+            if workspace_alias:
+                identity = subprocess.run([str(app), "--data-dir", str(data), "--workspace-id"],
+                                          cwd=physical_workspace, env=env, input="", capture_output=True,
+                                          text=True, encoding="utf-8", timeout=15)
+                assert identity.returncode == 0, "Original workspace identity failed"
+                original_identity = identity.stdout.strip()
+                registry_before = (data / "profile/workspaces.json").read_bytes()
             if permission:
                 import runpy
                 check_permission = runpy.run_path(str(Path(__file__).with_name("console-fixture.py")))["check_permission"]
@@ -272,6 +293,47 @@ def check(executable, short_path=False, lifecycle=None, permission=None, long_wo
             assert list(data.rglob("*.jsonl")), "No authoritative session was saved"
             assert not list(app_dir.rglob("*.dll")), "Unexpected injected runtime"
             print("PASS: real Write/Edit/Read/Grep/Glob/Bash; Unicode/spaces; external data; fragmented arguments")
+            if workspace_alias:
+                assert (physical_workspace / target.name).read_text() == "marker-after\n"
+                assert (physical_workspace / "runtime tasks/probe.txt").read_text() == "shell-marker"
+                for location in (workspace, physical_workspace):
+                    identity = subprocess.run([str(app), "--data-dir", str(data), "--workspace-id"],
+                                              cwd=location, env=env, input="", capture_output=True,
+                                              text=True, encoding="utf-8", timeout=15)
+                    assert identity.returncode == 0 and identity.stdout.strip() == original_identity, \
+                        "Workspace alias changed persistent UUID"
+                registry = data / "profile/workspaces.json"
+                assert registry.read_bytes() == registry_before, "Alias duplicated workspace registry"
+                transcripts = {path: path.read_bytes() for path in data.rglob("*.jsonl")}
+                listings = []
+                for location in (workspace, physical_workspace):
+                    listed = subprocess.run([str(app), "--data-dir", str(data), "--sessions"],
+                                            cwd=location, env=env, input="", capture_output=True,
+                                            text=True, encoding="utf-8", timeout=15)
+                    assert listed.returncode == 0, "Alias history listing failed"
+                    visible = {path.stem for path in transcripts if path.stem in listed.stdout}
+                    assert visible, "Alias hid actual session history"
+                    listings.append(visible)
+                assert listings[0] == listings[1], "Alias sees different sessions"
+                assert all(path.read_bytes() == contents for path, contents in transcripts.items()), \
+                    "Listing alias history changed authoritative transcripts"
+                assert registry.read_bytes() == registry_before
+                # Resume from the physical spelling after running through the alias.
+                # Only the response is synthetic: the engine must send its real saved history.
+                plan = []
+                requests.clear()
+                resumed = subprocess.run([str(app), "--data-dir", str(data), "--print", "--continue",
+                                          "Continue alias acceptance without tools."],
+                                         cwd=physical_workspace, env=env, input="", capture_output=True,
+                                         text=True, encoding="utf-8", timeout=60)
+                assert resumed.returncode == 0, "Alias history did not resume from physical workspace"
+                assert len(requests) == 1, "Alias resume unexpectedly replayed a request"
+                history = json.dumps(requests[0].get("messages", []))
+                assert "Exercise the six tools in this workspace." in history, "Original prompt lost"
+                assert "marker-after" in history and "shell-marker" in history, "Tool history lost"
+                assert not handler_errors, "Alias resume fixture failed"
+                assert registry.read_bytes() == registry_before
+                print(f"PASS: {workspace_alias} alias preserves six real tools, workspace UUID, history listing and actual resumed context")
             if long_workspace:
                 print("PASS: all six actual tools execute with workspace cwd beyond 260 characters")
         finally:
@@ -283,6 +345,10 @@ if __name__ == "__main__":
     executable = Path(sys.argv[1]).resolve()
     if len(sys.argv) == 3 and sys.argv[2] == "--long-workspace-only":
         check(executable, long_workspace=True)
+        sys.exit(0)
+    if len(sys.argv) == 3 and sys.argv[2] == "--workspace-aliases-only":
+        check(executable, workspace_alias="case")
+        check(executable, workspace_alias="junction")
         sys.exit(0)
     check(executable)
     check(executable, short_path=True)

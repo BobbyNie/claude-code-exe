@@ -4,6 +4,14 @@ import unittest
 
 
 class AcceptanceWorkflowTests(unittest.TestCase):
+    def test_workspace_alias_acceptance_is_independent_and_required(self):
+        workflow = (Path(__file__).resolve().parents[1] /
+                    '.github/workflows/test-ccode.yml').read_text()
+        step = workflow.split('      - name: Verify workspace aliases', 1)[1].split('      - ', 1)[0]
+        self.assertIn("if: ${{ !cancelled() && steps.build.outcome == 'success' }}", step)
+        self.assertIn('python tests/ccode/tools-integration.py ./ccode.exe --workspace-aliases-only', step)
+        self.assertNotIn('continue-on-error:', step)
+
     def test_failed_gateway_does_not_hide_independent_acceptance(self):
         workflow = (Path(__file__).resolve().parents[1] /
                     '.github/workflows/test-ccode.yml').read_text()
