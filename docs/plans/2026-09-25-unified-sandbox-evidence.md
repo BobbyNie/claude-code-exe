@@ -27,10 +27,10 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 | A04 | 內部範圍 | ADR 明確允許引擎／使用者資料原名 | 隨包公開邊界清單、runtime 環境及 metadata 記錄、必要通知核實 |
 | A05 | 資料分離 | --data-dir、獨立 profile；工具 integration 檢查程式區無 session | 更新、搬移、重新打包排除資料、程式區無 temp 全面快照 |
 | A06 | 路徑一致 | runtime-paths.js 真實 mkdir/stat/讀寫/列舉/刪除/子進程 | 重命名、同工作區真實工具鏈和故障結果完整證據 |
-| A07 | 執行檔 | engine.exe、自啟動、rg backend；tools-integration.py | 空格／中文前端→真正 Grep/Glob 執行結果需 Windows run 驗證 |
+| A07 | 執行檔 | `36123600008` 兩版本通過：空格／中文程式與工作區、前端→真正 Grep/Glob；既有自啟動測試亦通過 | 本條所列 CI 場景通過；乾淨端點證據仍依 A01 |
 | A08 | 路徑邊界 | 工具 fixture 含中文／空格 | 長路徑、大小寫、junction；UNC 支援界線與明確拒絕／驗證 |
-| A09 | 基本工具 | tools-integration.py 驅動真實 Write/Edit/Read/Grep/Glob/Bash | 兩版本成功、退出碼、批准／拒絕／取消、實際 gateway 試運行 |
-| A10 | 串流 JSON | frontend-tests.cpp 每個文字 UTF-8 byte 分片點；穩定錯誤碼、失敗不可重啟 | 工具 JSON 全分片點、無效 UTF-8、大小界線、斷流／故障端到端 |
+| A09 | 基本工具 | tools-integration.py 驅動真實 Write/Edit/Read/Grep/Glob/Bash | 兩版本一般完整路徑工具成功與 8.3 短路徑拒絕已驗證；仍欠批准／取消、政策退出碼、實際 gateway 試運行 |
+| A10 | 串流 JSON | frontend-tests.cpp 每個文字 UTF-8 byte 分片點；穩定錯誤碼、失敗不可重啟 | `0097a5a` 補工具 JSON 每個 byte 分片點、無效 UTF-8、超限、缺終止／截斷後不可復活；仍欠大小邊界、斷流／故障端到端 |
 | A11 | 工具名稱 | init 宣告工具清單；空名、未知名、空／重複 ID、錯誤參數分類 | 缺終止事件、所有狀態轉移與新版本／擴展的真實事件相容 |
 | A12 | 權限 | PermissionRpc 預設拒絕；interactive console；Job Object | 批准、拒絕、等待中取消、前端異常退出真實子進程案例 |
 | A13 | 歷史 | --sessions、--resume、--continue、/resume；fixture 驗證請求歷史標記 | 列表→選擇→續接 UI 路徑與多輪、損壞資料分類、穩定工作區 UUID |
@@ -66,7 +66,17 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   **不包含 A01–A20 的全量驗收**。
 - `2f0da2c`：本機六組 C++、八項 Python 通過。新增測試先失敗再實作；分類
   JSON/schema/tool name/input/id/duplicate/unknown，UTF-8 每個 byte 分片點及失敗後禁止復活。
-- `27b1945`：新增真正工具端到端 fixture，Windows 結果待記錄。
+- `27b1945`：新增真正工具端到端 fixture。`36122828477` 兩版本均失敗；失敗不能忽略。
+- `5cfaf65` / `36123289630`：相同 workspace/profile/gateway 下對照未改動引擎，
+  確認 `RUNNER~1` 8.3 路徑會觸發原生「suspicious Windows path pattern」人工批准政策。
+  並非允許規則遺失。不採用 bypass permission 的解法。
+- `a195c81` / `36123600008`：兩版本 Windows 全步驟通過。分開保留：
+  1. canonical 完整路徑、中文／空格 program/workspace、外置 profile；真正 Write/Edit/Read/Grep/Glob/Bash
+     透過本機 API fixture 逐一執行，驗證 tool_result 與實際磁碟內容。
+  2. 8.3 短路徑需批准時，無互動批准必須拒絕 Write/Bash，磁碟不能出現寫入副作用。
+  工具參數使用分片 SSE JSON。此 run 不證明真實模型／外部 gateway／其他 MCP 已驗收。
+- `0097a5a`：本機紅／綠驗證不完整／截斷資料流結束後不可被後續 input 復活；
+  Windows 最終回歸結果待後續 run 補記。
 
 ## 下一批實施順序
 
