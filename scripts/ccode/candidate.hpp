@@ -13,6 +13,28 @@ namespace ccode {
 using CandidateProbe = std::function<bool(const std::filesystem::path&, const std::string&, const std::string&)>;
 using CandidateWorkspaceProbe = std::function<bool(const std::filesystem::path&, const std::filesystem::path&,
     const std::string&, const std::string&)>;
+// Exclusively allocate receipt evidence. Never truncate an interrupted writer's
+// file; retain our own partial file on write failure for explicit recovery.
+inline void WriteCandidateEvidence(const std::filesystem::path& destination,
+    const std::string& bytes, const char* error) {
+    const auto path = SnapshotIoPath(destination);
+#ifdef _WIN32
+    HANDLE file = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) throw std::runtime_error(error);
+    DWORD written = 0;
+    const bool saved = bytes.size() <= MAXDWORD &&
+        WriteFile(file, bytes.data(), static_cast<DWORD>(bytes.size()), &written, nullptr) &&
+        written == bytes.size() && FlushFileBuffers(file);
+    const bool closed = CloseHandle(file) != 0;
+    if (!saved || !closed) throw std::runtime_error(error);
+#else
+    const int file = ::open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL, 0600);
+    if (file < 0) throw std::runtime_error(error);
+    const bool saved = ::write(file, bytes.data(), bytes.size()) == static_cast<ssize_t>(bytes.size()) && ::fsync(file) == 0;
+    const int closed = ::close(file);
+    if (!saved || closed != 0) throw std::runtime_error(error);
+#endif
+}
 inline Json ReadCandidateDocument(const std::filesystem::path& file) {
     namespace fs = std::filesystem;
     const auto path = SnapshotIoPath(file);
@@ -212,10 +234,7 @@ inline Json ValidateProfileCandidate(const std::filesystem::path& candidatePath,
         receipt["workspaceId"] = sessions[0]["workspaceId"];
     }
     const auto pending = candidate / "validation.json.pending";
-    std::ofstream output(pending, std::ios::binary);
-    output << receipt.dump(2) << '\n';
-    output.close();
-    if (!output) throw std::runtime_error("E_CANDIDATE_WRITE");
+    WriteCandidateEvidence(pending, receipt.dump(2) + "\n", "E_CANDIDATE_WRITE");
     fs::rename(pending, candidate / "validation.json");
     return receipt;
 }

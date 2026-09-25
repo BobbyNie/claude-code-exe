@@ -1409,3 +1409,18 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - 六組 C++ 本機回歸通過；Python 47 項中 46 通過、1 Windows 專用跳過；
   portable fixture 語法及 diff 檢查通過。此修補不解決並發替換／TOCTOU，
   也不將 A13 損壞恢復、A16 會話並發等完整門檻視為完成。
+
+### 候選驗證收據：保留探測期間出現的 pending 證據
+
+- 以獨立 staged candidate 呼叫 ValidateProfileCandidate，在 probe callback 中
+  寫入 validation.json.pending 模擬探測期間出現的中斷證據。舊實作以截斷
+  stream 覆寫並移走該檔，在「原 pending bytes 保留」斷言實際 RED。
+- 改為獨占建立：Windows CREATE_NEW，POSIX O_CREAT|O_EXCL；寫入後刷新、
+  關閉才沿用原提交步驟。既有 pending 不覆寫，以 E_CANDIDATE_WRITE 拒絕；
+  自身寫入失敗的部分檔亦保留。測試要求原證據不變且沒有 validation.json。
+- 使用隔離候選避免把失敗後已建立的工作區 registry 當成乾淨候選重試；未
+  刪除產品所建立的驗證快照。最終測試重新在舊寫法確認 RED，修補後 GREEN。
+- 六組 C++ 回歸通過；Python 47 項中 46 通過、1 Windows 專用跳過；diff
+  檢查通過。Windows 分支未執行，不宣稱已驗證 Windows 崩潰持久性。
+- 此變更只處理候選收據配置時的覆寫；rollback-validation 的寫入仍需獨立
+  TDD 驗證。rename 前並發替換、完整斷電／磁碟滿恢復矩陣仍非已完成項目。

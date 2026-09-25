@@ -258,6 +258,23 @@ int main() try {
     assert(changedDuringProbe && !fs::exists(probeCandidate / "validation.json"));
     assert(Read(candidateProfile / "external-write.txt") == "preserve this write");
     fs::remove(candidateProfile / "external-write.txt");
+    // Evidence appearing during an engine probe must never be truncated.
+    const auto lateCandidate = ccode::StageProfileCandidate(probeSnapshot, root / "late-candidates", historyId, testDigest);
+    bool latePendingRejected = false;
+    const auto pendingEvidence = lateCandidate / "validation.json.pending";
+    try {
+        ccode::ValidateProfileCandidate(lateCandidate, probeSnapshot, candidateProfile, root / "verified",
+            "e2345678-1234-1234-1234-123456789abc", root, historyId, engine, testDigest,
+            [&](const fs::path&, const std::string&, const std::string&) {
+                Write(pendingEvidence, "preserve interrupted validation evidence");
+                return true;
+            });
+    } catch (const std::runtime_error& error) {
+        latePendingRejected = std::string(error.what()) == "E_CANDIDATE_WRITE";
+    }
+    assert(Read(pendingEvidence) == "preserve interrupted validation evidence");
+    assert(latePendingRejected && !fs::exists(lateCandidate / "validation.json"));
+    fs::remove(pendingEvidence); // Only remove evidence created by this test.
     bool sawPrivateHistory = false;
     auto receipt = ccode::ValidateProfileCandidate(probeCandidate, probeSnapshot, candidateProfile, root / "verified", snapshotId,
         root, historyId, engine, testDigest, [&](const fs::path& profile, const std::string& id, const std::string& expected) {
