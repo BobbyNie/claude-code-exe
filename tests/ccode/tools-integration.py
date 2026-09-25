@@ -11,10 +11,66 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
-def check(executable, short_path=False):
+def check_lifecycle(app, workspace, data, env, mode):
+    """Observe a real grandchild, then cancel/crash the frontend and verify cleanup."""
+    import ctypes
+    import signal
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.OpenProcess.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
+    kernel.OpenProcess.restype = ctypes.c_void_p
+    kernel.WaitForSingleObject.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+    kernel.CloseHandle.argtypes = [ctypes.c_void_p]
+    kernel.TerminateProcess.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+    allocated = not kernel.GetConsoleCP()
+    if allocated:
+        assert kernel.AllocConsole(), "Cannot create test console for Ctrl+Break"
+    process = None
+    child = None
+    try:
+        process = subprocess.Popen([str(app), "--data-dir", str(data), "--print",
+                                    "--allowedTools", "Bash", "Run the process-tree fixture."],
+                                   cwd=workspace, env=env, stdin=subprocess.DEVNULL,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+        marker = workspace / "child.pid"
+        deadline = time.monotonic() + 45
+        while not marker.exists() and process.poll() is None and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert marker.exists(), ("Tool grandchild did not start", process.poll())
+        pid = int(marker.read_text())
+        child = kernel.OpenProcess(0x00100001, False, pid)  # SYNCHRONIZE | PROCESS_TERMINATE
+        assert child and kernel.WaitForSingleObject(child, 0) == 258, "Grandchild is not alive"
+        if mode == "cancel":
+            process.send_signal(signal.CTRL_BREAK_EVENT)
+        else:
+            process.kill()  # crash: no frontend cleanup code can run
+        output, errors = process.communicate(timeout=15)
+        assert kernel.WaitForSingleObject(child, 5000) == 0, "Frontend left a running tool grandchild"
+        if mode == "cancel":
+            assert process.returncode == 130, (process.returncode, output, errors)
+            assert b"Cancelled" in errors, errors
+        else:
+            assert process.returncode != 0
+        assert not (workspace / "after-wait.txt").exists(), "Cancelled tool continued its side effects"
+        print(f"PASS: {mode} terminates actual tool process tree without orphan grandchildren")
+    finally:
+        if process is not None and process.poll() is None:
+            process.kill()
+            process.communicate(timeout=15)
+        if child:
+            if kernel.WaitForSingleObject(child, 0) == 258:
+                kernel.TerminateProcess(child, 99)  # clean up the fixture even on a failing implementation
+                kernel.WaitForSingleObject(child, 5000)
+            kernel.CloseHandle(child)
+        if allocated:
+            kernel.FreeConsole()
+
+
+def check(executable, short_path=False, lifecycle=None):
     with tempfile.TemporaryDirectory(prefix="ccode-tools-") as temporary:
         root = Path(temporary).resolve()
         if short_path:
@@ -43,6 +99,13 @@ def check(executable, short_path=False):
             ("Glob", {"pattern": "*.txt", "path": str(workspace)}),
             ("Bash", {"command": "mkdir -p 'runtime tasks' && printf 'shell-marker' > 'runtime tasks/probe.txt' && cat 'runtime tasks/probe.txt'", "description": "Exercise workspace filesystem"}),
         ]
+        if lifecycle:
+            script = workspace / "wait-child.ps1"
+            script.write_text("[IO.File]::WriteAllText((Join-Path $PSScriptRoot 'child.pid'), [string]$PID)\n"
+                              "Start-Sleep -Seconds 300\n"
+                              "[IO.File]::WriteAllText((Join-Path $PSScriptRoot 'after-wait.txt'), 'unexpected')\n")
+            plan = [("Bash", {"command": "powershell.exe -NoProfile -File ./wait-child.ps1",
+                              "description": "Wait for lifecycle acceptance signal", "timeout": 600000})]
         received = {}
         requests = []
         handler_errors = []
@@ -124,6 +187,10 @@ def check(executable, short_path=False):
                if not key.startswith(("A_", "C_", "ANTHROPIC_", "CLAUDE_", "CCODE_"))}
         env.update(A_AUTH_TOKEN="acceptance-test-only", A_BASE_URL=f"http://127.0.0.1:{server.server_port}")
         try:
+            if lifecycle:
+                check_lifecycle(app, workspace, data, env, lifecycle)
+                assert not handler_errors, handler_errors
+                return
             result = subprocess.run([str(app), "--data-dir", str(data), "--print",
                                      "--allowedTools", "Write,Edit,Read,Grep,Glob,Bash",
                                      "Exercise the six tools in this workspace."],
@@ -165,3 +232,5 @@ if __name__ == "__main__":
     executable = Path(sys.argv[1]).resolve()
     check(executable)
     check(executable, short_path=True)
+    check(executable, lifecycle="cancel")
+    check(executable, lifecycle="crash")
