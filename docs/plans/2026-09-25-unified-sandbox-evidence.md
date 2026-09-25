@@ -703,3 +703,15 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   此增量沒有產品修復，不宣稱存在產品 RED→GREEN。
 - 上方 A14/A15/D10 已依累積結果回填，未刪除剩餘驗收門檻。
   工作區本身搬移仍需明確遷移；資料根搬移成功不能代替它。整體仍未放行。
+
+### 超長 profile 的身份與索引 TDD 修復
+
+- `35607dd` / `36160376359` 兩版本在新增超過 260 字元 profile 測試失敗；
+  首次僅有未處理異常終止碼，未據此猜測具體錯誤。`4cd0f32` 增加測試診斷，
+  `36160859413` 兩版本明確報告 ResolveWorkspace 的 create_directories 路徑找不到。
+- 測試 fixture 已透過 NativeIoPath 建立該目錄，故不是不存在的輸入；產品登記檔
+  操作尚未使用 Windows extended path。修復在 registry 與 session-index 的 IO
+  邊界統一使用既有 NativeIoPath，不改 workspace key、儲存的身份或原生歷史。
+- 本機六組 C++、20 項 Python 及 diff 檢查通過；Windows 修復結果仍待下一輪。
+  此案例覆蓋長 profile 的登記檔建立／重讀、歷史發現及刪除索引後重建，
+  不代表全部工具或長工作區 cwd 已驗收，整體仍未放行。

@@ -17,7 +17,7 @@ inline std::vector<Session> ListWorkspaceSessions(const std::filesystem::path& p
     }
     // 'discovered' does not promise compatibility or a successfully resumed turn.
     const Json document = {{"schema", 1}, {"workspaceId", identity}, {"sessions", entries}};
-    const auto directory = profile / "session-index";
+    const auto directory = NativeIoPath(profile / "session-index");
     if (fs::is_symlink(fs::symlink_status(directory))) throw std::runtime_error("E_SESSION_INDEX_WRITE");
     fs::create_directories(directory);
     const auto target = directory / (identity + ".json");

@@ -34,9 +34,10 @@ inline std::string NewWorkspaceId() {
 // Caller holds the profile lock. This registry is persistent identity metadata,
 // not a substitute for authoritative engine transcripts. Runtime paths never
 // participate in identity. Relocating the workspace itself needs explicit migration.
-inline std::string ResolveWorkspace(const std::filesystem::path& registry,
+inline std::string ResolveWorkspace(const std::filesystem::path& registryPath,
                                     const std::filesystem::path& workspace) {
     namespace fs = std::filesystem;
+    const auto registry = NativeIoPath(registryPath);
     const auto key = WorkspaceKey(workspace);
     Json document = {{"schema", 1}, {"workspaces", Json::object()}};
     if (fs::exists(registry)) {
