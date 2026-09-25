@@ -682,6 +682,92 @@ int main() try {
         "rollback-validation.json") == rollbackReceipt);
     assert(ccode::CandidateFiles(nextCandidate / "profile", testDigest) == currentFiles);
     assert(Read(activationRoot / "active-profile.json") == secondPointerBytes);
+    const auto rollbackProfile = activationRoot / "rollback-candidates" / historyId / "profile";
+    Write(nextCandidate / "profile/after-verification.txt", "new data since validation");
+    bool staleRollbackCommit = false;
+    try { ccode::ActivateProfileRollback(activationRoot, historyId, incompatibleEngine, testDigest); }
+    catch (const std::runtime_error& error) {
+        staleRollbackCommit = std::string(error.what()) == "E_ROLLBACK_CHANGED";
+    }
+    assert(staleRollbackCommit);
+    assert(Read(activationRoot / "active-profile.json") == secondPointerBytes);
+    assert(!fs::exists(activationRoot / "active-profile.json.pending"));
+    assert(Read(nextCandidate / "profile/after-verification.txt") == "new data since validation");
+    fs::remove(nextCandidate / "profile/after-verification.txt");
+    const auto rollbackEvidencePath = rollbackProfile.parent_path() / "rollback-validation.json";
+    auto wrongBinding = rollbackReceipt;
+    wrongBinding["plan"]["sourceSnapshotId"] = secondId;
+    Write(rollbackEvidencePath, wrongBinding.dump());
+    bool mismatchedRollbackReceipt = false;
+    try { ccode::ActivateProfileRollback(activationRoot, historyId, incompatibleEngine, testDigest); }
+    catch (const std::runtime_error& error) {
+        mismatchedRollbackReceipt = std::string(error.what()) == "E_ROLLBACK_DATA";
+    }
+    assert(mismatchedRollbackReceipt);
+    assert(Read(activationRoot / "active-profile.json") == secondPointerBytes);
+    Write(rollbackEvidencePath, rollbackReceipt.dump());
+    const auto oldManifestPath = activationRoot / "snapshots" / historyId / "manifest.json";
+    const auto oldManifestBytes = Read(oldManifestPath);
+    Write(oldManifestPath, "{}");
+    bool damagedRollbackSource = false;
+    try { ccode::ActivateProfileRollback(activationRoot, historyId, incompatibleEngine, testDigest); }
+    catch (const std::runtime_error& error) {
+        damagedRollbackSource = std::string(error.what()) == "E_SNAPSHOT_DATA";
+    }
+    assert(damagedRollbackSource);
+    assert(Read(activationRoot / "active-profile.json") == secondPointerBytes);
+    assert(!fs::exists(activationRoot / "active-profile.json.pending"));
+    Write(oldManifestPath, oldManifestBytes);
+    Write(activationRoot / "active-profile.json.pending", "interrupted rollback evidence");
+    bool pendingRollbackCommit = false;
+    try { ccode::ActivateProfileRollback(activationRoot, historyId, incompatibleEngine, testDigest); }
+    catch (const std::runtime_error& error) {
+        pendingRollbackCommit = std::string(error.what()) == "E_ACTIVATION_PENDING";
+    }
+    assert(pendingRollbackCommit);
+    assert(Read(activationRoot / "active-profile.json") == secondPointerBytes);
+    assert(Read(activationRoot / "active-profile.json.pending") == "interrupted rollback evidence");
+    ccode::ArchiveActivationPending(activationRoot, preservationId);
+    ccode::ActivateProfileRollback(activationRoot, historyId, incompatibleEngine, testDigest);
+    assert(ccode::ResolveActiveProfile(activationRoot, incompatibleEngine) == rollbackProfile);
+    assert(ccode::ResolveProfileForBackup(activationRoot) == rollbackProfile);
+    assert(ccode::CandidateFiles(nextCandidate / "profile", testDigest) == currentFiles);
+    assert(ccode::VerifyProfileSnapshot(activationRoot / "snapshots" / preservationId,
+        testDigest)["files"] == currentFiles);
+    const auto rollbackPointer = ccode::Json::parse(Read(activationRoot / "active-profile.json"));
+    assert(rollbackPointer["schema"] == 2); // Old launchers must reject, never select ordinary candidates.
+    assert(rollbackPointer["profileKind"] == "rollback");
+    assert(rollbackPointer["preservationSnapshotId"] == preservationId);
+    assert(rollbackPointer["engine"] == incompatibleEngine);
+    bool rollbackAlreadyActive = false;
+    try { ccode::ActivateProfileRollback(activationRoot, historyId, incompatibleEngine, testDigest); }
+    catch (const std::runtime_error& error) {
+        rollbackAlreadyActive = std::string(error.what()) == "E_ACTIVATION_ALREADY_ACTIVE";
+    }
+    assert(rollbackAlreadyActive);
+    const auto committedRollbackBytes = Read(activationRoot / "active-profile.json");
+    Write(rollbackProfile / "new-runtime-data.txt", "normal writes after rollback");
+    assert(ccode::ResolveActiveProfile(activationRoot, incompatibleEngine) == rollbackProfile);
+    for (const auto* key : {"profileKind", "preservationSnapshotId"}) {
+        auto invalidState = rollbackPointer;
+        invalidState[key] = "invalid";
+        Write(activationRoot / "active-profile.json", invalidState.dump());
+        bool invalidRollbackPointer = false;
+        try { ccode::ResolveProfileForBackup(activationRoot); }
+        catch (const std::runtime_error& error) {
+            invalidRollbackPointer = std::string(error.what()) == "E_ACTIVE_PROFILE";
+        }
+        assert(invalidRollbackPointer);
+        Write(activationRoot / "active-profile.json", committedRollbackBytes);
+    }
+    Write(rollbackEvidencePath, wrongBinding.dump());
+    bool inconsistentRollbackBinding = false;
+    try { ccode::ResolveActiveProfile(activationRoot, incompatibleEngine); }
+    catch (const std::runtime_error& error) {
+        inconsistentRollbackBinding = std::string(error.what()) == "E_ACTIVE_PROFILE";
+    }
+    assert(inconsistentRollbackBinding);
+    Write(rollbackEvidencePath, rollbackReceipt.dump());
     auto partialReceipt = allReceipt;
     partialReceipt["sessions"].erase(1);
     Write(allCandidate / "validation.json", partialReceipt.dump());

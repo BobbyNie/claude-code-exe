@@ -292,14 +292,18 @@ inline std::filesystem::path ResolveProfileForBackup(const std::filesystem::path
     if (!fs::exists(fs::symlink_status(pointer))) return data / "profile";
     try {
         const auto state = ReadCandidateDocument(pointer);
-        if (!state.is_object() || state.value("schema", 0) != 1 ||
+        if (!state.is_object() || (state.value("schema", 0) != 1 && state.value("schema", 0) != 2) ||
             !state.contains("engine") || !ValidCandidateEngine(state["engine"]) ||
             state.value("adapter", "") != "stream-json-v1") throw std::runtime_error("invalid");
         for (const auto* key : {"candidateId", "verificationId", "sourceSnapshotId"})
             if (!state.contains(key) || !state[key].is_string() ||
                 !ValidSessionId(state[key].get<std::string>())) throw std::runtime_error("invalid");
-        const auto candidate = data / "candidates" / state["candidateId"].get<std::string>();
-        for (const auto& directory : {data / "candidates", candidate, candidate / "profile"}) {
+        const auto kind = state.value("profileKind", "candidate");
+        if ((kind != "candidate" && kind != "rollback") ||
+            state["schema"] != (kind == "rollback" ? 2 : 1)) throw std::runtime_error("invalid");
+        const auto candidateRoot = data / (kind == "rollback" ? "rollback-candidates" : "candidates");
+        const auto candidate = candidateRoot / state["candidateId"].get<std::string>();
+        for (const auto& directory : {candidateRoot, candidate, candidate / "profile"}) {
             const auto status = fs::symlink_status(SnapshotIoPath(directory));
             if (fs::is_symlink(status) || !fs::is_directory(status)) throw std::runtime_error("invalid");
         }
@@ -313,6 +317,20 @@ inline std::filesystem::path ResolveProfileForBackup(const std::filesystem::path
             if (!metadata.contains(key) || metadata[key] != state[key]) throw std::runtime_error("invalid");
         for (const auto* key : {"candidateId", "sourceSnapshotId", "verificationId", "engine", "adapter"})
             if (!receipt.contains(key) || receipt[key] != state[key]) throw std::runtime_error("invalid");
+        if (kind == "rollback") {
+            const auto evidence = ReadCandidateDocument(candidate / "rollback-validation.json");
+            const auto plan = ReadCandidateDocument(candidate / "rollback.json");
+            if (evidence.value("schema", 0) != 1 || !evidence.contains("plan") || evidence["plan"] != plan ||
+                !evidence.contains("validation") || evidence["validation"] != receipt ||
+                !state.contains("preservationSnapshotId") || !state["preservationSnapshotId"].is_string() ||
+                !ValidSessionId(state["preservationSnapshotId"].get<std::string>()) ||
+                plan.value("schema", 0) != 1 || plan.value("state", "") != "prepared" ||
+                plan.value("adapter", "") != "stream-json-v1" ||
+                !plan.contains("targetEngine") || plan["targetEngine"] != state["engine"])
+                throw std::runtime_error("invalid");
+            for (const auto* key : {"candidateId", "sourceSnapshotId", "preservationSnapshotId"})
+                if (!plan.contains(key) || plan[key] != state[key]) throw std::runtime_error("invalid");
+        }
         return candidate / "profile";
     } catch (const std::exception&) {
         throw std::runtime_error("E_ACTIVE_PROFILE");
@@ -532,6 +550,48 @@ inline void ActivateProfileCandidate(const std::filesystem::path& data, const st
         state[key] = receipt[key];
     const auto bytes = state.dump(2) + "\n";
     CommitActiveProfilePointer(data, bytes);
+}
+
+// Caller holds data-root, current profile and rollback-candidate exclusive locks.
+inline void ActivateProfileRollback(const std::filesystem::path& data, const std::string& id,
+    const Json& engine, const SnapshotDigest& digest) {
+    if (!ValidSessionId(id)) throw std::runtime_error("E_ROLLBACK_DATA");
+    const auto candidate = data / "rollback-candidates" / id;
+    VerifyRollbackDirectory(data, candidate / "profile");
+    VerifyRollbackDirectory(data, data / "rollback-verified");
+    const auto evidence = ReadCandidateDocument(candidate / "rollback-validation.json");
+    const auto plan = ReadCandidateDocument(candidate / "rollback.json");
+    if (evidence.value("schema", 0) != 1 || !evidence.contains("plan") || evidence["plan"] != plan ||
+        plan.value("schema", 0) != 1 || plan.value("state", "") != "prepared" ||
+        plan.value("candidateId", "") != id || plan.value("adapter", "") != "stream-json-v1" ||
+        !ValidCandidateEngine(engine) || !plan.contains("targetEngine") || plan["targetEngine"] != engine ||
+        !plan.contains("priorActivePointer")) throw std::runtime_error("E_ROLLBACK_DATA");
+    for (const auto* key : {"sourceSnapshotId", "preservationSnapshotId"})
+        if (!plan.contains(key) || !plan[key].is_string() || !ValidSessionId(plan[key].get<std::string>()))
+            throw std::runtime_error("E_ROLLBACK_DATA");
+    const auto current = ResolveProfileForBackup(data);
+    if (current.lexically_normal() == (candidate / "profile").lexically_normal())
+        throw std::runtime_error("E_ACTIVATION_ALREADY_ACTIVE");
+    const auto preservation = data / "snapshots" / plan.at("preservationSnapshotId").get<std::string>();
+    const auto source = data / "snapshots" / plan["sourceSnapshotId"].get<std::string>();
+    VerifyRollbackDirectory(data, preservation / "profile");
+    VerifyRollbackDirectory(data, source / "profile");
+    VerifyProfileSnapshot(source, digest);
+    const auto pointer = SnapshotIoPath(data / "active-profile.json");
+    const auto prior = std::filesystem::exists(std::filesystem::symlink_status(pointer)) ?
+        ReadCandidateDocument(pointer) : Json(nullptr);
+    if (prior != plan.at("priorActivePointer") ||
+        CandidateFiles(current, digest) != VerifyProfileSnapshot(preservation, digest)["files"])
+        throw std::runtime_error("E_ROLLBACK_CHANGED");
+    const auto receipt = VerifyCandidateValidation(candidate, data / "rollback-verified", engine, digest);
+    if (!evidence.contains("validation") || evidence["validation"] != receipt ||
+        receipt["scope"] != "all-top-level-sessions" || receipt["sourceSnapshotId"] != plan["sourceSnapshotId"])
+        throw std::runtime_error("E_ROLLBACK_DATA");
+    Json state = {{"schema", 2}, {"profileKind", "rollback"},
+        {"preservationSnapshotId", evidence.at("plan").at("preservationSnapshotId")}};
+    for (const auto* key : {"candidateId", "verificationId", "sourceSnapshotId", "engine", "adapter"})
+        state[key] = receipt[key];
+    CommitActiveProfilePointer(data, state.dump(2) + "\n");
 }
 
 }
