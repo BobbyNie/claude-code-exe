@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import uuid
 import shutil
 
 def check(executable):
@@ -51,6 +52,25 @@ def check(executable):
             decision = json.loads(response["result"]["content"][0]["text"])
             assert response["id"] == 1 and decision["behavior"] == "deny", (owner, response)
         print("PASS: unavailable frontend console fails closed without a hidden approval prompt")
+        data = root / "external data"
+        identity = run("--data-dir", str(data), "--workspace-id")
+        assert identity.returncode == 0, identity.stderr
+        workspace_id = str(uuid.UUID(identity.stdout.strip()))
+        relocated = root / "relocated app"
+        relocated.mkdir()
+        shutil.copy2(app, relocated / "ccode.exe")
+        restarted = subprocess.run([str(relocated / "ccode.exe"), "--data-dir", str(data), "--workspace-id"],
+                                   env=env, cwd=root, text=True, capture_output=True, timeout=15)
+        assert restarted.returncode == 0 and restarted.stdout.strip() == workspace_id, restarted
+        different = subprocess.run([str(app), "--data-dir", str(data), "--workspace-id"],
+                                   env=env, cwd=workspace, text=True, capture_output=True, timeout=15)
+        assert different.returncode == 0 and str(uuid.UUID(different.stdout.strip())) != workspace_id
+        registry = data / "profile" / "workspaces.json"
+        registry.write_text('{"schema":999,"workspaces":{}}')
+        rejected = run("--data-dir", str(data), "--workspace-id")
+        assert rejected.returncode != 0 and "E_WORKSPACE_DATA" in rejected.stderr, rejected
+        assert registry.read_text() == '{"schema":999,"workspaces":{}}'
+        print("PASS: persistent workspace UUID survives frontend relocation; corrupt registry fails without replacement")
         print("portable frontend integration passed")
 
 if __name__ == "__main__":

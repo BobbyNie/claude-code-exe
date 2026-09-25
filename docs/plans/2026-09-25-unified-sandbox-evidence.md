@@ -32,11 +32,11 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 | A09 | 基本工具 | tools-integration.py 驅動真實 Write/Edit/Read/Grep/Glob/Bash | 兩版本一般完整路徑工具成功與 8.3 短路徑拒絕已驗證；仍欠批准／取消、政策退出碼、實際 gateway 試運行 |
 | A10 | 串流 JSON | frontend-tests.cpp 每個文字 UTF-8 byte 分片點；穩定錯誤碼、失敗不可重啟 | `0097a5a` 補工具 JSON 每個 byte 分片點、無效 UTF-8、超限、缺終止／截斷後不可復活；仍欠大小邊界、斷流／故障端到端 |
 | A11 | 工具名稱 | init 宣告工具清單；空名、未知名、空／重複 ID、錯誤參數分類 | 缺終止事件、所有狀態轉移與新版本／擴展的真實事件相容 |
-| A12 | 權限 | PermissionRpc 預設拒絕；interactive console；Job Object；`e22cd72` / `36124014490` 兩版本真實 Bash→PowerShell 後代在 Ctrl+Break／前端強制終止後退出，無延遲寫入 | `cacdb06` / `36129711620` 兩版本真實 console 批准／拒絕／等待批准中取消通過；仍需故障後重啟恢復與目標普通帳戶端點證據 |
+| A12 | 權限 | PermissionRpc 預設拒絕；interactive console；Job Object；`e22cd72` / `36124014490` 兩版本真實 Bash→PowerShell 後代在 Ctrl+Break／前端強制終止後退出，無延遲寫入 | `cacdb06` / `36129711620` 兩版本真實 console 批准／拒絕／等待批准中取消通過；`199b57b` 同 profile 故障後重啟亦通過；仍需目標普通帳戶端點證據 |
 | A13 | 歷史 | --sessions、--resume、--continue、/resume；fixture 驗證請求歷史標記 | 列表→選擇→續接 UI 路徑與多輪、損壞資料分類、穩定工作區 UUID |
 | A14 | 升級／搬移 | runtime 按 hash 分區；資料不綁 runtime hash | 引擎／profile 相容 manifest、重啟／搬移／更新／回退實測 |
 | A15 | 遷移 | 舊版 CopyMissing 保留來源及現有檔案；profile 測試 | 備份+hash、隔離候選、引擎驗證後原子切換、磁碟滿／中斷重試 |
-| A16 | 並發 | profile-wide 排他鎖 | 同 session 單寫入、多 session 同工作區、前端故障釋鎖 Windows 實測 |
+| A16 | 並發 | profile-wide 排他鎖 | 故障釋鎖已由 `199b57b` 實測；仍欠同 session 單寫入、多 session 同工作區 |
 | A17 | 擴展 | CLI 參數可接設定／MCP／agents | 技能、子代理、核准 MCP 真實流程及明確版本相容矩陣 |
 | A18 | 網路 | gateway 設定入口；不宣稱 OS 網路隔離 | 不可達、TLS、過期憑證、429、斷流分類；不重放寫入；核准端點部署政策 |
 | A19 | 診斷 | 中性錯誤碼；parser 內容不直接外洩 | 操作／追蹤 ID、分類診斷包、憑證遮罩、預設不記提示／內容的實測 |
@@ -49,7 +49,7 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 | D01 / R01 | 免安裝、無需管理員 | A01；CI 管理員執行不等於普通帳戶通過 |
 | D02 / R02–03 | 中性企業交付及完整公開邊界 | A02/A04；不可沿用混合品牌公共 bundle |
 | D03 / R04 | 原工具及擴展穩定 | A09/A17；明列支援和未支援命令，不宣稱 TUI 完全等價 |
-| D04 / R05 | 穩定工作區 UUID、會話權威檔案 | 尚無工作區 UUID registry；A13–16 |
+| D04 / R05 | 穩定工作區 UUID、會話權威檔案 | 已加入持久 UUID registry 基礎（本機測試通過、Windows 待驗）；尚欠與會話索引／搬移遷移整合；A13–16 |
 | D05 / R06 | 核准 API 通道 | A18；普通本機封裝本身無法封鎖工具任意外連，部署政策另驗 |
 | D06 / R07 | 受控完整進程樹 | A12；Job Object 結束／取消／崩潰無孤兒進程 |
 | D07 / R08 | 更新、診斷、恢復 | A14/A15/A19/A20 |
@@ -100,6 +100,18 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   Ctrl+Break 後輸出 Cancelled、返回 130、無檔案。退出後 stdout/stderr 讀取者結束，
   沒有後代持有管道阻止退出。既有工具與進程樹取消／crash 案例仍通過。
   此為 Windows CI 帳戶及固定工具組合的證據，不擴大成企業端點或全部 MCP 的驗收。
+
+- `be8ee3c` / `36130126715`：兩版本 Windows 成功；空／無效／溢位／不可用 frontend PID
+  均快速回傳 deny，不退回隱藏 console 等待批准。移除一次性進程列舉診斷。
+- `199b57b` / `36130341477`：兩版本 Windows 成功；三種中斷（工具執行中取消、前端 crash、
+  等待批准時取消）後，不刪 lock、不修補檔案，使用同一 profile 重啟；歷史可列出、
+  新的真實 Write 成功、既有 JSONL 逐位元組不變，沒有重放原取消工具。
+  這證明故障後可開新會話，不代表已驗證續接被中斷的那一會話。
+- 工作區身份第一個切片：`--workspace-id` 持久 UUID v4，registry 放在獨立 profile，
+  規範化工作區路徑作查找鍵，程式位置／runtime hash 不參與身份。原子替換 registry，
+  損壞／未知 schema 停止而非重建 ID；本機 TDD 另捕捉並修復暫存 symlink 覆寫風險。
+  已補 Windows 程式位置變更及重啟的 CLI 測試，結果待驗。**工作區本身搬移仍需明確遷移，
+  會話仍按引擎 cwd 列舉；本切片不宣稱 A13–A16 或完整穩定身份生命週期已完成。**
 
 ## 下一批實施順序
 

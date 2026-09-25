@@ -1,4 +1,5 @@
 #include "../../scripts/ccode/sessions.hpp"
+#include "../../scripts/ccode/workspaces.hpp"
 #include <cassert>
 #include <chrono>
 #include <iostream>
@@ -19,6 +20,38 @@ int main() {
     assert(ccode::ListSessions(root / "projects", root / "other").empty());
     assert(!ccode::ValidSessionId("../../escape"));
     assert(!ccode::ValidSessionId("123"));
+    const auto registry = root / "profile" / "workspaces.json";
+    auto first = ccode::ResolveWorkspace(registry, root);
+    assert(ccode::ValidSessionId(first));
+    assert(ccode::ResolveWorkspace(registry, root / ".") == first);
+    fs::create_directories(root / "other");
+    auto other = ccode::ResolveWorkspace(registry, root / "other");
+    assert(other != first && ccode::ValidSessionId(other));
+    assert(ccode::ResolveWorkspace(registry, root) == first);
+    auto readAll = [](const fs::path& path) {
+        std::ifstream input(path, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(input), {});
+    };
+    const auto saved = readAll(registry);
+    { std::ofstream out(registry); out << "{broken"; }
+    bool corrupt = false;
+    try { ccode::ResolveWorkspace(registry, root); }
+    catch (const std::runtime_error& error) { corrupt = std::string(error.what()) == "E_WORKSPACE_DATA"; }
+    assert(corrupt && readAll(registry) == "{broken");
+    { std::ofstream out(registry); out << saved; }
+    fs::create_directories(root / "third");
+    auto candidate = registry; candidate += ".new";
+    auto victim = root / "must-preserve.txt";
+    { std::ofstream out(victim); out << "original"; }
+    std::error_code linkError;
+    fs::create_symlink(victim, candidate, linkError);
+    if (!linkError) {
+        bool rejected = false;
+        try { ccode::ResolveWorkspace(registry, root / "third"); }
+        catch (const std::runtime_error& error) { rejected = std::string(error.what()) == "E_WORKSPACE_WRITE"; }
+        assert(rejected && readAll(victim) == "original" && readAll(registry) == saved);
+        fs::remove(candidate);
+    }
     fs::remove_all(root);
     std::cout << "session discovery passed\n";
 }

@@ -12,6 +12,7 @@
 #include "environment.hpp"
 #include "profile.hpp"
 #include "sessions.hpp"
+#include "workspaces.hpp"
 #include "permission.hpp"
 
 namespace fs = std::filesystem;
@@ -179,7 +180,7 @@ int PermissionServer() {
     return 0;
 }
 struct Options {
-    bool print = false, sessions = false, resumePicker = false, latest = false;
+    bool print = false, sessions = false, resumePicker = false, latest = false, workspaceId = false;
     fs::path data;
     std::string prompt, session;
     std::vector<std::wstring> engine;
@@ -198,6 +199,7 @@ Options Parse(int argc, wchar_t** argv, const fs::path& module) {
         if (!literal && arg == L"--data-dir") options.data = next();
         else if (!literal && (arg == L"--print" || arg == L"-p")) options.print = true;
         else if (!literal && arg == L"--sessions") options.sessions = true;
+        else if (!literal && arg == L"--workspace-id") options.workspaceId = true;
         else if (!literal && (arg == L"--resume" || arg == L"-r")) {
             if (i + 1 < argc && argv[i + 1][0] != L'-') options.session = Utf8(next());
             else options.resumePicker = true;
@@ -353,6 +355,7 @@ int Main(int argc, wchar_t** argv) {
             "  --sessions             List saved sessions for this workspace\n"
             "  --data-dir PATH        Persistent data (or CCODE_DATA_DIR)\n"
             "  --model NAME           Select a model\n"
+            "  --workspace-id         Show persistent workspace identity\n"
             "  --allowedTools RULE    Explicit tool permission rule\n"
             "  --settings PATH        Engine settings file\n"
             "  --mcp-config PATH      Additional tool servers\n"
@@ -375,6 +378,8 @@ int Main(int argc, wchar_t** argv) {
     Handle lock(CreateFileW((profile / L"frontend.lock").c_str(), GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (!lock.valid()) throw std::runtime_error("E_PROFILE_BUSY");
     for (auto name : {L"home", L"roaming", L"local", L"temp"}) fs::create_directories(profile / name);
+    const auto workspaceId = ccode::ResolveWorkspace(profile / L"workspaces.json", fs::current_path());
+    if (options.workspaceId) { std::cout << workspaceId << '\n'; return 0; }
     ccode::RestoreLegacyProfile(profile / L"home");
     auto sessions = ccode::ListSessions(profile / L"home" / L".claude" / L"projects", fs::current_path());
     if (options.sessions) { PrintSessions(sessions); return 0; }
