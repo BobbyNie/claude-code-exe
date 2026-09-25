@@ -208,7 +208,7 @@ int PermissionServer() {
 struct Options {
     bool print = false, sessions = false, resumePicker = false, latest = false, workspaceId = false, snapshotProfile = false, allSessions = false, archivePending = false;
     fs::path data;
-    std::string prompt, session, stageSnapshot, validateCandidate, activateCandidate, rollbackSnapshot, validateRollback;
+    std::string prompt, session, stageSnapshot, validateCandidate, activateCandidate, rollbackSnapshot, validateRollback, activateRollback;
     std::vector<std::wstring> engine;
 };
 Options Parse(int argc, wchar_t** argv, const fs::path& module) {
@@ -236,6 +236,11 @@ Options Parse(int argc, wchar_t** argv, const fs::path& module) {
             if (!options.validateRollback.empty()) throw std::runtime_error("E_ARGUMENT");
             options.validateRollback = Utf8(next());
             if (!ccode::ValidSessionId(options.validateRollback)) throw std::runtime_error("E_ROLLBACK_DATA");
+        }
+        else if (!literal && arg == L"--activate-rollback") {
+            if (!options.activateRollback.empty()) throw std::runtime_error("E_ARGUMENT");
+            options.activateRollback = Utf8(next());
+            if (!ccode::ValidSessionId(options.activateRollback)) throw std::runtime_error("E_ROLLBACK_DATA");
         }
         else if (!literal && arg == L"--stage-profile") options.stageSnapshot = Utf8(next());
         else if (!literal && arg == L"--archive-activation-pending") options.archivePending = true;
@@ -303,6 +308,11 @@ Options Parse(int argc, wchar_t** argv, const fs::path& module) {
         for (size_t i = 0; i < options.engine.size(); i += 2)
             if (options.engine[i] != L"--model") throw std::runtime_error("E_ARGUMENT");
     }
+    if (!options.activateRollback.empty() && (options.print || options.sessions || options.resumePicker ||
+        options.latest || options.workspaceId || options.allSessions || options.archivePending || options.snapshotProfile ||
+        !options.session.empty() || !options.stageSnapshot.empty() || !options.validateCandidate.empty() ||
+        !options.activateCandidate.empty() || !options.rollbackSnapshot.empty() || !options.validateRollback.empty() ||
+        !options.prompt.empty() || !options.engine.empty())) throw std::runtime_error("E_ARGUMENT");
     options.data = fs::absolute(options.data).lexically_normal();
     return options;
 }
@@ -452,6 +462,7 @@ int Main(int argc, wchar_t** argv) {
             "  --all-sessions         Verify every top-level session in its workspace\n"
             "  --archive-activation-pending  Preserve interrupted activation evidence\n"
             "  --activate-profile ID  Activate a fully verified candidate\n"
+            "  --activate-rollback ID Commit a fully verified rollback\n"
             "  --allowedTools RULE    Explicit tool permission rule\n"
             "  --settings PATH        Engine settings file\n"
             "  --mcp-config PATH      Additional tool servers\n"
@@ -480,7 +491,7 @@ int Main(int argc, wchar_t** argv) {
         return 0;
     }
     const Json selectedEngine = {{"version", metadata.at("version")}, {"sha256", metadata.at("sha256")}};
-    auto profile = (options.snapshotProfile || !options.rollbackSnapshot.empty() || !options.validateRollback.empty()) ? ccode::ResolveProfileForBackup(options.data) :
+    auto profile = (options.snapshotProfile || !options.rollbackSnapshot.empty() || !options.validateRollback.empty() || !options.activateRollback.empty()) ? ccode::ResolveProfileForBackup(options.data) :
         ccode::ResolveActiveProfile(options.data, selectedEngine);
     fs::create_directories(profile);
     Handle lock(CreateFileW((profile / L"frontend.lock").c_str(), GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
@@ -493,20 +504,25 @@ int Main(int argc, wchar_t** argv) {
         std::cout << plan.dump(2) << '\n';
         return 0;
     }
-    if (!options.activateCandidate.empty()) {
-        const auto candidate = options.data / L"candidates" / Wide(options.activateCandidate);
+    if (!options.activateCandidate.empty() || !options.activateRollback.empty()) {
+        const bool rollback = !options.activateRollback.empty();
+        const auto& id = rollback ? options.activateRollback : options.activateCandidate;
+        const auto candidateRoot = options.data / (rollback ? L"rollback-candidates" : L"candidates");
+        const auto candidate = candidateRoot / Wide(id);
+        if (rollback) ccode::VerifyRollbackDirectory(options.data, candidate / L"profile");
         const auto candidateProfile = candidate / L"profile";
         if (profile.lexically_normal() == candidateProfile.lexically_normal())
             throw std::runtime_error("E_ACTIVATION_ALREADY_ACTIVE");
-        for (const auto& directory : {options.data / L"candidates", candidate, candidateProfile}) {
+        for (const auto& directory : {candidateRoot, candidate, candidateProfile}) {
             const auto status = fs::symlink_status(ccode::SnapshotIoPath(directory));
             if (fs::is_symlink(status) || !fs::is_directory(status)) throw std::runtime_error("E_CANDIDATE_DATA");
         }
         Handle candidateLock(CreateFileW(ccode::SnapshotIoPath(candidateProfile / L"frontend.lock").c_str(),
             GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
         if (!candidateLock.valid()) throw std::runtime_error("E_PROFILE_BUSY");
-        ccode::ActivateProfileCandidate(options.data, options.activateCandidate, selectedEngine, FileDigest);
-        std::cout << "Activated profile: " << options.activateCandidate << '\n';
+        if (rollback) ccode::ActivateProfileRollback(options.data, id, selectedEngine, FileDigest);
+        else ccode::ActivateProfileCandidate(options.data, id, selectedEngine, FileDigest);
+        std::cout << "Activated profile: " << id << '\n';
         return 0;
     }
     if (!options.stageSnapshot.empty()) {

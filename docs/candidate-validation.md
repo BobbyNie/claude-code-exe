@@ -121,8 +121,7 @@ API 憑證、不啟動引擎，不能混用其他操作、模型選項或提示�
 sourceSnapshotId、preservationSnapshotId、priorActivePointer、targetEngine 及 adapter；
 同份計畫保存在候選的 rollback.json。正式指標與現有歷史不變，不盲目合併。
 
-**prepared 不代表相容，也不會啟用候選。** 原子回退提交
-仍待實作；不可把此目錄搬入普通 candidates 或手動修改 active 指標以繞過驗證。
+**prepared 不代表相容，也不會啟用候選。** 必須先完成全會話驗證，再明確提交；不可把此目錄搬入普通 candidates 或手動修改 active 指標以繞過驗證。
 若中途失敗，保留已產生的備份／候選供核對，不自動清理或重放。
 
 
@@ -142,5 +141,20 @@ ccode.exe --data-dir DATA --validate-rollback CANDIDATE_ID
 `rollback-validation.json`，保留 `rollback-verified` 凍結副本。已有回執或
 pending 證據時拒絕重跑；失敗後保留證據，不手動刪除檔案以繞過檢查。
 
-此命令仍不切換 active，原子回退提交尚未實作。實際模型與企業 gateway
+此命令仍不切換 active。實際模型與企業 gateway
 相容性仍須以目標環境驗收，CI 的本機假 API 不能替代。
+
+
+## 明確提交已驗證回退
+
+```powershell
+ccode.exe --data-dir DATA --activate-rollback CANDIDATE_ID
+```
+
+只接受準備計畫指定的目標引擎及完整驗證回執，不需要 API 憑證，不能混用其他
+操作或引擎參數。持有資料根、目前 active 及候選鎖後，再核對計畫、來源／保全
+快照、候選與凍結內容；目前 active 或指標有新變動時拒絕提交，不丟棄較新資料。
+成功後原子切換 schema 2 回退指標，保留舊 active 與保全快照；重複啟用拒絕。
+若存在 pending 證據，先核對再使用既有明確歸檔命令，不手動覆寫或自動重放。
+
+公開提交的 Windows 端到端結果待 CI；這不代表真實跨版本回退或企業驗收完成。
