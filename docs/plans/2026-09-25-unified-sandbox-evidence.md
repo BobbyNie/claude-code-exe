@@ -865,3 +865,21 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - 新 workflow 契約測試先 RED（產物上傳受預設 success 條件限制），調整後本機
   21 項 Python GREEN、diff 檢查通過。這只驗證調度設定；實際 Windows job
   調度與各驗收結果仍須新 run 證明，沒有宣稱已修復 EOF 重放或長工作區。
+
+### EOF 重放根因線索與結構化 retry 中止切片
+
+- 唯讀檢查本機原始 2.1.282 Windows 負載（SHA256
+  `fc0e3af017705624b9e1bce913f72761864ff994804514da1f5e41380fca4484`）中的
+  引擎程式碼：StreamTruncated 分支選用獨立的固定一次重試上限，而非一般
+  MAX_RETRIES 設定；該分支在等待重試前 yield retry 事件。這與先前兩次相同
+  請求一致，但沒有修改負載，也不將內部實作名稱當作支援介面。
+- 已取得官方 https://code.claude.com/docs/en/headless.md 的 Handle API retries
+  章節，確認 system/api_retry 是結構化重試前事件。文件也明示 apiKeyHelper
+  某些認證重試可能不發事件；因此事件中止不是所有重試路徑的完整保證。
+- 新增每個 byte 分片及 retry 後同批 success 不得恢復的測試，先 RED（前端
+  原先忽略該事件），再令 EventReader 回 E_GATEWAY_RETRY，沿用 RunTurn 的
+  TerminateJobObject 及非零退出；只顯示固定「automatic retry refused」，
+  不透傳上游 error、狀態文字或路徑。保留環境中原有三個禁止重試／fallback 設定。
+- 本機六組 C++、21 項 Python、diff 檢查 GREEN。原有 Windows gateway fixture
+  的一次模型請求、非零退出、無工作區寫入及遮罩斷言完全不變；是否在重試發送
+  前及時終止必須由新一輪 Windows 證明，不因 unit test 通過而提前結案。

@@ -41,6 +41,20 @@ int main() {
         rejected.Finish();
         assert(rejected.failed);
     }
+    // A documented retry notification is a stop boundary, not progress chrome.
+    // Reject every transport split without exposing untrusted retry details.
+    const auto retry = ccode::Json{{"type", "system"}, {"subtype", "api_retry"},
+        {"attempt", 1}, {"max_retries", 1}, {"retry_delay_ms", 1000},
+        {"error_status", nullptr}, {"error", "private-gateway-detail secret-token"}}.dump() + "\n";
+    for (size_t split = 0; split < retry.size(); ++split) {
+        ccode::EventReader retrying;
+        assert(retrying.Feed(retry.substr(0, split)).empty());
+        ExpectError(retrying, retry.substr(split), "E_GATEWAY_RETRY");
+        ExpectError(retrying, wire, "E_PROTOCOL_FAILED");
+    }
+    ccode::EventReader batchedRetry;
+    ExpectError(batchedRetry, retry + wire, "E_GATEWAY_RETRY");
+    ExpectError(batchedRetry, wire, "E_PROTOCOL_FAILED");
     ccode::EventReader badShape;
     ExpectError(badShape, "{\"type\":42}\n", "E_PROTOCOL_SCHEMA");
     // After any invalid event, later input must not revive the failed turn.

@@ -29,6 +29,11 @@ class EventReader {
         if (!event.is_object()) throw ProtocolError("E_PROTOCOL");
         const auto type = event.value("type", std::string());
         if (complete && (type == "assistant" || type == "result")) throw ProtocolError("E_PROTOCOL_ORDER");
+        // The engine can have cause-specific retry budgets outside MAX_RETRIES.
+        // Stop on its documented pre-retry event; RunTurn terminates the Job Object.
+        // Do not render error fields or rely on a particular delay/category.
+        if (type == "system" && event.value("subtype", std::string()) == "api_retry")
+            throw ProtocolError("E_GATEWAY_RETRY");
         if (event.contains("session_id")) session = event.at("session_id").get<std::string>();
         if (type == "system" && event.value("subtype", std::string()) == "init") {
             const auto& tools = event.at("tools");

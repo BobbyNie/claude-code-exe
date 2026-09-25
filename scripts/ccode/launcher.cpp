@@ -412,7 +412,11 @@ int RunTurn(const fs::path& module, const fs::path& payload, const fs::path& pro
     DWORD code = 1; GetExitCodeProcess(process, &code);
     if (ccode::ValidSessionId(reader.session)) session = reader.session;
     if (code == 130) { std::cerr << "[Cancelled]\n"; return 130; }
-    if (!protocolError.empty()) { std::cerr << "[" << protocolError << ": invalid engine event]\n"; return 65; }
+    if (!protocolError.empty()) {
+        std::cerr << "[" << protocolError << (protocolError == "E_GATEWAY_RETRY"
+            ? ": automatic retry refused]\n" : ": invalid engine event]\n");
+        return 65;
+    }
     try { reader.Finish(); }
     catch (const ccode::ProtocolError& error) {
         std::cerr << "[" << error.what() << ": incomplete turn]\n";
