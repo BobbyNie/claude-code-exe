@@ -241,6 +241,11 @@ int main() try {
     assert(receipt["engine"] == engine && receipt["sessionId"] == historyId);
     assert(receipt.dump().find("private historical marker") == std::string::npos);
     assert(ccode::VerifyCandidateValidation(probeCandidate, root / "verified", engine, testDigest) == receipt);
+    bool singleCannotActivate = false;
+    try { ccode::VerifyCandidateActivation(probeCandidate, probeSnapshot, candidateProfile,
+        root / "verified", engine, testDigest); }
+    catch (const std::runtime_error& error) { singleCannotActivate = std::string(error.what()) == "E_ACTIVATION_SCOPE"; }
+    assert(singleCannotActivate);
     const auto candidateMetadata = ccode::ReadCandidateDocument(probeCandidate / "candidate.json");
     for (const auto& invalid : std::vector<ccode::Json>{
         {{"schema", 2}}, {{"schema", nullptr}}, {{"state", "active"}}, {{"state", nullptr}}}) {
@@ -326,6 +331,17 @@ int main() try {
     assert(allReceipt["scope"] == "all-top-level-sessions" && allReceipt["sessions"].size() == 2);
     assert(!allReceipt.contains("sessionId") && allReceipt.dump().find("private marker") == std::string::npos);
     assert(ccode::VerifyCandidateValidation(allCandidate, root / "all-verified", engine, testDigest) == allReceipt);
+    assert(ccode::VerifyCandidateActivation(allCandidate, allSnapshot, inventoryProfile,
+        root / "all-verified", engine, testDigest) == allReceipt);
+    Write(inventoryProfile / "after-validation.txt", "new source data must survive");
+    bool activationSourceChanged = false;
+    try { ccode::VerifyCandidateActivation(allCandidate, allSnapshot, inventoryProfile,
+        root / "all-verified", engine, testDigest); }
+    catch (const std::runtime_error& error) { activationSourceChanged = std::string(error.what()) == "E_SOURCE_CHANGED"; }
+    assert(activationSourceChanged);
+    assert(Read(inventoryProfile / "after-validation.txt") == "new source data must survive");
+    assert(ccode::ReadCandidateDocument(allCandidate / "validation.json") == allReceipt);
+    fs::remove(inventoryProfile / "after-validation.txt");
     auto partialReceipt = allReceipt;
     partialReceipt["sessions"].erase(1);
     Write(allCandidate / "validation.json", partialReceipt.dump());

@@ -348,3 +348,14 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   鎖定 active profile；啟用前再次核對來源和完整驗證回執，單會話回執不得冒充
   全 profile 啟用依據。一般運行寫入後不能要求舊不可變回執仍與 live profile
   完全相同；必須區分啟用證據與運行中狀態。此段為待實作約束，不是已實作宣稱。
+
+## 啟用前關卡切片（尚未接入 CLI／原子切換）
+
+- 新增 VerifyCandidateActivation：重用完整回執／候選／凍結資料驗證，拒絕
+  single-session 範圍；重驗來源快照及其 UUID 綁定，重新比對 active profile
+  與來源快照，來源已寫入新資料時 E_SOURCE_CHANGED，保留新資料及回執。
+- TDD：單會話拒絕案例先因介面不存在編譯失敗，加入 scope gate 後通過；再補
+  驗證後來源寫入案例，activationSourceChanged 斷言先失敗，加入来源重驗後通過。
+- 本機六組 C++、14 項 Python 與 diff 檢查通過。本切片尚未接入公開 CLI，沒有
+  原子切換指標，也不宣稱啟用／回滾已完成。呼叫端仍須持有資料根協調鎖與兩個
+  profile 鎖至原子提交結束；後續必須完成這些連接與 Windows 公共流程測試。

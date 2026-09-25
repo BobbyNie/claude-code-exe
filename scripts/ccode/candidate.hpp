@@ -265,4 +265,17 @@ inline Json VerifyCandidateValidation(const std::filesystem::path& candidate,
     }
     return receipt;
 }
+// Pre-activation gate only; caller must hold the data-root coordination lock and
+// both profile locks through the eventual atomic pointer commit.
+inline Json VerifyCandidateActivation(const std::filesystem::path& candidate,
+    const std::filesystem::path& sourceSnapshot, const std::filesystem::path& activeProfile,
+    const std::filesystem::path& verifiedRoot, const Json& engine, const SnapshotDigest& digest) {
+    const auto receipt = VerifyCandidateValidation(candidate, verifiedRoot, engine, digest);
+    if (receipt["scope"] != "all-top-level-sessions") throw std::runtime_error("E_ACTIVATION_SCOPE");
+    const auto source = VerifyProfileSnapshot(sourceSnapshot, digest);
+    if (source["snapshotId"] != receipt["sourceSnapshotId"]) throw std::runtime_error("E_CANDIDATE_DATA");
+    if (CandidateFiles(activeProfile, digest) != source["files"]) throw std::runtime_error("E_SOURCE_CHANGED");
+    return receipt;
+}
+
 }
