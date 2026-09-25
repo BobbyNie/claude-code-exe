@@ -724,3 +724,20 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   characters 後輸出 session discovery passed，先前失敗案例已完成 Windows RED→GREEN。
 - cross-version `108159847314` 亦完成資料根搬移續接 PASS。修復未改寫歷史內容，
   也未放寬超長路徑斷言。此證據仍不涵蓋超長工作區 cwd、全工具鏈、UNC 或企業端點。
+
+### 超長 cwd 平台限制：未通過且保留獨立放行 gate
+
+- `cdaa5a3` / `36162165020` 兩版本在 Python CreateProcess 啟動產品之前
+  回傳 WinError 267；不是工具本身的 RED。`468053f` / `36162600975` 用
+  extended-path 格式傳同一 cwd 仍於同一處失敗，已讀取兩版本實際日誌。
+- Microsoft SetCurrentDirectory 文件明確記載超過 MAX_PATH 的目前目錄會
+  使 CreateProcessW 失敗（2026-09-26 查閱）：
+  https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-setcurrentdirectory
+- 不以縮短 cwd、8.3 alias、改寫工作區或跳過斷言冒充完整成功。超長 cwd 的
+  六工具驗收移至獨立 long-workspace matrix job，仍保留失敗退出碼，無
+  continue-on-error；依賴一般測試 artifacts，與 cross-version 並行，使平台
+  限制不再遮住一般工具、權限、取消、恢復與跨版本回歸。整個 workflow 仍會
+  因此 gate 未過而失敗，不代表完整方案已完成或准予放行。
+- 超长檔案／profile 可用與超長 cwd 可啟動是不同範圍。A08 完整邊界仍未完成，
+  需要可驗證且不違反原生 cwd 設計的解法，或使用者明確批准調整支援範圍；
+  本次沒有自行縮小原始目標。

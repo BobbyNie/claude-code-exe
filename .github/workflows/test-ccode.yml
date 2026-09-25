@@ -46,6 +46,26 @@ jobs:
           name: ccode-windows-tested-${{ matrix.version }}
           path: ccode.exe
 
+  long-workspace:
+    # Keep this acceptance gate required/failing, but do not let an OS cwd limit
+    # hide the independent lifecycle and cross-version regression results.
+    needs: test
+    runs-on: windows-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ['2.1.221', '2.1.282']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ccode-windows-tested-${{ matrix.version }}
+          path: long-workspace-bin
+      - name: Require actual tools in workspace cwd beyond MAX_PATH
+        shell: pwsh
+        run: python tests/ccode/tools-integration.py ./long-workspace-bin/ccode.exe --long-workspace-only
+
   cross-version:
     needs: test
     runs-on: windows-latest

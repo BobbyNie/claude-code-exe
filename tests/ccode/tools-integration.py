@@ -281,8 +281,10 @@ def check(executable, short_path=False, lifecycle=None, permission=None, long_wo
 
 if __name__ == "__main__":
     executable = Path(sys.argv[1]).resolve()
+    if len(sys.argv) == 3 and sys.argv[2] == "--long-workspace-only":
+        check(executable, long_workspace=True)
+        sys.exit(0)
     check(executable)
-    check(executable, long_workspace=True)
     check(executable, short_path=True)
     check(executable, lifecycle="cancel")
     check(executable, lifecycle="crash")
