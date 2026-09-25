@@ -15,6 +15,13 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
+def verify_rename_files(source, target):
+    assert not source.exists(), "Tool rename left the old name visible"
+    assert target.read_bytes() == b"marker-renamed\n", "Tool rename/edit changed expected bytes"
+    assert not (target.parent / "absent-rename-parent/file.txt").exists(), \
+        "Failed rename left a destination"
+
+
 def check_lifecycle(app, workspace, data, env, mode):
     """Observe a real grandchild, then cancel/crash the frontend and verify cleanup."""
     import ctypes
@@ -114,6 +121,24 @@ def check(executable, short_path=False, lifecycle=None, permission=None, long_wo
             ("Glob", {"pattern": "*.txt", "path": str(workspace)}),
             ("Bash", {"command": "mkdir -p 'runtime tasks' && printf 'shell-marker' > 'runtime tasks/probe.txt' && cat 'runtime tasks/probe.txt'", "description": "Exercise workspace filesystem"}),
         ]
+        renamed = workspace / "renamed tool 中文.txt"
+        if not short_path and not lifecycle and not permission:
+            # Relative Bash names and absolute tool names must resolve to the same native file.
+            import shlex
+            old_name, new_name = shlex.quote(target.name), shlex.quote(renamed.name)
+            plan.extend([
+                ("Bash", {"command": f"mv -- {old_name} {new_name} && test ! -e {old_name}",
+                          "description": "Rename the actual workspace file"}),
+                ("Read", {"file_path": str(renamed)}),
+                ("Edit", {"file_path": str(renamed), "old_string": "marker-after",
+                          "new_string": "marker-renamed"}),
+                ("Grep", {"pattern": "marker-renamed", "path": str(renamed), "output_mode": "content"}),
+                ("Glob", {"pattern": renamed.name, "path": str(workspace)}),
+                ("Bash", {"command": f"test ! -e absent-rename-parent && "
+                          f"if mv -- {new_name} absent-rename-parent/file.txt; then exit 91; "
+                          f"else test ! -e absent-rename-parent/file.txt && cat -- {new_name}; fi",
+                          "description": "Verify failed rename preserves source"}),
+            ])
         if lifecycle:
             script = workspace / "wait-child.ps1"
             script.write_text("[IO.File]::WriteAllText((Join-Path $PSScriptRoot 'child.pid'), [string]$PID)\n"
@@ -286,7 +311,11 @@ def check(executable, short_path=False, lifecycle=None, permission=None, long_wo
             for i, marker in [(2, "marker-after"), (3, "marker-after"),
                               (4, target.name), (5, "shell-marker")]:
                 assert marker in json.dumps(received[f"acceptance_{i}"]), received[f"acceptance_{i}"]
-            assert target.read_text() == "marker-after\n"
+            for i, marker in [(7, "marker-after"), (9, "marker-renamed"),
+                              (10, renamed.name), (11, "marker-renamed")]:
+                assert marker in json.dumps(received[f"acceptance_{i}"], ensure_ascii=False), received[f"acceptance_{i}"]
+            verify_rename_files(target, renamed)
+            print("PASS: actual Bash rename, Read/Edit/Grep/Glob new path, failed rename preserves edited bytes")
             assert (workspace / "runtime tasks/probe.txt").read_text() == "shell-marker"
             assert not (app_dir / "data").exists(), "Explicit data directory was ignored"
             assert not list(app_dir.rglob("*.jsonl")), "Session leaked into program directory"
@@ -294,7 +323,8 @@ def check(executable, short_path=False, lifecycle=None, permission=None, long_wo
             assert not list(app_dir.rglob("*.dll")), "Unexpected injected runtime"
             print("PASS: real Write/Edit/Read/Grep/Glob/Bash; Unicode/spaces; external data; fragmented arguments")
             if workspace_alias:
-                assert (physical_workspace / target.name).read_text() == "marker-after\n"
+                assert (physical_workspace / renamed.name).read_bytes() == b"marker-renamed\n"
+                assert not (physical_workspace / target.name).exists()
                 assert (physical_workspace / "runtime tasks/probe.txt").read_text() == "shell-marker"
                 for location in (workspace, physical_workspace):
                     identity = subprocess.run([str(app), "--data-dir", str(data), "--workspace-id"],

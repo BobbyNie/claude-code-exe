@@ -1055,3 +1055,14 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - long-workspace `108229406783`、`108229406791` 實際 traceback 仍為
   WinError 267；整體 failure。未將原生測試擴大解讀為模型驅動重命名、
   長 cwd 或目標企業端點驗收完成。完整門檻不變。
+
+### A06 實際引擎跨工具重命名鏈（待 Windows）
+
+- 在既有六工具之後加入真實 Bash mv → Read 新名 → Edit 新名 → Grep／Glob
+  新名 → 缺父目錄 mv 失敗後 cat；要求每項工具成功完成其驗證命令、回傳
+  對應 marker，舊名消失、新名 bytes 精確符合編輯結果、失敗目的地不存在。
+  此鏈亦接入大小寫與 junction alias 案例，物理路徑驗證同一重命名結果。
+- TDD：新增檔案結果 oracle 測試，先因缺介面 RED，再以實際臨時檔覆蓋
+  舊名殘留、內容破壞、目的地殘留與健康情境；Python 27 項、Node 2 項 GREEN。
+- 本輪只修改驗收 fixture，沒有改動產品或略過既有門檻。Windows 結果待驗；
+  模型回覆是本機 deterministic API，不宣稱真實模型／企業端點已驗收。
