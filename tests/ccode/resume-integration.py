@@ -465,8 +465,12 @@ def verify(executable):
         assert (all_data / "active-profile.json").read_bytes() == old_pointer
         assert pending_pointer.read_text(encoding="utf-8") == "interrupted replacement evidence"
         assert profile_bytes(all_root / "profile") == live_before_replacement and not requests
-        # Test fixture cleanup only; the product never deletes pending evidence.
-        pending_pointer.unlink()
+        recovery_id = str(uuid.UUID(active_command("--archive-activation-pending").stdout.strip()))
+        archived_pending = all_data / "activation-recovery" / recovery_id / "pending.json"
+        assert archived_pending.read_bytes() == b"interrupted replacement evidence"
+        assert not pending_pointer.exists()
+        assert (all_data / "active-profile.json").read_bytes() == old_pointer
+        assert not requests
         active_command("--activate-profile", next_id)
         assert json.loads((all_data / "active-profile.json").read_text(encoding="utf-8"))["candidateId"] == next_id
         assert profile_bytes(all_root / "profile") == live_before_replacement

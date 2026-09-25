@@ -28,7 +28,11 @@ def check(executable):
         assert not any(name in result.stdout.lower() for name in ("claude", "anthropic"))
         assert not (root / "data").exists(), "Informational commands must not create profile data"
         test_id = "a2345678-1234-1234-1234-123456789abc"
-        for args in (("--activate-profile", test_id, "--sessions"),
+        for args in (("--archive-activation-pending", "--sessions"),
+                     ("--archive-activation-pending", "--activate-profile", test_id),
+                     ("--archive-activation-pending", "--model", "test"),
+                     ("--archive-activation-pending", "unexpected prompt"),
+                     ("--activate-profile", test_id, "--sessions"),
                      ("--activate-profile", test_id, "--model", "test"),
                      ("--activate-profile", test_id, "--snapshot-profile"),
                      ("--all-sessions",),
@@ -38,6 +42,23 @@ def check(executable):
             invalid = run(*args)
             assert invalid.returncode == 64 and invalid.stderr.strip() == "E_ARGUMENT", invalid
         assert not (root / "data").exists(), "Invalid validation arguments must not create data"
+        recovery_data = root / "recovery data"
+        recovery_data.mkdir()
+        pointer = recovery_data / "active-profile.json"
+        pointer.write_bytes(b"malformed committed pointer")
+        pending = recovery_data / "active-profile.json.pending"
+        pending.write_bytes(b'{"schema":1,\x00truncated')
+        result = run("--data-dir", str(recovery_data), "--archive-activation-pending")
+        assert result.returncode == 0, result
+        recovery_id = str(uuid.UUID(result.stdout.strip()))
+        archived = recovery_data / "activation-recovery" / recovery_id / "pending.json"
+        assert archived.read_bytes() == b'{"schema":1,\x00truncated'
+        assert pointer.read_bytes() == b"malformed committed pointer"
+        assert not pending.exists() and not (recovery_data / "profile").exists()
+        result = run("--data-dir", str(recovery_data), "--archive-activation-pending")
+        assert result.returncode == 64 and result.stderr.strip() == "E_ACTIVATION_PENDING_MISSING", result
+        assert list((recovery_data / "activation-recovery").iterdir()) == [archived.parent]
+        print("PASS: explicit pending archive preserves raw bytes and invalid committed pointer without creating a profile")
         env.update(A_AUTH_TOKEN="fake-token", A_BASE_URL="http://127.0.0.1:1")
         result = run("--sessions")
         assert result.returncode == 0, result.stderr

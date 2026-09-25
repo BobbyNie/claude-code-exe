@@ -317,6 +317,36 @@ inline std::filesystem::path ResolveActiveProfile(const std::filesystem::path& d
     }
 }
 
+// Caller holds the data-root coordination lock. Archive opaque interrupted
+// bytes, never interpret them as an instruction to activate a profile.
+inline std::filesystem::path ArchiveActivationPending(const std::filesystem::path& data,
+    const std::string& recoveryId) {
+    namespace fs = std::filesystem;
+    if (!ValidSessionId(recoveryId)) throw std::runtime_error("E_ACTIVATION_RECOVERY_ID");
+    const auto pending = SnapshotIoPath(data / "active-profile.json.pending");
+    const auto status = fs::symlink_status(pending);
+    if (!fs::exists(status)) throw std::runtime_error("E_ACTIVATION_PENDING_MISSING");
+    if (fs::is_symlink(status) || !fs::is_regular_file(status))
+        throw std::runtime_error("E_ACTIVATION_PENDING_INVALID");
+    const auto archive = data / "activation-recovery";
+    const auto destination = archive / recoveryId;
+    const auto archiveStatus = fs::symlink_status(SnapshotIoPath(archive));
+    if (fs::exists(archiveStatus) && (fs::is_symlink(archiveStatus) || !fs::is_directory(archiveStatus)))
+        throw std::runtime_error("E_ACTIVATION_RECOVERY_INVALID");
+    if (fs::exists(fs::symlink_status(SnapshotIoPath(destination))))
+        throw std::runtime_error("E_ACTIVATION_RECOVERY_EXISTS");
+    try {
+        fs::create_directories(SnapshotIoPath(archive));
+        if (!fs::create_directory(SnapshotIoPath(destination)))
+            throw std::runtime_error("E_ACTIVATION_RECOVERY_EXISTS");
+        fs::rename(pending, SnapshotIoPath(destination / "pending.json"));
+    } catch (const fs::filesystem_error&) {
+        // Retain all evidence on error, including an allocated archive directory.
+        throw std::runtime_error("E_ACTIVATION_RECOVERY_WRITE");
+    }
+    return destination / "pending.json";
+}
+
 // Caller holds data-root, active-profile and candidate-profile exclusive locks.
 // Pending evidence is never silently reused. The pointer is the commit record;
 // candidate metadata stays staged so there is no second non-atomic state change.

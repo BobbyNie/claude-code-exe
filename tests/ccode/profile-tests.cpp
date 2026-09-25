@@ -416,7 +416,46 @@ int main() try {
     assert(secondPendingRejected && Read(activationRoot / "active-profile.json") == oldPointerBytes);
     assert(ccode::ResolveActiveProfile(activationRoot, engine) == firstActive);
     assert(Read(activationRoot / "active-profile.json.pending") == "interrupted second activation");
-    fs::remove(activationRoot / "active-profile.json.pending");
+    const auto archivedPending = ccode::ArchiveActivationPending(activationRoot, snapshotId);
+    assert(Read(archivedPending) == "interrupted second activation");
+    assert(!fs::exists(activationRoot / "active-profile.json.pending"));
+    assert(Read(activationRoot / "active-profile.json") == oldPointerBytes);
+    // Recovery refuses collisions, invalid IDs and missing evidence without
+    // touching the committed pointer or previously archived bytes.
+    Write(activationRoot / "active-profile.json.pending", "new pending");
+    bool recoveryCollision = false;
+    try { ccode::ArchiveActivationPending(activationRoot, snapshotId); }
+    catch (const std::runtime_error& error) { recoveryCollision = std::string(error.what()) == "E_ACTIVATION_RECOVERY_EXISTS"; }
+    assert(recoveryCollision);
+    assert(Read(archivedPending) == "interrupted second activation");
+    assert(Read(activationRoot / "active-profile.json.pending") == "new pending");
+    bool invalidRecovery = false;
+    try { ccode::ArchiveActivationPending(activationRoot, "../escape"); }
+    catch (const std::runtime_error& error) { invalidRecovery = std::string(error.what()) == "E_ACTIVATION_RECOVERY_ID"; }
+    assert(invalidRecovery);
+    ccode::ArchiveActivationPending(activationRoot, historyId);
+    bool missingPending = false;
+    try { ccode::ArchiveActivationPending(activationRoot, secondId); }
+    catch (const std::runtime_error& error) { missingPending = std::string(error.what()) == "E_ACTIVATION_PENDING_MISSING"; }
+    assert(missingPending);
+    assert(!fs::exists(activationRoot / "activation-recovery" / secondId));
+    assert(Read(activationRoot / "active-profile.json") == oldPointerBytes);
+    const auto invalidRecoveryRoot = root / "invalid-recovery";
+    fs::create_directories(invalidRecoveryRoot / "active-profile.json.pending");
+    bool directoryPending = false;
+    try { ccode::ArchiveActivationPending(invalidRecoveryRoot, snapshotId); }
+    catch (const std::runtime_error& error) { directoryPending = std::string(error.what()) == "E_ACTIVATION_PENDING_INVALID"; }
+    assert(directoryPending && !fs::exists(invalidRecoveryRoot / "activation-recovery"));
+    const auto linkedRecoveryRoot = root / "linked-recovery";
+    Write(linkedRecoveryRoot / "active-profile.json.pending", "preserve me");
+    std::error_code linkError;
+    fs::create_directory_symlink(activationRoot / "activation-recovery", linkedRecoveryRoot / "activation-recovery", linkError);
+    if (!linkError) {
+        bool linkedArchive = false;
+        try { ccode::ArchiveActivationPending(linkedRecoveryRoot, secondId); }
+        catch (const std::runtime_error& error) { linkedArchive = std::string(error.what()) == "E_ACTIVATION_RECOVERY_INVALID"; }
+        assert(linkedArchive && Read(linkedRecoveryRoot / "active-profile.json.pending") == "preserve me");
+    }
     ccode::ActivateProfileCandidate(activationRoot, secondId, engine, testDigest);
     assert(ccode::ResolveActiveProfile(activationRoot, engine) == nextCandidate / "profile");
     assert(ccode::CandidateFiles(firstActive, testDigest) == firstActiveFiles);

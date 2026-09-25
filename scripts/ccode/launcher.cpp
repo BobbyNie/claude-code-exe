@@ -206,7 +206,7 @@ int PermissionServer() {
     return 0;
 }
 struct Options {
-    bool print = false, sessions = false, resumePicker = false, latest = false, workspaceId = false, snapshotProfile = false, allSessions = false;
+    bool print = false, sessions = false, resumePicker = false, latest = false, workspaceId = false, snapshotProfile = false, allSessions = false, archivePending = false;
     fs::path data;
     std::string prompt, session, stageSnapshot, validateCandidate, activateCandidate;
     std::vector<std::wstring> engine;
@@ -228,6 +228,7 @@ Options Parse(int argc, wchar_t** argv, const fs::path& module) {
         else if (!literal && arg == L"--workspace-id") options.workspaceId = true;
         else if (!literal && arg == L"--snapshot-profile") options.snapshotProfile = true;
         else if (!literal && arg == L"--stage-profile") options.stageSnapshot = Utf8(next());
+        else if (!literal && arg == L"--archive-activation-pending") options.archivePending = true;
         else if (!literal && arg == L"--activate-profile") options.activateCandidate = Utf8(next());
         else if (!literal && arg == L"--all-sessions") options.allSessions = true;
         else if (!literal && arg == L"--validate-profile") options.validateCandidate = Utf8(next());
@@ -269,6 +270,11 @@ Options Parse(int argc, wchar_t** argv, const fs::path& module) {
             !options.validateCandidate.empty() || !options.prompt.empty() || !options.engine.empty())
             throw std::runtime_error("E_ARGUMENT");
     }
+    if (options.archivePending && (options.print || options.sessions || options.resumePicker ||
+        options.latest || options.workspaceId || options.snapshotProfile || options.allSessions ||
+        !options.session.empty() || !options.stageSnapshot.empty() || !options.validateCandidate.empty() ||
+        !options.activateCandidate.empty() || !options.prompt.empty() || !options.engine.empty()))
+        throw std::runtime_error("E_ARGUMENT");
     options.data = fs::absolute(options.data).lexically_normal();
     return options;
 }
@@ -414,6 +420,7 @@ int Main(int argc, wchar_t** argv) {
             "  --stage-profile ID     Copy verified snapshot to isolated candidate\n"
             "  --validate-profile ID  Verify candidate (--resume ID or --all-sessions)\n"
             "  --all-sessions         Verify every top-level session in its workspace\n"
+            "  --archive-activation-pending  Preserve interrupted activation evidence\n"
             "  --activate-profile ID  Activate a fully verified candidate\n"
             "  --allowedTools RULE    Explicit tool permission rule\n"
             "  --settings PATH        Engine settings file\n"
@@ -436,6 +443,12 @@ int Main(int argc, wchar_t** argv) {
     Handle coordinationLock(CreateFileW(ccode::SnapshotIoPath(options.data / L"active-profile.lock").c_str(),
         GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (!coordinationLock.valid()) throw std::runtime_error("E_PROFILE_BUSY");
+    if (options.archivePending) {
+        const auto recoveryId = ccode::NewWorkspaceId();
+        ccode::ArchiveActivationPending(options.data, recoveryId);
+        std::cout << recoveryId << '\n';
+        return 0;
+    }
     const Json selectedEngine = {{"version", metadata.at("version")}, {"sha256", metadata.at("sha256")}};
     auto profile = ccode::ResolveActiveProfile(options.data, selectedEngine);
     fs::create_directories(profile);

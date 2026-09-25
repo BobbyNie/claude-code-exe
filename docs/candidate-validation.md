@@ -81,8 +81,13 @@ ccode.exe --data-dir DATA --validate-profile CANDIDATE_ID --all-sessions
 來源已變更則 `E_SOURCE_CHANGED`，必須從新來源重新備份及驗證，不自動合併。
 
 指標經同目錄 `active-profile.json.pending` 寫入及 flush 後替換正式指標。
-既有 pending 會使本次啟用停止，不覆寫中斷證據；目前沒有自動 pending 清理／
-恢復指令。原 profile、來源快照與 verified 凍結副本都保留，後續會話寫入所選
+既有 pending 會使本次啟用停止，不覆寫中斷證據，也不自動重放。
+可執行 `ccode.exe --data-dir DATA --archive-activation-pending`，在資料根獨占鎖內
+將原始 bytes 移至 `activation-recovery/UUID/pending.json` 並輸出 UUID。即使 pending
+截斷或正式指標損壞也不解析／改寫它們，不建立 fallback profile，不需要 API。
+無 pending、非法檔案或歸檔碰撞明確拒絕；失敗保留證據，不承諾斷電耐久性。
+此命令不修復損壞的正式指標、不啟用候選；之後重試啟用仍須通過完整驗證。
+原 profile、來源快照與 verified 凍結副本都保留，後續會話寫入所選
 候選的 live profile。指標是唯一啟用提交記錄，candidate metadata 保持 staged。
 
 這不表示已實作跨引擎回滾、斷電耐久保證或細粒度並發。不要手工編寫指標來繞過
