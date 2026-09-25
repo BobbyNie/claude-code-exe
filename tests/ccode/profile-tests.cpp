@@ -555,6 +555,133 @@ int main() try {
         assert(!fs::exists(activationRoot / "rollback-candidates" / secondId));
         assert(Read(activationRoot / "active-profile.json") == secondPointerBytes);
     }
+    // Rollback validation probes every old session, not the newer active data.
+    size_t rejectedProbes = 0;
+    bool wrongRollbackEngine = false;
+    try {
+        ccode::ValidateProfileRollback(activationRoot, historyId, snapshotId, engine, testDigest,
+            [&](const fs::path&, const fs::path&, const std::string&, const std::string&) {
+                ++rejectedProbes; return true;
+            });
+    } catch (const std::runtime_error& error) {
+        wrongRollbackEngine = std::string(error.what()) == "E_ROLLBACK_DATA";
+    }
+    assert(wrongRollbackEngine && rejectedProbes == 0);
+    assert(!fs::exists(activationRoot / "rollback-candidates" / historyId / "validation.json"));
+    Write(nextCandidate / "profile/after-preparation.txt", "must not be lost");
+    bool changedRollbackActive = false;
+    try {
+        ccode::ValidateProfileRollback(activationRoot, historyId, snapshotId, incompatibleEngine, testDigest,
+            [&](const fs::path&, const fs::path&, const std::string&, const std::string&) {
+                ++rejectedProbes; return true;
+            });
+    } catch (const std::runtime_error& error) {
+        changedRollbackActive = std::string(error.what()) == "E_ROLLBACK_CHANGED";
+    }
+    assert(changedRollbackActive && rejectedProbes == 0);
+    assert(Read(nextCandidate / "profile/after-preparation.txt") == "must not be lost");
+    assert(!fs::exists(activationRoot / "rollback-candidates" / historyId / "validation.json"));
+    fs::remove(nextCandidate / "profile/after-preparation.txt");
+    size_t interruptedProbes = 0;
+    bool changedDuringRollback = false;
+    try {
+        ccode::ValidateProfileRollback(activationRoot, historyId, snapshotId, incompatibleEngine, testDigest,
+            [&](const fs::path&, const fs::path&, const std::string&, const std::string&) {
+                ++interruptedProbes;
+                Write(nextCandidate / "profile/during-validation.txt", "retain newest bytes");
+                return true;
+            });
+    } catch (const std::runtime_error& error) {
+        changedDuringRollback = std::string(error.what()) == "E_ROLLBACK_CHANGED";
+    }
+    assert(changedDuringRollback && interruptedProbes == 1);
+    assert(Read(nextCandidate / "profile/during-validation.txt") == "retain newest bytes");
+    assert(!fs::exists(activationRoot / "rollback-candidates" / historyId / "validation.json"));
+    assert(!fs::exists(activationRoot / "rollback-candidates" / historyId / "rollback-validation.json"));
+    fs::remove(nextCandidate / "profile/during-validation.txt");
+    if (!linkError) {
+        fs::create_directory_symlink(activationRoot / "rollback-candidates",
+            linkedRollbackRoot / "rollback-candidates", linkError);
+        if (!linkError) {
+            bool rejectedLinkedValidation = false;
+            try {
+                ccode::ValidateProfileRollback(linkedRollbackRoot, historyId, snapshotId,
+                    incompatibleEngine, testDigest,
+                    [&](const fs::path&, const fs::path&, const std::string&, const std::string&) {
+                        ++rejectedProbes; return true;
+                    });
+            } catch (const std::runtime_error& error) {
+                rejectedLinkedValidation = std::string(error.what()) == "E_ROLLBACK_PATH";
+            }
+            assert(rejectedLinkedValidation && rejectedProbes == 0);
+        }
+    }
+    const auto rollbackPending = activationRoot / "rollback-candidates" / historyId /
+        "rollback-validation.json.pending";
+    Write(rollbackPending, "interrupted validation evidence");
+    bool pendingRollbackValidation = false;
+    try {
+        ccode::ValidateProfileRollback(activationRoot, historyId, snapshotId, incompatibleEngine, testDigest,
+            [&](const fs::path&, const fs::path&, const std::string&, const std::string&) {
+                ++rejectedProbes; return true;
+            });
+    } catch (const std::runtime_error& error) {
+        pendingRollbackValidation = std::string(error.what()) == "E_ROLLBACK_EXISTS";
+    }
+    assert(pendingRollbackValidation && rejectedProbes == 0);
+    assert(Read(rollbackPending) == "interrupted validation evidence");
+    fs::remove(rollbackPending);
+    size_t failedHistoryProbes = 0;
+    bool historyNotRecovered = false;
+    try {
+        ccode::ValidateProfileRollback(activationRoot, historyId, snapshotId, incompatibleEngine, testDigest,
+            [&](const fs::path&, const fs::path&, const std::string&, const std::string&) {
+                ++failedHistoryProbes; return false;
+            });
+    } catch (const std::runtime_error& error) {
+        historyNotRecovered = std::string(error.what()) == "E_CANDIDATE_HISTORY";
+    }
+    assert(historyNotRecovered && failedHistoryProbes == 1);
+    assert(!fs::exists(activationRoot / "rollback-candidates" / historyId / "rollback-validation.json"));
+    for (const auto& changedPath : {activationRoot / "active-profile.json",
+        activationRoot / "rollback-candidates" / historyId / "rollback.json"}) {
+        const auto original = Read(changedPath);
+        auto changed = ccode::Json::parse(original);
+        changed["changed-during-probe"] = true;
+        size_t probes = 0;
+        bool changedBinding = false;
+        try {
+            ccode::ValidateProfileRollback(activationRoot, historyId, snapshotId, incompatibleEngine, testDigest,
+                [&](const fs::path&, const fs::path&, const std::string&, const std::string&) {
+                    ++probes; Write(changedPath, changed.dump()); return true;
+                });
+        } catch (const std::runtime_error& error) {
+            changedBinding = std::string(error.what()) == "E_ROLLBACK_CHANGED";
+        }
+        assert(changedBinding && probes == 1);
+        assert(!fs::exists(activationRoot / "rollback-candidates" / historyId / "validation.json"));
+        assert(Read(changedPath) == changed.dump());
+        Write(changedPath, original);
+    }
+    size_t rollbackProbes = 0;
+    const auto rollbackReceipt = ccode::ValidateProfileRollback(activationRoot, historyId,
+        snapshotId, incompatibleEngine, testDigest,
+        [&](const fs::path& isolated, const fs::path& workspace, const std::string& id,
+            const std::string& expected) {
+            ++rollbackProbes;
+            assert(isolated == activationRoot / "rollback-candidates" / historyId / "profile");
+            assert(ccode::CandidateHistoryText(isolated, workspace, id) == expected);
+            assert(!expected.empty());
+            return true;
+        });
+    assert(rollbackProbes == 2);
+    assert(rollbackReceipt["plan"] == rollback);
+    assert(rollbackReceipt["validation"]["scope"] == "all-top-level-sessions");
+    assert(rollbackReceipt["validation"]["engine"] == incompatibleEngine);
+    assert(ccode::ReadCandidateDocument(activationRoot / "rollback-candidates" / historyId /
+        "rollback-validation.json") == rollbackReceipt);
+    assert(ccode::CandidateFiles(nextCandidate / "profile", testDigest) == currentFiles);
+    assert(Read(activationRoot / "active-profile.json") == secondPointerBytes);
     auto partialReceipt = allReceipt;
     partialReceipt["sessions"].erase(1);
     Write(allCandidate / "validation.json", partialReceipt.dump());

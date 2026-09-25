@@ -319,6 +319,19 @@ inline std::filesystem::path ResolveProfileForBackup(const std::filesystem::path
     }
 }
 
+inline void VerifyRollbackDirectory(const std::filesystem::path& data, const std::filesystem::path& path) {
+    namespace fs = std::filesystem;
+    for (auto parent = fs::absolute(path); !parent.empty();) {
+        const auto status = fs::symlink_status(SnapshotIoPath(parent));
+        if (fs::is_symlink(status) || (fs::exists(status) && !fs::is_directory(status)))
+            throw std::runtime_error("E_ROLLBACK_PATH");
+        if (parent == fs::absolute(data)) break;
+        const auto next = parent.parent_path();
+        if (next == parent) break;
+        parent = next;
+    }
+}
+
 // Caller holds the data-root and current profile locks for the whole operation.
 // Preparation is not compatibility approval and never changes the active pointer.
 inline Json PrepareProfileRollback(const std::filesystem::path& data,
@@ -331,15 +344,7 @@ inline Json PrepareProfileRollback(const std::filesystem::path& data,
     // Reject linked ancestors before any snapshot or staging writes.
     for (const auto& path : {data / "snapshots" / sourceId,
         data / "rollback-candidates" / ".staging"}) {
-        for (auto parent = fs::absolute(path); !parent.empty();) {
-            const auto status = fs::symlink_status(SnapshotIoPath(parent));
-            if (fs::is_symlink(status) || (fs::exists(status) && !fs::is_directory(status)))
-                throw std::runtime_error("E_ROLLBACK_PATH");
-            if (parent == fs::absolute(data)) break;
-            const auto next = parent.parent_path();
-            if (next == parent) break;
-            parent = next;
-        }
+        VerifyRollbackDirectory(data, path);
     }
     for (const auto& destination : {data / "snapshots" / preservationId,
         data / "rollback-candidates" / rollbackId,
@@ -365,6 +370,67 @@ inline Json PrepareProfileRollback(const std::filesystem::path& data,
     output.close();
     if (!output) throw std::runtime_error("E_ROLLBACK_WRITE");
     return plan;
+}
+
+// Caller holds data-root, active-profile and rollback-candidate locks.
+inline Json ValidateProfileRollback(const std::filesystem::path& data, const std::string& id,
+    const std::string& verificationId, const Json& engine, const SnapshotDigest& digest,
+    const CandidateWorkspaceProbe& probe) {
+    namespace fs = std::filesystem;
+    if (!ValidSessionId(id) || !probe) throw std::runtime_error("E_ROLLBACK_DATA");
+    const auto candidate = data / "rollback-candidates" / id;
+    VerifyRollbackDirectory(data, candidate / "profile");
+    VerifyRollbackDirectory(data, data / "rollback-verified");
+    for (const auto* name : {"rollback-validation.json", "rollback-validation.json.pending"})
+        if (fs::exists(fs::symlink_status(SnapshotIoPath(candidate / name))))
+            throw std::runtime_error("E_ROLLBACK_EXISTS");
+    const auto plan = ReadCandidateDocument(candidate / "rollback.json");
+    if (plan.value("schema", 0) != 1 || plan.value("state", "") != "prepared" ||
+        plan.value("candidateId", "") != id || plan.value("adapter", "") != "stream-json-v1" ||
+        !ValidCandidateEngine(engine) || !plan.contains("targetEngine") || plan["targetEngine"] != engine ||
+        !plan.contains("priorActivePointer")) throw std::runtime_error("E_ROLLBACK_DATA");
+    for (const auto* key : {"sourceSnapshotId", "preservationSnapshotId"})
+        if (!plan.contains(key) || !plan[key].is_string() || !ValidSessionId(plan[key].get<std::string>()))
+            throw std::runtime_error("E_ROLLBACK_DATA");
+    const auto source = data / "snapshots" / plan.at("sourceSnapshotId").get<std::string>();
+    const auto preservation = data / "snapshots" / plan["preservationSnapshotId"].get<std::string>();
+    VerifyRollbackDirectory(data, source / "profile");
+    VerifyRollbackDirectory(data, preservation / "profile");
+    const auto preserved = VerifyProfileSnapshot(preservation, digest);
+    const auto selected = VerifyProfileSnapshot(source, digest);
+    const auto guard = [&]() {
+        VerifyRollbackDirectory(data, candidate / "profile");
+        VerifyRollbackDirectory(data, source / "profile");
+        VerifyRollbackDirectory(data, preservation / "profile");
+        const auto pointer = SnapshotIoPath(data / "active-profile.json");
+        const auto state = fs::exists(fs::symlink_status(pointer)) ? ReadCandidateDocument(pointer) : Json(nullptr);
+        if (state != plan["priorActivePointer"] ||
+            ReadCandidateDocument(candidate / "rollback.json") != plan ||
+            VerifyProfileSnapshot(preservation, digest) != preserved ||
+            VerifyProfileSnapshot(source, digest) != selected ||
+            CandidateFiles(ResolveProfileForBackup(data), digest) != preserved["files"])
+            throw std::runtime_error("E_ROLLBACK_CHANGED");
+    };
+    guard();
+    const auto receipt = ValidateProfileCandidate(candidate, source, source / "profile",
+        data / "rollback-verified", verificationId, {}, "", engine, digest, {},
+        [&](const fs::path& isolated, const fs::path& workspace, const std::string& session,
+            const std::string& expected) {
+            guard();
+            const auto restored = probe(isolated, workspace, session, expected);
+            guard();
+            return restored;
+        });
+    guard();
+    const Json result = {{"schema", 1}, {"plan", plan}, {"validation", receipt}};
+    const auto pending = SnapshotIoPath(candidate / "rollback-validation.json.pending");
+    std::ofstream output(pending, std::ios::binary);
+    output << result.dump(2) << '\n';
+    output.close();
+    if (!output) throw std::runtime_error("E_ROLLBACK_WRITE");
+    guard();
+    fs::rename(pending, SnapshotIoPath(candidate / "rollback-validation.json"));
+    return result;
 }
 
 // Runtime selection still requires exactly the engine bound to the pointer.
