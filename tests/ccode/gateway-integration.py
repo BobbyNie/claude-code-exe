@@ -1,13 +1,59 @@
 """Actual engine gateway rejection; local HTTP fixture and dummy credentials only."""
+from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+
+@contextmanager
+def unreachable_endpoint():
+    # Keep ownership until the engine exits: closing an ephemeral listener would
+    # allow another process to take the port and invalidate the refusal fixture.
+    with socket.socket() as endpoint:
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            endpoint.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        endpoint.bind(("127.0.0.1", 0))
+        yield endpoint.getsockname()
+
+
+def check_unreachable(executable):
+    with tempfile.TemporaryDirectory(prefix="ccode-unreachable-") as folder:
+        root = Path(folder).resolve()
+        program, workspace, data = root / "program", root / "workspace", root / "data"
+        program.mkdir()
+        workspace.mkdir()
+        app = program / "ccode.exe"
+        shutil.copy2(executable, app)
+        token = "fixture-unreachable-dummy-token-81936"
+        prompt = "fixture-private-unreachable-prompt-12974"
+        env = {key: value for key, value in os.environ.items()
+               if not key.startswith(("A_", "C_", "ANTHROPIC_", "CLAUDE_", "CCODE_"))}
+        with unreachable_endpoint() as address:
+            # Verify refusal on the actual runner, not only in local unit tests.
+            with socket.socket() as client:
+                client.settimeout(2)
+                assert client.connect_ex(address) != 0, "Unreachable fixture accepted a connection"
+            env.update(A_AUTH_TOKEN=token, A_BASE_URL=f"http://{address[0]}:{address[1]}")
+            try:
+                result = subprocess.run([str(app), "--data-dir", str(data), "--print",
+                    "--tools", "", prompt], cwd=workspace, env=env, input="",
+                    capture_output=True, text=True, encoding="utf-8", timeout=60)
+            except subprocess.TimeoutExpired:
+                raise AssertionError("Unreachable gateway did not terminate within 60 seconds") from None
+        terminal = result.stdout + result.stderr
+        assert result.returncode != 0, "Unreachable gateway turn incorrectly succeeded"
+        assert "E_" in terminal, "Unreachable gateway needs a neutral error"
+        assert token not in terminal and prompt not in terminal, "Private fixture data leaked"
+        assert not list(workspace.iterdir()), "Unreachable gateway changed workspace"
+        assert not list(program.rglob("*.jsonl")), "History leaked into program directory"
+        print("PASS: actual engine unreachable gateway terminates with neutral error, no workspace writes or terminal secret disclosure")
 
 
 def unfinished_tool_events(model, target, marker, complete_arguments=False):
@@ -156,6 +202,7 @@ def check_rejection(executable, status_code, error_type, diagnostic, stream_cut=
 
 if __name__ == "__main__":
     executable = Path(sys.argv[1]).resolve()
+    check_unreachable(executable)
     check_rejection(executable, 401, "authentication_error", "E_GATEWAY_AUTH")
     check_rejection(executable, 429, "rate_limit_error", "E_GATEWAY_RATE_LIMIT")
     check_rejection(executable, 200, None, "E_", stream_cut=True)

@@ -997,3 +997,15 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - cross-version `108216564763` 成功，確認舊→新→舊與外置資料根搬移續接。
   long-workspace `108216564886`、`108216564905` 的實際日誌仍為
   WinError 267；整體 failure，未放行。未重啟或縮減該驗收門檻。
+
+### A18 gateway 不可達：新增實際連線拒絕驗收
+
+- 新增保留但不 listen 的 loopback TCP 埠 fixture，保持 socket 所有權到引擎
+  結束，避免先關閉 listener 後被其他程式搶佔。Windows 設 exclusive address
+  use；實際 runner 先確認 TCP 連線不成功，再啟動原始引擎。
+- 要求 60 秒內非零退出、中性 E_ 診斷、假 token／私人 prompt 不出現在終端、
+  工作區沒有寫入及程式目錄沒有 JSONL。僅使用假憑證、本機端點，不觸及企業服務。
+- fixture TDD 先因缺介面 RED，實作後本機 25 項 Python 通過；socket bind
+  需沙箱外授權，已授權重跑而非跳過。語法與 diff 檢查通過。Windows 結果待驗。
+- 此案例不計算連線重試次數，也不把泛用中性錯誤當作已完成細分網路錯誤分類；
+  TLS、DNS、逾時／斷線分類、實際過期憑證與企業端點完整門檻仍保留。

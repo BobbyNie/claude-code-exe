@@ -1,6 +1,7 @@
 """Validate that interrupted-stream fixtures exercise semantic EOF boundaries."""
 import importlib.util
 import json
+import socket
 from pathlib import Path
 import unittest
 
@@ -11,6 +12,16 @@ spec.loader.exec_module(fixture)
 
 
 class GatewayFixtureTests(unittest.TestCase):
+    def test_unreachable_endpoint_reserves_port_without_accepting_connections(self):
+        with fixture.unreachable_endpoint() as address:
+            self.assertEqual(address[0], "127.0.0.1")
+            with socket.socket() as client:
+                client.settimeout(2)
+                self.assertNotEqual(client.connect_ex(address), 0)
+            with socket.socket() as competitor:
+                with self.assertRaises(OSError):
+                    competitor.bind(address)
+
     def test_complete_arguments_still_lack_block_and_message_termination(self):
         events = fixture.unfinished_tool_events("fixture-model", "target.txt", "marker", True)
         self.assertEqual([kind for kind, _ in events],
