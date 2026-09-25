@@ -117,7 +117,7 @@ int main() try {
     bool changed = false;
     try {
         ccode::CreateProfileSnapshot(active, snapshots, changedId, [&](const fs::path& path) {
-            if (path == active / "home/history.jsonl") return Read(path);
+            if (fs::equivalent(path, active / "home/history.jsonl")) return Read(path);
             return std::string("injected copy corruption");
         });
     } catch (const std::runtime_error& error) { changed = std::string(error.what()) == "E_SNAPSHOT_CHANGED"; }
@@ -167,8 +167,11 @@ int main() try {
     std::cout << "Checking snapshot destination beyond 260 characters" << std::endl;
     const auto longSnapshot = ccode::CreateProfileSnapshot(longActive, longBackups, longId, testDigest);
     assert(ccode::VerifyProfileSnapshot(longSnapshot, testDigest)["files"].size() == 1);
+    const auto longCandidate = ccode::StageProfileCandidate(longSnapshot,
+        root / "long-candidates" / std::string(45, 'c'), candidateId, testDigest);
+    assert(Read(ccode::SnapshotIoPath(longCandidate / "profile" / longRelative)) == "source transcript\n");
     assert(Read(longActive / longRelative) == "source transcript\n");
-    fs::remove_all(root);
+    fs::remove_all(ccode::SnapshotIoPath(root));
     std::cout << "ccode profile recovery tests passed\n";
 } catch (const std::exception& error) {
     std::cerr << "profile test exception: " << error.what() << '\n';
