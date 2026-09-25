@@ -1177,3 +1177,17 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - long-workspace `108250151422`、`108250151552` 實際仍 WinError 267，
   整體 failure。沒有 DIAGNOSTIC 停滯快照，未解根因及其餘完整驗收缺口保留。
   本機 API fixture 不替代企業端點、真實模型或普通帳戶完整驗收。
+
+### 工作區身份更新中斷證據不可覆寫
+
+- ResolveWorkspace 原本以 trunc 開啟既有 workspaces.json.new，新增工作區會
+  靜默覆寫上次中斷的身份資料。現在保留該檔及已提交 registry，回報中性
+  E_WORKSPACE_PENDING；既有已提交身份仍可讀取，不自動採用未完成內容。
+- TDD 先建立實際 pending 檔並新增工作區，pendingRejected 斷言 RED；最小
+  加入存在檢查後 GREEN。測試逐 bytes 確認兩份檔案不變；明確將 pending
+  另存後重試成功，原有 UUID 不變，保存的中斷內容仍在。原 symlink 拒絕保留。
+- 六組 C++ 通過，Python 30 項中 29 通過、1 Windows 專用測試跳過。另加入
+  Windows 真實 ccode.exe --workspace-id 驗收：既有身份可讀、未知工作區
+  拒絕且不洩漏 pending 內容、手動保存後可重試。該實際命令驗收待 CI。
+- 這是特定中斷殘留的保全，不等同斷電／磁碟滿全矩陣完成；也沒有新增自動
+  合併或宣稱已完成工作區搬移遷移。保存動作目前由操作員明確執行。

@@ -131,6 +131,29 @@ def check(executable):
                                    env=env, cwd=workspace, text=True, capture_output=True, timeout=15)
         assert different.returncode == 0 and str(uuid.UUID(different.stdout.strip())) != workspace_id
         registry = data / "profile" / "workspaces.json"
+        committed = registry.read_bytes()
+        pending = registry.with_name(registry.name + ".new")
+        pending_bytes = b'{interrupted-identity-private-marker'
+        pending.write_bytes(pending_bytes)
+        existing = run("--data-dir", str(data), "--workspace-id")
+        assert existing.returncode == 0 and existing.stdout.strip() == workspace_id
+        new_workspace = root / "new workspace"
+        new_workspace.mkdir()
+        def register_new_workspace():
+            return subprocess.run([str(app), "--data-dir", str(data), "--workspace-id"],
+                                  env=env, cwd=new_workspace, text=True, encoding="utf-8",
+                                  capture_output=True, timeout=15)
+        blocked = register_new_workspace()
+        assert blocked.returncode == 64 and blocked.stderr.strip() == "E_WORKSPACE_PENDING"
+        assert not blocked.stdout and "private-marker" not in blocked.stderr
+        assert pending.read_bytes() == pending_bytes and registry.read_bytes() == committed
+        archive = data / "preserved-workspace-update"
+        pending.rename(archive)
+        retried = register_new_workspace()
+        assert retried.returncode == 0 and str(uuid.UUID(retried.stdout.strip())) != workspace_id
+        assert archive.read_bytes() == pending_bytes and not pending.exists()
+        assert run("--data-dir", str(data), "--workspace-id").stdout.strip() == workspace_id
+        print("PASS: interrupted workspace registry update is preserved; committed identity remains readable and explicit archive permits retry")
         registry.write_text('{"schema":999,"workspaces":{}}')
         rejected = run("--data-dir", str(data), "--workspace-id")
         assert rejected.returncode != 0 and "E_WORKSPACE_DATA" in rejected.stderr, rejected

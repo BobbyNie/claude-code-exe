@@ -175,6 +175,27 @@ int main() {
     assert(readAll(registry) == saved);
     fs::create_directories(root / "third");
     auto candidate = registry; candidate += ".new";
+    // Interrupted identity metadata is evidence, not a disposable index cache.
+    const std::string interrupted = "{interrupted-workspace-identity";
+    { std::ofstream out(candidate, std::ios::binary); out << interrupted; }
+    assert(ccode::ResolveWorkspace(registry, root) == first);
+    bool pendingRejected = false;
+    try { ccode::ResolveWorkspace(registry, root / "third"); }
+    catch (const std::runtime_error& error) {
+        pendingRejected = std::string(error.what()) == "E_WORKSPACE_PENDING";
+    }
+    assert(pendingRejected);
+    assert(readAll(registry) == saved && readAll(candidate) == interrupted);
+    // Explicit preservation permits retry; never silently delete or reuse it.
+    const auto archived = root / "preserved-workspace-update";
+    fs::rename(candidate, archived);
+    const auto third = ccode::ResolveWorkspace(registry, root / "third");
+    assert(ccode::ValidSessionId(third) && third != first && third != other);
+    assert(readAll(archived) == interrupted && !fs::exists(candidate));
+    assert(ccode::ResolveWorkspace(registry, root) == first);
+    assert(ccode::ResolveWorkspace(registry, root / "other") == other);
+    // Restore the initial committed registry for the independent link test.
+    { std::ofstream out(registry, std::ios::binary); out << saved; }
     auto victim = root / "must-preserve.txt";
     { std::ofstream out(victim); out << "original"; }
     std::error_code linkError;

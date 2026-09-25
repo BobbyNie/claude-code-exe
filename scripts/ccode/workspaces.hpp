@@ -68,6 +68,9 @@ inline std::string ResolveWorkspace(const std::filesystem::path& registryPath,
     fs::create_directories(registry.parent_path());
     auto candidate = registry; candidate += ".new";
     if (fs::is_symlink(fs::symlink_status(candidate))) throw std::runtime_error("E_WORKSPACE_WRITE");
+    // A prior interrupted identity update is not a rebuildable cache. Preserve
+    // it and the committed registry until the operator explicitly archives it.
+    if (fs::exists(fs::symlink_status(candidate))) throw std::runtime_error("E_WORKSPACE_PENDING");
     {
         std::ofstream output(candidate, std::ios::binary | std::ios::trunc);
         output << document.dump(2) << '\n';
