@@ -456,7 +456,7 @@ int Main(int argc, wchar_t** argv) {
         const Json engine = {{"version", metadata.at("version")}, {"sha256", metadata.at("sha256")}};
         const auto receipt = ccode::ValidateProfileCandidate(candidate,
             options.data / L"snapshots" / Wide(document["sourceSnapshotId"].get<std::string>()),
-            options.data / L"verified", ccode::NewWorkspaceId(), fs::current_path(), options.session, engine, FileDigest,
+            profile, options.data / L"verified", ccode::NewWorkspaceId(), fs::current_path(), options.session, engine, FileDigest,
             [&](const fs::path& isolated, const std::string& id, const std::string& expected) {
                 auto probeOptions = options;
                 probeOptions.engine.insert(probeOptions.engine.end(), {L"--tools", L"", L"--max-turns", L"1"});

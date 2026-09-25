@@ -257,3 +257,18 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   schema=1 / state=staged 要求；測試包含未知／null schema、active／null state，
   要求 E_CANDIDATE_DATA、回執不變，還原 metadata 後仍可核驗。
   此修正的 Windows 回歸結果另行記錄，不以此前 CI 代替。
+
+## 來源變更衝突切片（Windows 待驗）
+
+- 候選驗證新增必填 active profile，先核對非操作鎖檔案與來源快照完全一致，
+  並在引擎 probe 後再次核對；不符回傳 E_SOURCE_CHANGED，不寫成功回執。
+- TDD：先補快照後新增來源資料的案例，確認 sourceConflict 斷言紅燈，再實作
+  請求前檢查；接著補 probe 期間外部寫入案例，確認 changedDuringProbe 紅燈，
+  再實作 probe 後檢查。兩案均保留來源新資料，沒有自動合併或還原。
+- 本機六組 C++、八項 Python、Python 語法及 diff 檢查通過。
+- Windows 公共 CLI 新增來源已變更時退出 64、零 API 請求、候選／來源快照不變、
+  來源新增檔保留及不啟用的案例，結果待 CI。正常候選驗證及錯誤答案案例保留。
+- 未實作原子啟用；啟用時仍須重新核對來源，不能把本切片当作最終衝突保障。
+
+- 前一個 metadata 核驗修正 `33cb808` / `36138276610`：兩引擎所有 Windows
+  步驟成功（已核對 job 步驟及 run 終態）；此結果不包含本節來源衝突新增案例。

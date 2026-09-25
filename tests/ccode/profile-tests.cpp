@@ -184,11 +184,23 @@ int main() try {
     Write(probeCandidate / "profile/frontend.lock", "operational lock");
     assert(ccode::CandidateHistoryText(probeCandidate / "profile", root, historyId) == "private historical marker");
     const ccode::Json engine = {{"version", "test-engine"}, {"sha256", std::string(64, 'e')}};
+    Write(candidateProfile / "new-history.jsonl", "new active data after snapshot");
+    bool sourceConflict = false, ranConflictProbe = false;
+    try {
+        ccode::ValidateProfileCandidate(probeCandidate, probeSnapshot, candidateProfile, root / "verified", snapshotId,
+            root, historyId, engine, testDigest, [&](const fs::path&, const std::string&, const std::string&) {
+                ranConflictProbe = true; return true;
+            });
+    } catch (const std::runtime_error& error) { sourceConflict = std::string(error.what()) == "E_SOURCE_CHANGED"; }
+    assert(sourceConflict && !ranConflictProbe);
+    assert(!fs::exists(probeCandidate / "validation.json"));
+    assert(Read(candidateProfile / "new-history.jsonl") == "new active data after snapshot");
+    fs::remove(candidateProfile / "new-history.jsonl");
     // Ignoring the operational lock must not permit any other extra file.
     Write(probeCandidate / "profile/unexpected.bin", "unexpected");
     bool rejectedExtra = false, ranUnexpectedProbe = false;
     try {
-        ccode::ValidateProfileCandidate(probeCandidate, probeSnapshot, root / "verified", snapshotId,
+        ccode::ValidateProfileCandidate(probeCandidate, probeSnapshot, candidateProfile, root / "verified", snapshotId,
             root, historyId, engine, testDigest, [&](const fs::path&, const std::string&, const std::string&) {
                 ranUnexpectedProbe = true; return true;
             });
@@ -203,12 +215,23 @@ int main() try {
     fs::remove(probeSnapshot / "profile/frontend.lock");
     bool failedProbe = false;
     try {
-        ccode::ValidateProfileCandidate(probeCandidate, probeSnapshot, root / "verified", snapshotId,
+        ccode::ValidateProfileCandidate(probeCandidate, probeSnapshot, candidateProfile, root / "verified", snapshotId,
             root, historyId, engine, testDigest, [](const fs::path&, const std::string&, const std::string&) { return false; });
     } catch (const std::runtime_error& error) { failedProbe = std::string(error.what()) == "E_CANDIDATE_HISTORY"; }
     assert(failedProbe && !fs::exists(probeCandidate / "validation.json"));
+    bool changedDuringProbe = false;
+    try {
+        ccode::ValidateProfileCandidate(probeCandidate, probeSnapshot, candidateProfile, root / "verified", snapshotId,
+            root, historyId, engine, testDigest, [&](const fs::path&, const std::string&, const std::string&) {
+                Write(candidateProfile / "external-write.txt", "preserve this write");
+                return true;
+            });
+    } catch (const std::runtime_error& error) { changedDuringProbe = std::string(error.what()) == "E_SOURCE_CHANGED"; }
+    assert(changedDuringProbe && !fs::exists(probeCandidate / "validation.json"));
+    assert(Read(candidateProfile / "external-write.txt") == "preserve this write");
+    fs::remove(candidateProfile / "external-write.txt");
     bool sawPrivateHistory = false;
-    auto receipt = ccode::ValidateProfileCandidate(probeCandidate, probeSnapshot, root / "verified", snapshotId,
+    auto receipt = ccode::ValidateProfileCandidate(probeCandidate, probeSnapshot, candidateProfile, root / "verified", snapshotId,
         root, historyId, engine, testDigest, [&](const fs::path& profile, const std::string& id, const std::string& expected) {
             sawPrivateHistory = fs::equivalent(profile, probeCandidate / "profile") && id == historyId && expected == "private historical marker";
             Write(profile / "engine-recovered.txt", "source transcript\n");

@@ -228,6 +228,24 @@ def verify(executable):
             assert result.returncode == 0, result.stderr
             return str(uuid.UUID(result.stdout.strip()))
 
+        conflict_id = stage_again()
+        conflict_root = profile.parent / "candidates" / conflict_id
+        candidate_before_conflict = profile_bytes(conflict_root)
+        changed_source = profile / "new-source-data.txt"
+        changed_source.write_bytes(b"preserve source changes")
+        requests.clear()
+        conflict = subprocess.run([str(executable), "--validate-profile", conflict_id, "--resume", session],
+                                  cwd=executable.parent, env=env, capture_output=True,
+                                  text=True, encoding="utf-8", timeout=60)
+        assert conflict.returncode == 64 and conflict.stderr.strip() == "E_SOURCE_CHANGED", conflict
+        assert not requests, "Source conflict must be rejected before any API request"
+        assert changed_source.read_bytes() == b"preserve source changes"
+        assert profile_bytes(conflict_root) == candidate_before_conflict
+        assert profile_bytes(snapshot) == snapshot_before
+        assert not (profile.parent / "active-profile.json").exists()
+        changed_source.unlink()
+        assert profile_bytes(profile) == active_before
+        print("PASS: changed active source rejects candidate validation before API without changing source, backup or candidate")
         validation_id = stage_again()
         requests.clear()
         validated = subprocess.run([str(executable), "--validate-profile", validation_id, "--resume", session],

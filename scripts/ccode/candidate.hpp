@@ -85,7 +85,8 @@ inline bool ValidCandidateEngine(const Json& engine) {
     return hash.size() == 64 && hash.find_first_not_of("0123456789abcdef") == std::string::npos;
 }
 inline Json ValidateProfileCandidate(const std::filesystem::path& candidatePath,
-    const std::filesystem::path& sourceSnapshot, const std::filesystem::path& verifiedRoot,
+    const std::filesystem::path& sourceSnapshot, const std::filesystem::path& activeProfile,
+    const std::filesystem::path& verifiedRoot,
     const std::string& verificationId, const std::filesystem::path& workspace,
     const std::string& session, const Json& engine, const SnapshotDigest& digest, const CandidateProbe& probe) {
     namespace fs = std::filesystem;
@@ -100,6 +101,7 @@ inline Json ValidateProfileCandidate(const std::filesystem::path& candidatePath,
         !metadata.contains("sourceSnapshotId") || metadata["sourceSnapshotId"] != sourceSnapshot.filename().u8string())
         throw std::runtime_error("E_CANDIDATE_DATA");
     const auto source = VerifyProfileSnapshot(sourceSnapshot, digest);
+    if (CandidateFiles(activeProfile, digest) != source["files"]) throw std::runtime_error("E_SOURCE_CHANGED");
     // A live candidate has frontend.lock while an immutable snapshot must not.
     // Validate the full expected manifest and all non-lock files without relaxing
     // VerifyProfileSnapshot's strict rejection of extra backup files.
@@ -113,6 +115,7 @@ inline Json ValidateProfileCandidate(const std::filesystem::path& candidatePath,
     if (VerifyProfileSnapshot(sourceSnapshot, digest) != source ||
         ReadCandidateDocument(candidate / "candidate.json") != metadata)
         throw std::runtime_error("E_CANDIDATE_CHANGED");
+    if (CandidateFiles(activeProfile, digest) != source["files"]) throw std::runtime_error("E_SOURCE_CHANGED");
     const auto workspaceId = ResolveWorkspace(SnapshotIoPath(candidate / "profile/workspaces.json"), workspace);
     const auto checkpoint = CreateProfileSnapshot(candidate / "profile", verifiedRoot, verificationId, digest);
     const auto frozen = VerifyProfileSnapshot(checkpoint, digest);
