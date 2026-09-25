@@ -2,9 +2,34 @@
 import ctypes
 from ctypes import wintypes as w
 import signal
+import json
 import subprocess
 import threading
 import time
+
+
+def wait_for_persisted_history(data, process, timeout=15):
+    """Establish recovery evidence before killing an asynchronously writing engine."""
+    deadline = time.monotonic() + timeout
+    while process.poll() is None and time.monotonic() < deadline:
+        for path in data.rglob("*.jsonl"):
+            try:
+                lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+            except (OSError, UnicodeError):
+                continue
+            for line in lines:
+                if not line.endswith("\n"):
+                    continue  # A partial write is not persisted transcript evidence.
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(record, dict) and record.get("type") == "user":
+                    message = record.get("message")
+                    if isinstance(message, dict) and message.get("role") == "user" and message.get("content"):
+                        return
+        time.sleep(0.05)
+    raise AssertionError("No persisted user history before cancellation; recovery precondition unmet")
 
 
 def check_permission(app, workspace, data, env, mode, target):
@@ -102,6 +127,8 @@ def check_permission(app, workspace, data, env, mode, target):
                                   "console", screen().rstrip(" \x00")[-8000:]))
         assert not target.exists(), "Write occurred before user approval"
         if mode == "cancel":
+            wait_for_persisted_history(data, process)
+            assert not target.exists(), "Write occurred while awaiting history persistence"
             process.send_signal(signal.CTRL_BREAK_EVENT)
             deadline = time.monotonic() + 15
             while b"Cancelled" not in captured[1] and process.poll() is None and time.monotonic() < deadline:
