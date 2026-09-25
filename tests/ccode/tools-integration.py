@@ -70,7 +70,7 @@ def check_lifecycle(app, workspace, data, env, mode):
             kernel.FreeConsole()
 
 
-def check(executable, short_path=False, lifecycle=None):
+def check(executable, short_path=False, lifecycle=None, permission=None):
     with tempfile.TemporaryDirectory(prefix="ccode-tools-") as temporary:
         root = Path(temporary).resolve()
         if short_path:
@@ -106,6 +106,9 @@ def check(executable, short_path=False, lifecycle=None):
                               "[IO.File]::WriteAllText((Join-Path $PSScriptRoot 'after-wait.txt'), 'unexpected')\n")
             plan = [("Bash", {"command": "powershell.exe -NoProfile -File ./wait-child.ps1",
                               "description": "Wait for lifecycle acceptance signal", "timeout": 600000})]
+        if permission:
+            target = workspace / f"permission-{permission}-{time.time_ns()}.txt"
+            plan = [("Write", {"file_path": str(target), "content": "approved-write\n"})]
         received = {}
         requests = []
         handler_errors = []
@@ -187,6 +190,15 @@ def check(executable, short_path=False, lifecycle=None):
                if not key.startswith(("A_", "C_", "ANTHROPIC_", "CLAUDE_", "CCODE_"))}
         env.update(A_AUTH_TOKEN="acceptance-test-only", A_BASE_URL=f"http://127.0.0.1:{server.server_port}")
         try:
+            if permission:
+                import runpy
+                check_permission = runpy.run_path(str(Path(__file__).with_name("console-fixture.py")))["check_permission"]
+                check_permission(app, workspace, data, env, permission, target)
+                assert not handler_errors, handler_errors
+                if permission != "cancel":
+                    assert len(received) == 1, received
+                    assert bool(received["acceptance_0"].get("is_error")) == (permission == "deny"), received
+                return
             if lifecycle:
                 check_lifecycle(app, workspace, data, env, lifecycle)
                 assert not handler_errors, handler_errors
@@ -234,3 +246,6 @@ if __name__ == "__main__":
     check(executable, short_path=True)
     check(executable, lifecycle="cancel")
     check(executable, lifecycle="crash")
+
+    for permission in ("allow", "deny", "cancel"):
+        check(executable, permission=permission)
