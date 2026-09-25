@@ -56,9 +56,28 @@ try {
     Invoke-ExpectExit -Arguments @("login") -Expected 64
     Invoke-ExpectExit -Arguments @("--ccode-self-test") -Expected 0
 
+    # Old releases rewrote .claude to .cc; an upgrade must recover transcripts.
+    $homePath = Join-Path $testRoot 'data/cc/profile/home'
+    $legacyProject = Join-Path $homePath '.cc/projects/D--tt'
+    $currentProject = Join-Path $homePath '.claude/projects/D--tt'
+    New-Item -ItemType Directory -Path $legacyProject -Force | Out-Null
+    New-Item -ItemType Directory -Path $currentProject -Force | Out-Null
+    Set-Content (Join-Path $legacyProject 'old-session.jsonl') 'legacy-session-marker'
+    Set-Content (Join-Path $legacyProject 'existing-session.jsonl') 'old-copy'
+    Set-Content (Join-Path $currentProject 'existing-session.jsonl') 'new-copy'
+
     & $testExe --version
     if ($LASTEXITCODE -ne 0) {
         throw "The embedded official payload failed its injected --version smoke test"
+    }
+    if (-not (Test-Path (Join-Path $currentProject 'old-session.jsonl'))) {
+        throw 'Upgrade lost access to legacy .cc session transcripts'
+    }
+    if ((Get-Content (Join-Path $currentProject 'existing-session.jsonl') -Raw).Trim() -ne 'new-copy') {
+        throw 'Upgrade overwrote an existing session'
+    }
+    if (-not (Test-Path (Join-Path $legacyProject 'old-session.jsonl'))) {
+        throw 'Upgrade removed the original session backup'
     }
 
     $savedTemp = $env:TEMP
