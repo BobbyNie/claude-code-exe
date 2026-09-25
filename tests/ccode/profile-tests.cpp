@@ -218,6 +218,20 @@ int main() try {
     assert(receipt["engine"] == engine && receipt["sessionId"] == historyId);
     assert(receipt.dump().find("private historical marker") == std::string::npos);
     assert(ccode::VerifyCandidateValidation(probeCandidate, root / "verified", engine, testDigest) == receipt);
+    const auto candidateMetadata = ccode::ReadCandidateDocument(probeCandidate / "candidate.json");
+    for (const auto& invalid : std::vector<ccode::Json>{
+        {{"schema", 2}}, {{"schema", nullptr}}, {{"state", "active"}}, {{"state", nullptr}}}) {
+        auto changedMetadata = candidateMetadata;
+        changedMetadata.update(invalid);
+        Write(probeCandidate / "candidate.json", changedMetadata.dump());
+        bool rejectedMetadata = false;
+        try { ccode::VerifyCandidateValidation(probeCandidate, root / "verified", engine, testDigest); }
+        catch (const std::runtime_error& error) { rejectedMetadata = std::string(error.what()) == "E_CANDIDATE_DATA"; }
+        assert(rejectedMetadata);
+        assert(ccode::ReadCandidateDocument(probeCandidate / "validation.json") == receipt);
+    }
+    Write(probeCandidate / "candidate.json", candidateMetadata.dump());
+    assert(ccode::VerifyCandidateValidation(probeCandidate, root / "verified", engine, testDigest) == receipt);
     auto incompatibleEngine = engine;
     incompatibleEngine["sha256"] = std::string(64, 'f');
     bool incompatible = false;

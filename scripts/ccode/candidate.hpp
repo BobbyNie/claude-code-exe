@@ -145,7 +145,9 @@ inline Json VerifyCandidateValidation(const std::filesystem::path& candidate,
         !receipt.contains("engine") || !ValidCandidateEngine(engine) || receipt["engine"] != engine ||
         !receipt.contains("files")) throw std::runtime_error("E_CANDIDATE_DATA");
     const auto metadata = ReadCandidateDocument(candidate / "candidate.json");
-    if (!receipt.contains("sourceSnapshotId") || !receipt["sourceSnapshotId"].is_string() ||
+    if (!metadata.contains("schema") || metadata["schema"] != 1 ||
+        !metadata.contains("state") || metadata["state"] != "staged" ||
+        !receipt.contains("sourceSnapshotId") || !receipt["sourceSnapshotId"].is_string() ||
         !ValidSessionId(receipt["sourceSnapshotId"].get<std::string>()) ||
         !metadata.contains("sourceSnapshotId") || receipt["sourceSnapshotId"] != metadata["sourceSnapshotId"] ||
         !metadata.contains("candidateId") || receipt["candidateId"] != metadata["candidateId"])

@@ -35,7 +35,7 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 | A12 | 權限 | PermissionRpc 預設拒絕；interactive console；Job Object；`e22cd72` / `36124014490` 兩版本真實 Bash→PowerShell 後代在 Ctrl+Break／前端強制終止後退出，無延遲寫入 | `cacdb06` / `36129711620` 兩版本真實 console 批准／拒絕／等待批准中取消通過；`199b57b` 同 profile 故障後重啟亦通過；仍需目標普通帳戶端點證據 |
 | A13 | 歷史 | --sessions、--resume、--continue、/resume；fixture 驗證請求歷史標記 | `6c92fdd` / `36131964792` 兩版本列表→選擇→兩輪→重啟 continue 通過；仍欠完整損壞資料可用性分類及穩定工作區 UUID 整合 |
 | A14 | 升級／搬移 | runtime 按 hash 分區；資料不綁 runtime hash | 引擎／profile 相容 manifest、重啟／搬移／更新／回退實測 |
-| A15 | 遷移 | SHA-256 快照、核驗後隔離候選；`87f7065` / `36135890793` 兩版本真實引擎在候選恢復多輪歷史，來源與備份逐位元組不變 | 產品內建引擎驗證回執及完整遷移流程、重名衝突處理、原子切換、磁碟滿／中斷重試 |
+| A15 | 遷移 | SHA-256 快照、核驗後隔離候選；`87f7065` / `36135890793` 兩版本真實引擎在候選恢復多輪歷史，來源與備份逐位元組不變 | 單一會話驗證回執已通過兩版本 CI；仍欠完整 profile 驗證及遷移流程、重名衝突處理、原子切換、磁碟滿／中斷重試 |
 | A16 | 並發 | profile-wide 排他鎖 | 故障釋鎖已由 `199b57b` 實測；仍欠同 session 單寫入、多 session 同工作區 |
 | A17 | 擴展 | CLI 參數可接設定／MCP／agents | 技能、子代理、核准 MCP 真實流程及明確版本相容矩陣 |
 | A18 | 網路 | gateway 設定入口；不宣稱 OS 網路隔離 | 不可達、TLS、過期憑證、429、斷流分類；不重放寫入；核准端點部署政策 |
@@ -55,7 +55,7 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 | D07 / R08 | 更新、診斷、恢復 | A14/A15/A19/A20 |
 | D08 | 固定 adapter／引擎／工具鏈及 mapping manifest | 目前 CI 固定兩引擎，尚無完整隨包 manifest |
 | D09 | 工具 schema、錯誤分类、不猜測／不重放 | A10/A11/A18；前端驗證輸出不等於能阻止引擎內部已执行的工具 |
-| D10 | 隔離候選 profile、備份 hash、原子 active 切換 | 現有 CopyMissing 僅是舊版兼容，未達設計遷移流程 |
+| D10 | 隔離候選 profile、備份 hash、原子 active 切換 | 已實作 SHA-256 快照、隔離候選及 single-session 驗證回執；尚欠完整驗證範圍、來源變更衝突與原子 active 切換／回退 |
 | D11 | 來源、授權、必要通知、可信簽名 | 需核實再分發權限及核准簽署者；不得刪除必要通知以通過名稱掃描 |
 | D12 | 小範圍試運行與中斷／還原／回退演練 | 尚未執行；需明確目標 Windows 版本／帳戶／工作負載與性能基線 |
 | D13 | 每案可追溯報告 | Windows、package、engine、adapter、帳戶、輸入、期望、實際、證據位置均須記錄 |
@@ -245,3 +245,15 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   非 root frontend.lock 的檔案雜湊。不可變 snapshot 核验維持原本嚴格規則。
   測試同時確認候選任何其他多檔在呼叫引擎前拒絕，以及 snapshot 多出 lock 仍拒絕。
   本機六組 C++、八項 Python 通過；Windows 重驗待結果。
+
+## 候選驗證 Windows 結果與回執讀取狀態檢查
+
+- `5a9ca83` / `36137575727`：兩固定引擎全部步驟成功；已讀取兩個 job
+  日誌，均確認 product candidate verifier 恢復真實歷史、凍結 SHA-256 證據、
+  錯誤答案拒絕且不重放／不啟用的 PASS。先前 live lock 完整性誤判已排除。
+- 這仍只是 single-session；不證明完整 profile 相容，不啟用候選。
+- 後續 TDD 發現回執讀取端未核對 candidate metadata 的 schema/state：
+  schema=2 的案例先在 rejectedMetadata 斷言失敗。補回與建立端一致的
+  schema=1 / state=staged 要求；測試包含未知／null schema、active／null state，
+  要求 E_CANDIDATE_DATA、回執不變，還原 metadata 後仍可核驗。
+  此修正的 Windows 回歸結果另行記錄，不以此前 CI 代替。
