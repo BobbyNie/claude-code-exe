@@ -206,6 +206,50 @@ class PackageAuditTests(unittest.TestCase):
             changed = self.audit.scan_directory(unpacked, ['restricted'], ['ccode.exe'])
             self.assertNotEqual(changed['files'], directory['files'])
 
+    def test_cli_pairs_archive_with_unpacked_contents_and_rejects_mismatch(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            unpacked = root / 'package'
+            unpacked.mkdir()
+            payload = b'MZoriginal'
+            (unpacked / 'ccode.exe').write_bytes(payload)
+            archive = root / 'package.zip'
+            with zipfile.ZipFile(archive, 'w') as bundle:
+                bundle.writestr('ccode.exe', payload)
+            command = [sys.executable, str(MODULE), str(archive), '--archive',
+                       '--unpacked', str(unpacked), '--restricted-name', 'restricted',
+                       '--opaque', 'ccode.exe']
+            paired = subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual(paired.returncode, 0, paired.stderr)
+            report = json.loads(paired.stdout)
+            self.assertEqual(report['status'], 'passed')
+            self.assertEqual(report['comparison'], 'matched')
+            self.assertEqual(report['archive']['files'], report['unpacked']['files'])
+            (unpacked / 'ccode.exe').write_bytes(b'MZchanged')
+            mismatch = subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual(mismatch.returncode, 1)
+            report = json.loads(mismatch.stdout)
+            self.assertEqual(report['comparison'], 'mismatched')
+            self.assertEqual(report['status'], 'failed')
+            self.assertEqual(report['archive']['status'], 'passed')
+            self.assertEqual(report['unpacked']['status'], 'passed')
+            (unpacked / 'ccode.exe').write_bytes(payload)
+            (unpacked / 'leftover.txt').write_bytes(b'neutral leftover')
+            leftover = subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual(leftover.returncode, 1)
+            self.assertEqual(json.loads(leftover.stdout)['comparison'], 'mismatched')
+            (unpacked / 'leftover.txt').unlink()
+            (unpacked / 'notice.txt').write_bytes(b'Restricted required notice')
+            with zipfile.ZipFile(archive, 'a') as bundle:
+                bundle.writestr('notice.txt', b'Restricted required notice')
+            conflict = subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual(conflict.returncode, 1)
+            report = json.loads(conflict.stdout)
+            self.assertEqual(report['comparison'], 'matched')
+            self.assertEqual(report['status'], 'failed')
+            self.assertEqual(report['archive']['status'], 'failed')
+            self.assertEqual(report['unpacked']['status'], 'failed')
+
     def test_archive_delivery_filename_is_not_exempted_as_a_user_parent(self):
         with tempfile.TemporaryDirectory() as temporary:
             archive = Path(temporary) / 'Restricted-release.zip'

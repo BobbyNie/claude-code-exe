@@ -45,3 +45,23 @@ if ($LASTEXITCODE -ne 0) { throw 'Archive delivery name audit failed' }
 錯誤。非零均阻止該項放行。兩種輸入都要實際跑，不能拿單元測試或只掃描壓縮前
 目錄代替交付 ZIP 驗收。還要將報告關聯至正式包 hash、版本、平台及帳戶等全量
 驗收 metadata，並另行完成來源、通知、再分發批准及可信簽名門檻。
+
+## ZIP 與解包候選配對
+
+正式候選另需比對两種形式的普通檔案清單、大小及 SHA-256，不能只確認兩份報告
+各自通過。可在一次操作中掃描並比較（工具不負責解包）：
+
+```powershell
+python C:\source\scripts\ccode\package_audit.py C:\candidates\ccode.zip --archive `
+  --unpacked C:\candidates\ccode --restricted-name restricted-example `
+  --opaque ccode.exe > C:\evidence\paired-names.json
+if ($LASTEXITCODE -ne 0) { throw 'Paired delivery name audit failed' }
+```
+
+成功要求雙方名稱掃描通過，且普通檔案相對路徑、大小及內容雜湊完全一致。
+任一側新增／遺失檔案、大小寫不同或內容改變均使配對失敗。報告保留 `archive`
+及 `unpacked` 子報告；`comparison: matched` 單獨不代表通過，必須檢查總體
+`status` 與退出碼，因為相同的必要通知可能同時觸犯名稱政策。
+空目錄仍各自接受名稱檢查，但不列入普通檔案一致性比較；這不是檔案權限、時間、
+NTFS alternate streams 或完整檔案系統 metadata 的等價證明。固定候選／停寫要求
+維持不變。`--unpacked` 不可脫離 `--archive` 使用。

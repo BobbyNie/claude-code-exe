@@ -177,14 +177,24 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('root', help='Unpacked delivery directory; user-selected parent names are excluded')
     parser.add_argument('--archive', action='store_true', help='Scan ZIP members without extracting')
+    parser.add_argument('--unpacked', help='With --archive, verify the corresponding unpacked directory')
     parser.add_argument('--restricted-name', action='append', required=True,
                         help='Case-insensitive prohibited public name; repeat for each name')
     parser.add_argument('--opaque', action='append', default=[],
                         help='Exact relative .exe/.dll path whose original contents are outside naming scope')
     options = parser.parse_args()
+    if options.unpacked and not options.archive:
+        parser.error('--unpacked requires --archive')
     try:
         scan = scan_archive if options.archive else scan_directory
         report = scan(options.root, options.restricted_name, options.opaque)
+        if options.unpacked:
+            unpacked = scan_directory(options.unpacked, options.restricted_name, options.opaque)
+            matched = report['files'] == unpacked['files']
+            passed = matched and report['status'] == unpacked['status'] == 'passed'
+            report = {'schema': 1, 'status': 'passed' if passed else 'failed',
+                      'comparison': 'matched' if matched else 'mismatched',
+                      'archive': report, 'unpacked': unpacked}
     except ValueError as error:
         print(json.dumps({'schema': 1, 'status': 'error', 'code': str(error)}))
         return 2
