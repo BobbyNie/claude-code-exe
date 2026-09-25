@@ -399,6 +399,32 @@ int main() try {
     assert(ccode::ResolveActiveProfile(activationRoot, engine) == activationRoot / "candidates" / historyId / "profile");
     assert(ccode::CandidateFiles(activationRoot / "profile", testDigest) == beforeActivation);
     assert(!fs::exists(activationRoot / "active-profile.json.pending"));
+    // A second activation must replace an existing pointer, not only create one.
+    const auto firstActive = ccode::ResolveActiveProfile(activationRoot, engine);
+    Write(firstActive / "later-source.txt", "preserve first active writes");
+    const auto firstActiveFiles = ccode::CandidateFiles(firstActive, testDigest);
+    const auto nextSnapshot = ccode::CreateProfileSnapshot(firstActive, activationRoot / "snapshots", secondId, testDigest);
+    const auto nextCandidate = ccode::StageProfileCandidate(nextSnapshot, activationRoot / "candidates", secondId, testDigest);
+    ccode::ValidateProfileCandidate(nextCandidate, nextSnapshot, firstActive,
+        activationRoot / "verified", secondId, root, "", engine, testDigest, {},
+        [](const fs::path&, const fs::path&, const std::string&, const std::string&) { return true; });
+    const auto oldPointerBytes = Read(activationRoot / "active-profile.json");
+    Write(activationRoot / "active-profile.json.pending", "interrupted second activation");
+    bool secondPendingRejected = false;
+    try { ccode::ActivateProfileCandidate(activationRoot, secondId, engine, testDigest); }
+    catch (const std::runtime_error& error) { secondPendingRejected = std::string(error.what()) == "E_ACTIVATION_PENDING"; }
+    assert(secondPendingRejected && Read(activationRoot / "active-profile.json") == oldPointerBytes);
+    assert(ccode::ResolveActiveProfile(activationRoot, engine) == firstActive);
+    assert(Read(activationRoot / "active-profile.json.pending") == "interrupted second activation");
+    fs::remove(activationRoot / "active-profile.json.pending");
+    ccode::ActivateProfileCandidate(activationRoot, secondId, engine, testDigest);
+    assert(ccode::ResolveActiveProfile(activationRoot, engine) == nextCandidate / "profile");
+    assert(ccode::CandidateFiles(firstActive, testDigest) == firstActiveFiles);
+    const auto secondPointerBytes = Read(activationRoot / "active-profile.json");
+    bool alreadyActive = false;
+    try { ccode::ActivateProfileCandidate(activationRoot, secondId, engine, testDigest); }
+    catch (const std::runtime_error& error) { alreadyActive = std::string(error.what()) == "E_ACTIVATION_ALREADY_ACTIVE"; }
+    assert(alreadyActive && Read(activationRoot / "active-profile.json") == secondPointerBytes);
     auto partialReceipt = allReceipt;
     partialReceipt["sessions"].erase(1);
     Write(allCandidate / "validation.json", partialReceipt.dump());

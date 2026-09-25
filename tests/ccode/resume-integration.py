@@ -443,6 +443,41 @@ def verify(executable):
         assert profile_bytes(all_frozen / "profile") == all_saved
         assert profile_bytes(all_root / "profile") != all_saved, "New turns must write selected live profile"
         print("PASS: activation rejects changed source, commits verified pointer without API, and restarts both workspaces with preserved history and unchanged backups")
+        # Exercise replacement of an existing pointer, not just its first creation.
+        def active_command(*arguments):
+            result = subprocess.run([str(executable), *arguments], cwd=executable.parent,
+                                    env=all_env, capture_output=True, text=True, encoding="utf-8", timeout=120)
+            assert result.returncode == 0, result
+            return result
+
+        live_before_replacement = profile_bytes(all_root / "profile")
+        next_snapshot_id = str(uuid.UUID(active_command("--snapshot-profile").stdout.strip()))
+        next_id = str(uuid.UUID(active_command("--stage-profile", next_snapshot_id).stdout.strip()))
+        active_command("--validate-profile", next_id, "--all-sessions")
+        old_pointer = (all_data / "active-profile.json").read_bytes()
+        pending_pointer = all_data / "active-profile.json.pending"
+        pending_pointer.write_text("interrupted replacement evidence", encoding="utf-8")
+        requests.clear()
+        interrupted = subprocess.run([str(executable), "--activate-profile", next_id],
+                                     cwd=executable.parent, env=all_env, capture_output=True,
+                                     text=True, encoding="utf-8", timeout=60)
+        assert interrupted.returncode == 64 and interrupted.stderr.strip() == "E_ACTIVATION_PENDING", interrupted
+        assert (all_data / "active-profile.json").read_bytes() == old_pointer
+        assert pending_pointer.read_text(encoding="utf-8") == "interrupted replacement evidence"
+        assert profile_bytes(all_root / "profile") == live_before_replacement and not requests
+        # Test fixture cleanup only; the product never deletes pending evidence.
+        pending_pointer.unlink()
+        active_command("--activate-profile", next_id)
+        assert json.loads((all_data / "active-profile.json").read_text(encoding="utf-8"))["candidateId"] == next_id
+        assert profile_bytes(all_root / "profile") == live_before_replacement
+        assert profile_bytes(all_profile) == active_all_before and not requests
+        repeated_pointer = (all_data / "active-profile.json").read_bytes()
+        repeated = subprocess.run([str(executable), "--activate-profile", next_id], cwd=executable.parent,
+                                  env=all_env, capture_output=True, text=True, encoding="utf-8", timeout=60)
+        assert repeated.returncode == 64 and repeated.stderr.strip() == "E_ACTIVATION_ALREADY_ACTIVE", repeated
+        assert (all_data / "active-profile.json").read_bytes() == repeated_pointer
+        print("PASS: second activation preserves old pointer on pending conflict, replaces it on success, and rejects reactivation without data changes")
+
 
 
     finally:
