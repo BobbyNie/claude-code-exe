@@ -23,8 +23,8 @@ inline Json CandidateFiles(const std::filesystem::path& directory, const Snapsho
     Json files = Json::object();
     for (const auto& entry : fs::recursive_directory_iterator(profile)) {
         const auto name = entry.path().lexically_relative(profile).generic_u8string();
-        if (name == "frontend.lock") continue;
         if (entry.is_symlink()) throw std::runtime_error("E_CANDIDATE_DATA");
+        if (name == "frontend.lock") continue;
         if (entry.is_directory()) continue;
         if (!entry.is_regular_file()) throw std::runtime_error("E_CANDIDATE_DATA");
         files[name] = {{"sha256", digest(entry.path())}, {"size", entry.file_size()}};
@@ -100,8 +100,14 @@ inline Json ValidateProfileCandidate(const std::filesystem::path& candidatePath,
         !metadata.contains("sourceSnapshotId") || metadata["sourceSnapshotId"] != sourceSnapshot.filename().u8string())
         throw std::runtime_error("E_CANDIDATE_DATA");
     const auto source = VerifyProfileSnapshot(sourceSnapshot, digest);
-    const auto initial = VerifyProfileSnapshot(candidate, digest);
-    if (initial["files"] != source["files"]) throw std::runtime_error("E_CANDIDATE_CHANGED");
+    // A live candidate has frontend.lock while an immutable snapshot must not.
+    // Validate the full expected manifest and all non-lock files without relaxing
+    // VerifyProfileSnapshot's strict rejection of extra backup files.
+    auto expectedManifest = source;
+    expectedManifest["snapshotId"] = metadata["candidateId"];
+    if (ReadCandidateDocument(candidate / "manifest.json") != expectedManifest ||
+        CandidateFiles(candidate / "profile", digest) != source["files"])
+        throw std::runtime_error("E_CANDIDATE_CHANGED");
     const auto expected = CandidateHistoryText(candidate / "profile", workspace, session);
     if (!probe(candidatePath / "profile", session, expected)) throw std::runtime_error("E_CANDIDATE_HISTORY");
     if (VerifyProfileSnapshot(sourceSnapshot, digest) != source ||

@@ -237,3 +237,11 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   核對、錯誤答案拒絕及不重放、不啟用、來源不變斷言，尚待 CI 驗證。
 - 使用／失敗重試限制見 `docs/candidate-validation.md`。原子啟用、完整歷史驗證範圍、
   來源已變更衝突、回滾等門檻仍保留，未由本切片取代。
+
+- `16396cf` / `36137123613`：兩版本 public candidate verifier 均因
+  `E_SNAPSHOT_INTEGRITY` 失敗。候選在驗證前持有新增 `frontend.lock`，卻誤用不可變
+  snapshot 的完全相同檔案清單檢查；本機補同樣的 live lock fixture 後重現紅燈。
+- 修正候選入口：將初始 manifest 與來源核對（僅候選 UUID 不同），再核對候選所有
+  非 root frontend.lock 的檔案雜湊。不可變 snapshot 核验維持原本嚴格規則。
+  測試同時確認候選任何其他多檔在呼叫引擎前拒絕，以及 snapshot 多出 lock 仍拒絕。
+  本機六組 C++、八項 Python 通過；Windows 重驗待結果。

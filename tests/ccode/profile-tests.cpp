@@ -180,8 +180,27 @@ int main() try {
             {"message", {{"role", "user"}, {"content", "private historical marker"}}}}.dump() + "\n");
     const auto probeSnapshot = ccode::CreateProfileSnapshot(candidateProfile, snapshots, historyId, testDigest);
     const auto probeCandidate = ccode::StageProfileCandidate(probeSnapshot, root / "probe-candidates", historyId, testDigest);
+    // The public command holds a live profile lock, excluded from snapshot data.
+    Write(probeCandidate / "profile/frontend.lock", "operational lock");
     assert(ccode::CandidateHistoryText(probeCandidate / "profile", root, historyId) == "private historical marker");
     const ccode::Json engine = {{"version", "test-engine"}, {"sha256", std::string(64, 'e')}};
+    // Ignoring the operational lock must not permit any other extra file.
+    Write(probeCandidate / "profile/unexpected.bin", "unexpected");
+    bool rejectedExtra = false, ranUnexpectedProbe = false;
+    try {
+        ccode::ValidateProfileCandidate(probeCandidate, probeSnapshot, root / "verified", snapshotId,
+            root, historyId, engine, testDigest, [&](const fs::path&, const std::string&, const std::string&) {
+                ranUnexpectedProbe = true; return true;
+            });
+    } catch (const std::runtime_error& error) { rejectedExtra = std::string(error.what()) == "E_CANDIDATE_CHANGED"; }
+    assert(rejectedExtra && !ranUnexpectedProbe);
+    fs::remove(probeCandidate / "profile/unexpected.bin");
+    Write(probeSnapshot / "profile/frontend.lock", "unexpected snapshot lock");
+    bool rejectedSnapshotLock = false;
+    try { ccode::VerifyProfileSnapshot(probeSnapshot, testDigest); }
+    catch (const std::runtime_error& error) { rejectedSnapshotLock = std::string(error.what()) == "E_SNAPSHOT_INTEGRITY"; }
+    assert(rejectedSnapshotLock);
+    fs::remove(probeSnapshot / "profile/frontend.lock");
     bool failedProbe = false;
     try {
         ccode::ValidateProfileCandidate(probeCandidate, probeSnapshot, root / "verified", snapshotId,
