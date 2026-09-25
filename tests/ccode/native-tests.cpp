@@ -58,6 +58,14 @@ int main() {
     } else {
         std::cout << "SKIP: runtime symlink test requires link creation privilege\n";
     }
+    fs::create_hard_link(outside, runtime / "engine.new");
+    bool hardLinkRejected = false;
+    try { ValidateRuntimePaths(root, hash); }
+    catch (const std::runtime_error& error) { hardLinkRejected = std::string(error.what()) == "E_RUNTIME_PATH"; }
+    assert(hardLinkRejected);
+    { std::ifstream input(outside); std::string contents; std::getline(input, contents);
+      assert(contents == "preserve-outside"); }
+    fs::remove(runtime / "engine.new");
     fs::create_directory(runtime / "engine.exe");
     bool invalidType = false;
     try { ValidateRuntimePaths(root, hash); }

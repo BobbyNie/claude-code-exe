@@ -33,6 +33,10 @@ inline void ValidateRuntimePaths(const std::filesystem::path& program, const std
         const bool directory = path == root || path == runtime;
         if (linked || (directory ? !fs::is_directory(status) : !fs::is_regular_file(status)))
             throw std::runtime_error("E_RUNTIME_PATH");
+        if (!directory) {
+            const auto links = fs::hard_link_count(path, error);
+            if (error || links != 1) throw std::runtime_error("E_RUNTIME_PATH");
+        }
     }
 }
 }

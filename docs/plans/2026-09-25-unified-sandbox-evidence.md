@@ -1382,3 +1382,15 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   繼續健康解出及損壞快取修復驗收。該 Windows 案例尚未跑，不算通過。
 - 本機六組 C++ 全部通過；Python 47 項中 46 通過、1 Windows 專用跳過；
   diff 檢查通過。沒有降低任何原有長 cwd、TLS、console 或正式交付門檻。
+
+### Runtime 解出候選硬連結保護
+
+- 延續連結檢查，以真正 hard link 將 engine.new 與外部 sentinel 連在一起；
+  原 ValidateRuntimePaths 將其當普通檔案接受，測試在 hardLinkRejected 斷言
+  實際 RED。新增普通 runtime 檔案 link count 必須為 1，查詢失敗亦拒絕，
+  測試 GREEN，外部內容保留。不改動正常快取核對／修復路徑。
+- 新增 Windows 真實 CLI hard-link 案例：建立候選硬連結，要求退出 64、只有
+  E_RUNTIME_PATH、sentinel 位元組不變且未解出 engine.exe；清理只移除本案例
+  建立的硬連結，再接續正常引擎驗收。此 Windows 案例尚未執行。
+- 本機六組 C++ 全部通過；Python 47 項：46 通過、1 Windows 專用跳過；diff
+  檢查通過。檢查／開啟間的 TOCTOU 限制仍保留，不能宣稱同身份攻擊隔離。

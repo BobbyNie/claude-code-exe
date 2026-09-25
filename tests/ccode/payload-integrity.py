@@ -145,6 +145,21 @@ def check(executable):
             assert sentinel.read_bytes() == b'outside-runtime-preservation'
         finally:
             os.rmdir(junction)  # Remove the junction itself, never its target contents.
+        runtime_directory = root / 'runtime' / metadata['sha256']
+        runtime_directory.mkdir(parents=True)
+        linked_candidate = runtime_directory / 'engine.new'
+        os.link(sentinel, linked_candidate)
+        try:
+            rejected = subprocess.run([str(candidate), '--data-dir', str(data), '--print',
+                                       'integrity-test-only'], cwd=root, env=environment,
+                                      input=b'', capture_output=True, timeout=30)
+            assert rejected.returncode == 64, 'Hard-linked extraction candidate was not rejected'
+            assert rejected.stdout == b'' and rejected.stderr.strip() == b'E_RUNTIME_PATH'
+            assert sentinel.read_bytes() == b'outside-runtime-preservation', 'Hard-link target changed'
+            assert linked_candidate.read_bytes() == sentinel.read_bytes()
+            assert not (runtime_directory / 'engine.exe').exists(), 'Engine was extracted through hard link'
+        finally:
+            linked_candidate.unlink()
         with rejecting_gateway() as gateway:
             environment['A_BASE_URL'] = gateway.url
             extracted = root / 'runtime' / metadata['sha256'] / 'engine.exe'
