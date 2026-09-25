@@ -2,7 +2,7 @@ name: Test ccode Windows runtime
 
 on:
   push:
-    branches: ['codex/fix-ccode-runtime-paths']
+    branches: ['codex/fix-ccode-runtime-paths', 'codex/unified-sandbox-design']
   pull_request:
     paths: ['scripts/ccode/**', 'tests/ccode/**', '.github/workflows/test-ccode.yml']
   workflow_dispatch:
@@ -13,7 +13,7 @@ permissions:
 jobs:
   test:
     runs-on: windows-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -35,6 +35,9 @@ jobs:
           python -m unittest discover -s tests -v
           if ($LASTEXITCODE -ne 0) { throw 'Python tests failed' }
           ./scripts/ccode/test-windows.ps1 -Executable ./ccode.exe
+      - name: Test portable frontend contract
+        shell: pwsh
+        run: python tests/ccode/portable-integration.py ./ccode.exe
       - uses: actions/upload-artifact@v4
         with:
           name: ccode-windows-tested-${{ matrix.version }}
