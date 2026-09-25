@@ -132,6 +132,13 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   兩版本 Windows 全部步驟成功，日誌均確認 picker 多輪和重啟 continue 的 PASS。
   此案例透過 stdin 操作文字 picker，不等同真實 console 按鍵測試；API 為本機 fixture。
 
+- 工作區會話索引整合：`session-index.hpp` 在 profile 鎖內，以持久 workspace UUID
+  建立 `session-index/<uuid>.json`，接入啟動列表及 picker。索引只存 ID、摘要、原生
+  修改時間、來源引擎版本與 discovered 狀態；discovered 不宣稱版本相容或已恢復。
+  每次由原生 JSONL 重建，不讀快取作會話存在／續接判定；刪除／損壞快取不改寫歷史。
+  本機 TDD 先確認新入口缺失，再完成實作及六組 C++ 回歸；Windows 擴充測試待驗。
+  UUID 已接入列表／picker 的索引生命週期，仍未完成工作區搬移、相容性判定及候選遷移。
+
 ## 下一批實施順序
 
 1. 驗證實際工具端到端，處理揭露的缺陷；補取消／權限／進程樹及路徑邊界。

@@ -16,6 +16,7 @@ inline bool ValidSessionId(const std::string& id) {
 }
 struct Session {
     std::string id, title;
+    std::string engineVersion;
     std::filesystem::file_time_type modified;
 };
 inline bool SameWorkspace(const std::filesystem::path& a, const std::filesystem::path& b) {
@@ -62,7 +63,10 @@ inline std::vector<Session> ListSessions(const std::filesystem::path& projects,
                     event["message"]["content"].is_string())
                     title = ConsoleText(event["message"]["content"].get<std::string>());
                 std::replace(title.begin(), title.end(), '\n', ' ');
-                result.push_back({id, title, file.last_write_time()});
+                std::string version;
+                if (event.contains("version") && event["version"].is_string())
+                    version = event["version"].get<std::string>();
+                result.push_back({id, title, version, file.last_write_time()});
                 break;
             }
         }

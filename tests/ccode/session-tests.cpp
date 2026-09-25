@@ -1,5 +1,6 @@
 #include "../../scripts/ccode/sessions.hpp"
 #include "../../scripts/ccode/workspaces.hpp"
+#include "../../scripts/ccode/session-index.hpp"
 #include <cassert>
 #include <chrono>
 #include <iostream>
@@ -12,7 +13,7 @@ int main() {
     const std::string id = "12345678-1234-1234-1234-123456789abc";
     { std::ofstream out(project / (id + ".jsonl"));
       out << ccode::Json{{"type", "user"}, {"sessionId", id}, {"cwd", root.u8string()},
-        {"isSidechain", false}, {"message", {{"role", "user"}, {"content", "hello history"}}}}.dump() << '\n';
+        {"isSidechain", false}, {"version", "2.1.221"}, {"message", {{"role", "user"}, {"content", "hello history"}}}}.dump() << '\n';
       out << "{truncated"; }
     auto sessions = ccode::ListSessions(root / "projects", root);
     assert(sessions.size() == 1 && sessions[0].id == id);
@@ -20,6 +21,38 @@ int main() {
     assert(ccode::ListSessions(root / "projects", root / "other").empty());
     assert(!ccode::ValidSessionId("../../escape"));
     assert(!ccode::ValidSessionId("123"));
+    // The frontend cache follows persistent workspace identity, while the native
+    // transcript remains authoritative even when a cache is corrupt or deleted.
+    const auto indexedProfile = root / "indexed-profile";
+    const auto indexedProjects = indexedProfile / "home" / ".claude" / "projects";
+    fs::create_directories(indexedProjects / "native-key");
+    const auto source = indexedProjects / "native-key" / (id + ".jsonl");
+    fs::copy_file(project / (id + ".jsonl"), source);
+    auto indexed = ccode::ListWorkspaceSessions(indexedProfile, root);
+    assert(indexed.size() == 1 && indexed[0].id == id);
+    const auto workspaceIdentity = ccode::ResolveWorkspace(indexedProfile / "workspaces.json", root);
+    const auto indexPath = indexedProfile / "session-index" / (workspaceIdentity + ".json");
+    auto loadIndex = [&]() {
+        std::ifstream input(indexPath);
+        return ccode::Json::parse(input);
+    };
+    auto index = loadIndex();
+    assert(index["schema"] == 1 && index["workspaceId"] == workspaceIdentity);
+    assert(index["sessions"].size() == 1);
+    assert(index["sessions"][0]["id"] == id);
+    assert(index["sessions"][0]["summary"] == "hello history");
+    assert(index["sessions"][0]["availability"] == "discovered");
+    assert(index["sessions"][0].contains("modified"));
+    assert(index["sessions"][0]["engineVersion"] == "2.1.221");
+    { std::ofstream output(indexPath); output << "{broken cache"; }
+    assert(ccode::ListWorkspaceSessions(indexedProfile, root).size() == 1);
+    assert(loadIndex() == index);
+    fs::remove(indexPath);
+    assert(ccode::ListWorkspaceSessions(indexedProfile, root).size() == 1);
+    assert(loadIndex() == index);
+    fs::remove(source);
+    assert(ccode::ListWorkspaceSessions(indexedProfile, root).empty());
+    assert(loadIndex()["sessions"].empty());
     // Corrupt identity metadata must fail with a neutral, stable classification,
     // never disappear as an empty history or expose a JSON-library exception.
     const auto transcript = project / (id + ".jsonl");

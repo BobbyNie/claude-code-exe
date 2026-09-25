@@ -106,6 +106,30 @@ def verify(executable):
         # Derive the selection from the actual public list, not a guessed index.
         selection = re.search(r"(?m)^(\d+)\. " + re.escape(session) + r"  ", listed.stdout)
         assert selection, "Known session absent from public history list"
+        profile = executable.parent / "data/cc/profile"
+        identity = subprocess.run([str(executable), "--workspace-id"], cwd=executable.parent,
+                                  env=env, capture_output=True, text=True, encoding="utf-8", timeout=30)
+        assert identity.returncode == 0, identity.stderr
+        workspace_id = str(uuid.UUID(identity.stdout.strip()))
+        index_path = profile / "session-index" / (workspace_id + ".json")
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+        assert index["workspaceId"] == workspace_id
+        assert any(item["id"] == session and item["availability"] == "discovered"
+                   for item in index["sessions"]), "Workspace index omitted authoritative session"
+        native_files = {path: path.read_bytes() for path in (profile / "home/.claude/projects").rglob("*.jsonl")}
+        assert native_files
+        for damage in ("corrupt", "delete"):
+            if damage == "corrupt":
+                index_path.write_text('{"sessions":[{"id":"fabricated-cache-session"}]}', encoding="utf-8")
+            else:
+                index_path.unlink()
+            rebuilt = subprocess.run([str(executable), "--sessions"], cwd=executable.parent,
+                                     env=env, capture_output=True, text=True, encoding="utf-8", timeout=30)
+            assert rebuilt.returncode == 0 and session in rebuilt.stdout, rebuilt
+            assert "fabricated-cache-session" not in rebuilt.stdout
+            assert json.loads(index_path.read_text(encoding="utf-8")) == index
+            assert all(path.read_bytes() == saved for path, saved in native_files.items())
+        print("PASS: workspace UUID session index rebuilds from unchanged native history, never stale cache")
         first = "picker-first-turn-marker-4816"
         second = "picker-second-turn-marker-8527"
         requests.clear()

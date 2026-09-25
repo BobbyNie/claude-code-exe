@@ -13,6 +13,7 @@
 #include "profile.hpp"
 #include "sessions.hpp"
 #include "workspaces.hpp"
+#include "session-index.hpp"
 #include "permission.hpp"
 
 namespace fs = std::filesystem;
@@ -329,7 +330,7 @@ void PrintSessions(const std::vector<ccode::Session>& sessions) {
         std::cout << i + 1 << ". " << sessions[i].id << "  " << sessions[i].title << '\n';
 }
 void PickSession(const fs::path& profile, std::string& session) {
-    auto sessions = ccode::ListSessions(profile / L"home" / L".claude" / L"projects", fs::current_path());
+    auto sessions = ccode::ListWorkspaceSessions(profile, fs::current_path());
     PrintSessions(sessions);
     if (sessions.empty()) return;
     std::cout << "Session number (Enter cancels): " << std::flush;
@@ -381,7 +382,7 @@ int Main(int argc, wchar_t** argv) {
     const auto workspaceId = ccode::ResolveWorkspace(profile / L"workspaces.json", fs::current_path());
     if (options.workspaceId) { std::cout << workspaceId << '\n'; return 0; }
     ccode::RestoreLegacyProfile(profile / L"home");
-    auto sessions = ccode::ListSessions(profile / L"home" / L".claude" / L"projects", fs::current_path());
+    auto sessions = ccode::ListWorkspaceSessions(profile, fs::current_path());
     if (options.sessions) { PrintSessions(sessions); return 0; }
     if (options.latest) {
         if (sessions.empty()) throw std::runtime_error("E_NO_SESSION");
