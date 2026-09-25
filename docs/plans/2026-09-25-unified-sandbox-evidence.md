@@ -1332,3 +1332,21 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   掃描仍檢查兩側目錄。此為驗收工具門檻，正式候選及 Windows 實驗仍未完成。
 - 完整 Python 回歸 44 項：43 通過、1 Windows 專用跳過；diff 格式檢查通過。
   本輪沒有執行新的 Windows CI，未增加任何正式交付放行宣稱。
+
+### A03／A20 內嵌原始負載篡改：新增獨立 Windows 驗收門檻
+
+- 新增 `tests/ccode/payload-integrity.py`：以 Windows data-only resource loading
+  讀取原始負載及 metadata，先獨立計算 SHA-256 確認一致，再於臨時封裝副本的
+  唯一完整負載中改變一個位元組。原始建置、前端其他位元組及 metadata 不修改。
+- 驗收要求健康副本 self-test 成功；受損副本 self-test 與一般 `--print` 啟動
+  均退出 64、stdout 空、stderr 只有 E_CHECKSUM；整個臨時根目錄不得產生
+  engine.exe 或 JSONL。一般啟動僅提供假 token 及 loopback URL。
+- TDD：先因 fixture 不存在 RED，再驗證只改一個指定負載位元組、拒絕找不到／
+  多份負載及不符 checksum 的 fixture。workflow guard 先因缺少步驟 RED，再加入
+  兩版本獨立必跑門檻；不允許 continue-on-error，不讓其他驗收失敗遮蔽本案例。
+- 本機完整 Python 46 項：45 通過、1 Windows 專用跳過。新增 Windows resource
+  讀取及實際封裝篡改啟動案例尚未執行；本機 fixture GREEN 不是 A03／A20 通過。
+  此案例也不替代簽章失敗、更新中斷、可信來源／隨包來源清單及回退全矩陣。
+- 本輪重新查閱 Actions run list 與 `108261875239` annotation：最新可見 run
+  仍為 `36192868765` 的未啟動帳戶限制失敗，沒有新的 Windows 結果；歷史
+  annotation 不能證明帳戶現在已修復或仍未修復，沒有盲目重跑或更改計費。

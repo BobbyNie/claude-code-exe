@@ -47,6 +47,10 @@ jobs:
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         shell: pwsh
         run: python tests/ccode/tools-integration.py ./ccode.exe --workspace-aliases-only
+      - name: Reject tampered embedded payload
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        shell: pwsh
+        run: python tests/ccode/payload-integrity.py ./ccode.exe
       - name: Verify actual engine gateway rejection
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         shell: pwsh
