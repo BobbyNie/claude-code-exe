@@ -5,11 +5,61 @@ import os
 from pathlib import Path
 import shutil
 import socket
+import ssl
 import subprocess
 import sys
 import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+
+@contextmanager
+def untrusted_tls_endpoint():
+    """Loopback-only TLS fixture; the checked-in key is public test data, never trusted by the engine."""
+    fixtures = Path(__file__).parent / "fixtures"
+    certificate = fixtures / "untrusted-test-cert.pem"
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(certificate, fixtures / "untrusted-test-key.pem")
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *_):
+            pass
+
+        def do_GET(self):
+            self.server.http_requests += 1
+            self.send_response(503)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        do_POST = do_GET
+
+    class Server(ThreadingHTTPServer):
+        def get_request(self):
+            connection, address = super().get_request()
+            connection.settimeout(2)
+            try:
+                return context.wrap_socket(connection, server_side=True), address
+            except ssl.SSLError:
+                self.rejected.set()
+                connection.close()
+                raise
+            except OSError:
+                connection.close()
+                raise
+
+    server = Server(("127.0.0.1", 0), Handler)
+    server.address = server.server_address
+    server.certificate = certificate
+    server.rejected = threading.Event()
+    server.http_requests = 0
+    worker = threading.Thread(target=server.serve_forever, daemon=True)
+    worker.start()
+    try:
+        yield server
+    finally:
+        server.shutdown()
+        server.server_close()
+        worker.join(timeout=5)
 
 
 @contextmanager
@@ -54,6 +104,43 @@ def check_unreachable(executable):
         assert not list(workspace.iterdir()), "Unreachable gateway changed workspace"
         assert not list(program.rglob("*.jsonl")), "History leaked into program directory"
         print("PASS: actual engine unreachable gateway terminates with neutral error, no workspace writes or terminal secret disclosure")
+
+
+def check_tls_rejection(executable):
+    with tempfile.TemporaryDirectory(prefix="ccode-tls-") as folder:
+        root = Path(folder).resolve()
+        program, workspace, data = root / "program", root / "workspace", root / "data"
+        program.mkdir()
+        workspace.mkdir()
+        app = program / "ccode.exe"
+        shutil.copy2(executable, app)
+        token = "fixture-tls-dummy-token-31827"
+        prompt = "fixture-private-tls-prompt-63418"
+        env = {key: value for key, value in os.environ.items()
+               if not key.startswith(("A_", "C_", "ANTHROPIC_", "CLAUDE_", "CCODE_"))
+               and key not in ("NODE_TLS_REJECT_UNAUTHORIZED", "NODE_EXTRA_CA_CERTS",
+                               "SSL_CERT_FILE", "SSL_CERT_DIR")}
+        with untrusted_tls_endpoint() as endpoint:
+            env.update(A_AUTH_TOKEN=token,
+                       A_BASE_URL=f"https://127.0.0.1:{endpoint.server_port}")
+            try:
+                result = subprocess.run([str(app), "--data-dir", str(data), "--print",
+                    "--tools", "", prompt], cwd=workspace, env=env, input="",
+                    capture_output=True, text=True, encoding="utf-8", timeout=60)
+            except subprocess.TimeoutExpired:
+                raise AssertionError("Untrusted TLS gateway did not terminate within 60 seconds") from None
+            assert endpoint.rejected.is_set(), "No failed TLS handshake observed from actual engine"
+            assert endpoint.http_requests == 0, "Engine bypassed TLS trust and sent an HTTP request"
+        terminal = result.stdout + result.stderr
+        assert result.returncode != 0, "Untrusted TLS gateway turn incorrectly succeeded"
+        assert token not in terminal and prompt not in terminal, "Private TLS fixture data leaked"
+        assert not list(workspace.iterdir()), "Failed TLS changed workspace"
+        assert not list(program.rglob("*.jsonl")), "History leaked into program directory"
+        classifications = {code: code in terminal for code in
+                           ("E_GATEWAY_TLS", "E_GATEWAY_RETRY", "E_ENGINE_API", "E_ENGINE_RESULT")}
+        assert classifications["E_GATEWAY_TLS"], (
+            "TLS failure needs its distinct neutral diagnostic: " + json.dumps(classifications))
+        print("PASS: actual engine rejects untrusted TLS before HTTP, with TLS classification and no workspace writes or terminal secret disclosure")
 
 
 def unfinished_tool_events(model, target, marker, complete_arguments=False):
@@ -208,3 +295,4 @@ if __name__ == "__main__":
     check_rejection(executable, 200, None, "E_", stream_cut=True)
     check_rejection(executable, 200, None, "E_", stream_cut=True, graceful_eof=True)
     check_rejection(executable, 200, None, "E_", stream_cut=True, graceful_eof=True, complete_arguments=True)
+    check_tls_rejection(executable)

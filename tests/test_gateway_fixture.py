@@ -2,6 +2,7 @@
 import importlib.util
 import json
 import socket
+import ssl
 from pathlib import Path
 import unittest
 
@@ -21,6 +22,19 @@ class GatewayFixtureTests(unittest.TestCase):
             with socket.socket() as competitor:
                 with self.assertRaises(OSError):
                     competitor.bind(address)
+
+    def test_tls_endpoint_rejects_untrusted_certificate_but_accepts_explicit_trust(self):
+        with fixture.untrusted_tls_endpoint() as endpoint:
+            with socket.create_connection(endpoint.address, timeout=2) as connection:
+                with self.assertRaises(ssl.SSLCertVerificationError):
+                    ssl.create_default_context().wrap_socket(connection, server_hostname="127.0.0.1")
+            self.assertTrue(endpoint.rejected.wait(2), "No actual failed TLS handshake observed")
+            trusted = ssl.create_default_context(cafile=str(endpoint.certificate))
+            with socket.create_connection(endpoint.address, timeout=2) as connection:
+                with trusted.wrap_socket(connection, server_hostname="127.0.0.1") as secure:
+                    secure.sendall(b"GET / HTTP/1.0\r\nHost: localhost\r\n\r\n")
+                    self.assertIn(b"503", secure.recv(4096))
+            self.assertEqual(endpoint.http_requests, 1)
 
     def test_complete_arguments_still_lack_block_and_message_termination(self):
         events = fixture.unfinished_tool_events("fixture-model", "target.txt", "marker", True)
