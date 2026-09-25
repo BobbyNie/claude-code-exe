@@ -44,5 +44,34 @@ class ResumeFixtureTests(unittest.TestCase):
         self.assertEqual(resume.fixture_answer(messages, self.markers), "resume-test-ok")
 
 
+
+
+class PointerFaultFixtureTests(unittest.TestCase):
+    def test_replacement_lock_is_released_even_on_test_failure(self):
+        import ctypes
+        from unittest.mock import Mock, patch
+        kernel = Mock()
+        kernel.CreateFileW.return_value = 123
+        kernel.CloseHandle.return_value = 1
+        with patch.object(ctypes, "WinDLL", return_value=kernel, create=True):
+            with self.assertRaisesRegex(RuntimeError, "test failure"):
+                with resume.deny_pointer_replacement(Path("active-profile.json")):
+                    kernel.CloseHandle.assert_not_called()
+                    raise RuntimeError("test failure")
+        kernel.CreateFileW.assert_called_once_with("active-profile.json", 0x80000000, 3, None, 3, 0, None)
+        kernel.CloseHandle.assert_called_once_with(123)
+
+    def test_failed_lock_acquisition_does_not_run_fault_case(self):
+        import ctypes
+        from unittest.mock import Mock, patch
+        kernel = Mock()
+        kernel.CreateFileW.return_value = ctypes.c_void_p(-1).value
+        with patch.object(ctypes, "WinDLL", return_value=kernel, create=True):
+            with self.assertRaisesRegex(AssertionError, "replacement lock"):
+                with resume.deny_pointer_replacement(Path("active-profile.json")):
+                    self.fail("Fault precondition was not established")
+        kernel.CloseHandle.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,4 +1,5 @@
 """Exercise real --resume against a local fake API, without user credentials."""
+from contextlib import contextmanager
 import hashlib
 import json
 import os
@@ -9,6 +10,25 @@ import sys
 import threading
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+
+@contextmanager
+def deny_pointer_replacement(pointer):
+    """Real Windows sharing violation: allow reads/writes, forbid delete/rename."""
+    import ctypes
+    from ctypes import wintypes as w
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.CreateFileW.argtypes = [w.LPCWSTR, w.DWORD, w.DWORD, ctypes.c_void_p,
+                                  w.DWORD, w.DWORD, w.HANDLE]
+    kernel.CreateFileW.restype = w.HANDLE
+    kernel.CloseHandle.argtypes = [w.HANDLE]
+    kernel.CloseHandle.restype = w.BOOL
+    handle = kernel.CreateFileW(str(pointer), 0x80000000, 3, None, 3, 0, None)
+    assert handle != ctypes.c_void_p(-1).value, "Cannot establish pointer replacement lock"
+    try:
+        yield
+    finally:
+        assert kernel.CloseHandle(handle), "Cannot release pointer replacement lock"
 
 
 def prepare(executable):
@@ -471,10 +491,37 @@ def verify(executable):
         assert not pending_pointer.exists()
         assert (all_data / "active-profile.json").read_bytes() == old_pointer
         assert not requests
+        # An OS sharing violation exercises the actual commit failure path,
+        # unlike a manually created pending file. No product fault-injection flag.
+        frozen_before_failure = profile_bytes(all_data / "verified")
+        snapshots_before_failure = profile_bytes(all_data / "snapshots")
+        candidate_before_failure = profile_bytes(all_data / "candidates" / next_id / "profile")
+        with deny_pointer_replacement(all_data / "active-profile.json"):
+            failed_commit = subprocess.run([str(executable), "--activate-profile", next_id],
+                                           cwd=executable.parent, env=all_env, capture_output=True,
+                                           text=True, encoding="utf-8", timeout=60)
+        assert failed_commit.returncode == 64 and failed_commit.stderr.strip() == "E_ACTIVATION_WRITE", failed_commit
+        assert (all_data / "active-profile.json").read_bytes() == old_pointer
+        failed_pending = pending_pointer.read_bytes()
+        assert json.loads(failed_pending)["candidateId"] == next_id
+        assert profile_bytes(all_root / "profile") == live_before_replacement
+        assert profile_bytes(all_data / "candidates" / next_id / "profile") == candidate_before_failure
+        assert profile_bytes(all_data / "verified") == frozen_before_failure
+        assert profile_bytes(all_data / "snapshots") == snapshots_before_failure
+        assert not requests
+        retry_before_recovery = subprocess.run([str(executable), "--activate-profile", next_id],
+                                               cwd=executable.parent, env=all_env, capture_output=True,
+                                               text=True, encoding="utf-8", timeout=60)
+        assert retry_before_recovery.returncode == 64 and retry_before_recovery.stderr.strip() == "E_ACTIVATION_PENDING", retry_before_recovery
+        assert pending_pointer.read_bytes() == failed_pending
+        failure_archive_id = str(uuid.UUID(active_command("--archive-activation-pending").stdout.strip()))
+        assert (all_data / "activation-recovery" / failure_archive_id / "pending.json").read_bytes() == failed_pending
+        assert (all_data / "active-profile.json").read_bytes() == old_pointer
         active_command("--activate-profile", next_id)
         assert json.loads((all_data / "active-profile.json").read_text(encoding="utf-8"))["candidateId"] == next_id
         assert profile_bytes(all_root / "profile") == live_before_replacement
         assert profile_bytes(all_profile) == active_all_before and not requests
+        print("PASS: real Windows pointer replacement failure preserves committed state and pending evidence; explicit archive permits verified retry without API")
         repeated_pointer = (all_data / "active-profile.json").read_bytes()
         repeated = subprocess.run([str(executable), "--activate-profile", next_id], cwd=executable.parent,
                                   env=all_env, capture_output=True, text=True, encoding="utf-8", timeout=60)

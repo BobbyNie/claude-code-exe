@@ -434,3 +434,18 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - Windows 公共流程不再刪除 synthetic pending，改用真正歸檔命令；新增損壞
   正式指標、二進位截斷 pending、無 API／不建立 profile 與混合參數拒絕案例。
   這些新增 Windows 案例待 CI；不是磁碟滿／強制中斷／跨引擎回滾全部完成。
+
+## Windows 真實指標替換失敗故障案例（新增案例待驗）
+
+- `7befb21` / `36145555370` 已完成 success；已讀取兩個 job 的日誌，均有
+  pending 原始 bytes 歸檔、損壞正式指標不變／不建立 profile、二次啟用 PASS。
+- 新增真正的 OS 故障案例：以 Windows handle 允許正式指標讀写但不分享 delete，
+  再呼叫公開 --activate-profile，要求 E_ACTIVATION_WRITE；不是預先放入 pending
+  來模擬提交失敗，也沒有增加可由使用者啟用的產品故障開關。
+- 案例檢查舊指標逐位元組不變、來源／候選／快照／verified 副本不變、零 API；
+  真正寫出的 pending 綁定預期候選，未歸檔重試仍拒絕；釋鎖後公開歸檔保持
+  pending bytes，再完整驗證啟用成功。fault handle 即使斷言失敗也釋放。
+- TDD：fixture helper 測試先因缺 API 紅燈，再加入取得／釋放 handle 實作通過；
+  本機 19 項 Python、語法與 diff 檢查通過。Windows 行為以後續 run 為準，
+  本機 Mock 只驗證 fixture 控制流程，不證明 OS rename 故障已驗收。
+- 磁碟滿、真正進程強制中斷、跨引擎回退及完整企業端點驗收仍未完成。
