@@ -84,7 +84,8 @@ def verify(executable):
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    env = os.environ.copy()
+    env = {key: value for key, value in os.environ.items()
+           if not key.startswith(("A_", "C_", "ANTHROPIC_", "CLAUDE_", "CCODE_"))}
     env.update(A_AUTH_TOKEN="test-only-token", A_BASE_URL=f"http://127.0.0.1:{server.server_port}")
     session = (executable.parent / "resume-fixture-id.txt").read_text().strip()
     try:
@@ -96,6 +97,50 @@ def verify(executable):
         assert any("legacy-resume-marker-7391" in json.dumps(request.get("messages", []))
                    for request in requests), "Official runtime did not load legacy session history"
         print("ccode official --resume integration test passed")
+        legacy = executable.parent / "data/cc/profile/home/.cc/projects"
+        originals = {path: path.read_bytes() for path in legacy.rglob("*.jsonl")}
+        assert originals, "Missing authoritative legacy fixture"
+        listed = subprocess.run([str(executable), "--sessions"], cwd=executable.parent,
+                                env=env, capture_output=True, text=True, encoding="utf-8", timeout=30)
+        assert listed.returncode == 0, listed.stderr
+        # Derive the selection from the actual public list, not a guessed index.
+        selection = re.search(r"(?m)^(\d+)\. " + re.escape(session) + r"  ", listed.stdout)
+        assert selection, "Known session absent from public history list"
+        first = "picker-first-turn-marker-4816"
+        second = "picker-second-turn-marker-8527"
+        requests.clear()
+        picked = subprocess.run([str(executable), "--resume"], cwd=executable.parent,
+                                env=env, input=f"{selection[1]}\n{first}\n{second}\n/exit\n",
+                                capture_output=True, text=True, encoding="utf-8", timeout=120)
+        assert picked.returncode == 0, picked.stdout + picked.stderr
+        assert "Selected " + session in picked.stdout, picked.stdout
+        assert picked.stdout.count("resume-test-ok") >= 2, picked.stdout
+
+        def has_history(current, required):
+            # Inspect actual upstream messages; UI labels alone cannot prove resume.
+            for request in requests:
+                messages = request.get("messages", [])
+                if not messages or current not in json.dumps(messages[-1]):
+                    continue
+                history = json.dumps(messages[:-1])
+                if all(marker in history for marker in required):
+                    return True
+            return False
+
+        assert has_history(first, ["legacy-resume-marker-7391"]), "Picker lost historical context"
+        assert has_history(second, ["legacy-resume-marker-7391", first]), "Second turn lost session context"
+        print("PASS: public history picker resumes real engine and preserves context across two turns")
+        requests.clear()
+        continued = "continue-after-restart-marker-9638"
+        result = subprocess.run([str(executable), "--continue", "--print", continued],
+                                cwd=executable.parent, env=env, capture_output=True,
+                                text=True, encoding="utf-8", timeout=60)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "resume-test-ok" in result.stdout, result.stdout
+        assert has_history(continued, ["legacy-resume-marker-7391", first, second]), "Continue lost saved turns"
+        assert all(path.read_bytes() == saved for path, saved in originals.items()), "Legacy source changed"
+        print("PASS: restart and continue load both saved turns without modifying legacy source")
+
     finally:
         server.shutdown()
         server.server_close()
