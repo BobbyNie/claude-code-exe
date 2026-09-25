@@ -208,7 +208,7 @@ int PermissionServer() {
 struct Options {
     bool print = false, sessions = false, resumePicker = false, latest = false, workspaceId = false, snapshotProfile = false, allSessions = false, archivePending = false;
     fs::path data;
-    std::string prompt, session, stageSnapshot, validateCandidate, activateCandidate;
+    std::string prompt, session, stageSnapshot, validateCandidate, activateCandidate, rollbackSnapshot;
     std::vector<std::wstring> engine;
 };
 Options Parse(int argc, wchar_t** argv, const fs::path& module) {
@@ -227,6 +227,11 @@ Options Parse(int argc, wchar_t** argv, const fs::path& module) {
         else if (!literal && arg == L"--sessions") options.sessions = true;
         else if (!literal && arg == L"--workspace-id") options.workspaceId = true;
         else if (!literal && arg == L"--snapshot-profile") options.snapshotProfile = true;
+        else if (!literal && arg == L"--prepare-rollback") {
+            if (!options.rollbackSnapshot.empty()) throw std::runtime_error("E_ARGUMENT");
+            options.rollbackSnapshot = Utf8(next());
+            if (!ccode::ValidSessionId(options.rollbackSnapshot)) throw std::runtime_error("E_SNAPSHOT_ID");
+        }
         else if (!literal && arg == L"--stage-profile") options.stageSnapshot = Utf8(next());
         else if (!literal && arg == L"--archive-activation-pending") options.archivePending = true;
         else if (!literal && arg == L"--activate-profile") options.activateCandidate = Utf8(next());
@@ -277,6 +282,11 @@ Options Parse(int argc, wchar_t** argv, const fs::path& module) {
         throw std::runtime_error("E_ARGUMENT");
     if (options.snapshotProfile && (options.print || options.sessions || options.resumePicker ||
         options.latest || options.workspaceId || options.allSessions || options.archivePending ||
+        !options.session.empty() || !options.stageSnapshot.empty() || !options.validateCandidate.empty() ||
+        !options.activateCandidate.empty() || !options.prompt.empty() || !options.engine.empty()))
+        throw std::runtime_error("E_ARGUMENT");
+    if (!options.rollbackSnapshot.empty() && (options.print || options.sessions || options.resumePicker ||
+        options.latest || options.workspaceId || options.allSessions || options.archivePending || options.snapshotProfile ||
         !options.session.empty() || !options.stageSnapshot.empty() || !options.validateCandidate.empty() ||
         !options.activateCandidate.empty() || !options.prompt.empty() || !options.engine.empty()))
         throw std::runtime_error("E_ARGUMENT");
@@ -422,6 +432,7 @@ int Main(int argc, wchar_t** argv) {
             "  --model NAME           Select a model\n"
             "  --workspace-id         Show persistent workspace identity\n"
             "  --snapshot-profile     Create verified backup; print snapshot ID\n"
+            "  --prepare-rollback ID  Preserve active data and prepare old snapshot; print JSON\n"
             "  --stage-profile ID     Copy verified snapshot to isolated candidate\n"
             "  --validate-profile ID  Verify candidate (--resume ID or --all-sessions)\n"
             "  --all-sessions         Verify every top-level session in its workspace\n"
@@ -455,11 +466,19 @@ int Main(int argc, wchar_t** argv) {
         return 0;
     }
     const Json selectedEngine = {{"version", metadata.at("version")}, {"sha256", metadata.at("sha256")}};
-    auto profile = options.snapshotProfile ? ccode::ResolveProfileForBackup(options.data) :
+    auto profile = (options.snapshotProfile || !options.rollbackSnapshot.empty()) ? ccode::ResolveProfileForBackup(options.data) :
         ccode::ResolveActiveProfile(options.data, selectedEngine);
     fs::create_directories(profile);
     Handle lock(CreateFileW((profile / L"frontend.lock").c_str(), GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (!lock.valid()) throw std::runtime_error("E_PROFILE_BUSY");
+    if (!options.rollbackSnapshot.empty()) {
+        const auto rollbackId = ccode::NewWorkspaceId();
+        const auto preservationId = ccode::NewWorkspaceId();
+        const auto plan = ccode::PrepareProfileRollback(options.data, options.rollbackSnapshot,
+            rollbackId, preservationId, selectedEngine, FileDigest);
+        std::cout << plan.dump(2) << '\n';
+        return 0;
+    }
     if (!options.activateCandidate.empty()) {
         const auto candidate = options.data / L"candidates" / Wide(options.activateCandidate);
         const auto candidateProfile = candidate / L"profile";

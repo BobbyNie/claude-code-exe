@@ -105,3 +105,22 @@ ccode.exe --data-dir DATA --validate-profile CANDIDATE_ID --all-sessions
 這是回退前保留現有資料的操作，不是相容性認證。一般會話、候選驗證及啟用仍
 拒絕引擎不符。尚未提供完整跨引擎回退命令，也不能把備份成功視為舊引擎可讀
 新版資料；相容快照選擇、目標引擎實際驗證和回退提交仍需完成。
+
+## 回退準備（不是回退完成）
+
+```powershell
+ccode.exe --data-dir DATA --prepare-rollback SNAPSHOT_ID
+```
+
+使用預計回退到的程式版本執行，明確指定先前保留的快照 UUID。此命令不需要
+API 憑證、不啟動引擎，不能混用其他操作、模型選項或提示。即使目前 active
+記錄的是另一個引擎，只要指標及回執身份一致，仍可先保全資料。
+
+命令先核驗來源，完整備份目前 active，再把指定舊快照複製到
+`DATA/rollback-candidates/UUID`。stdout 回傳 JSON 準備計畫，包括 candidateId、
+sourceSnapshotId、preservationSnapshotId、priorActivePointer、targetEngine 及 adapter；
+同份計畫保存在候選的 rollback.json。正式指標與現有歷史不變，不盲目合併。
+
+**prepared 不代表相容，也不會啟用候選。** 目標引擎全會話驗證與原子回退提交
+仍待實作；不可把此目錄搬入普通 candidates 或手動修改 active 指標以繞過驗證。
+若中途失敗，保留已產生的備份／候選供核對，不自動清理或重放。

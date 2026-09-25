@@ -497,3 +497,17 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - 本機六組 C++、19 項 Python 通過；本次新增核心 Windows 案例待 CI。
   本切片尚無公開回退命令，仍欠 CLI、目標引擎全會話驗證及原子回退提交，
   不能宣稱完整回退或整體驗收完成。中途失敗保留資料，不自動刪除或重放。
+
+## 公開回退準備命令（Windows 綠燈待驗）
+
+- 前一核心提交 `af44625` / `36148280161` 已查核 completed/success。
+- 測試先行提交 `4b8cf4f` / `36148513947` 兩版本皆在公開
+  --prepare-rollback 測試失敗；已讀取兩 job 日誌，確定原因為
+  E_UNSUPPORTED_OPTION，而非既有會話回歸。
+- 接上 --prepare-rollback SNAPSHOT_ID：保持資料根／active profile 排他鎖，
+  採備份專用 active 選取，呼叫準備核心後回傳 JSON 計畫；禁止混用其他操作，
+  不要求憑證、不啟動引擎。候選留在獨立 rollback-candidates。
+- Windows 測試使用真實會話加 synthetic 引擎身份差異，檢查明確選舊快照、
+  最新 active 的保全快照、原指標與來源不變、無 API、無相容驗證回執。
+  這不是兩個真實版本間的相容性驗收。本機六組 C++、19 項 Python 通過；
+  新 launcher 公開行為須由下一輪 Windows CI 證明，完整回退仍未完成。
