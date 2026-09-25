@@ -70,7 +70,7 @@ def check_lifecycle(app, workspace, data, env, mode):
             kernel.FreeConsole()
 
 
-def check(executable, short_path=False, lifecycle=None, permission=None):
+def check(executable, short_path=False, lifecycle=None, permission=None, long_workspace=False):
     with tempfile.TemporaryDirectory(prefix="ccode-tools-") as temporary:
         root = Path(temporary).resolve()
         if short_path:
@@ -85,9 +85,12 @@ def check(executable, short_path=False, lifecycle=None, permission=None):
             assert "~" in str(root), "Runner must support 8.3 names for this acceptance case"
         app_dir = root / "portable app 中文"
         workspace = root / "workspace 中文 with spaces"
+        if long_workspace:
+            workspace = workspace / ("long-segment-" * 10) / ("nested-segment-" * 8)
+            assert len(str(workspace)) > 260
         data = root / "persistent data"
         app_dir.mkdir()
-        workspace.mkdir()
+        workspace.mkdir(parents=True)
         app = app_dir / "ccode.exe"
         shutil.copy2(executable, app)
         target = workspace / "claude-anthropic-original.txt"
@@ -266,6 +269,8 @@ def check(executable, short_path=False, lifecycle=None, permission=None):
             assert list(data.rglob("*.jsonl")), "No authoritative session was saved"
             assert not list(app_dir.rglob("*.dll")), "Unexpected injected runtime"
             print("PASS: real Write/Edit/Read/Grep/Glob/Bash; Unicode/spaces; external data; fragmented arguments")
+            if long_workspace:
+                print("PASS: all six actual tools execute with workspace cwd beyond 260 characters")
         finally:
             server.shutdown()
             server.server_close()
@@ -274,6 +279,7 @@ def check(executable, short_path=False, lifecycle=None, permission=None):
 if __name__ == "__main__":
     executable = Path(sys.argv[1]).resolve()
     check(executable)
+    check(executable, long_workspace=True)
     check(executable, short_path=True)
     check(executable, lifecycle="cancel")
     check(executable, lifecycle="crash")
