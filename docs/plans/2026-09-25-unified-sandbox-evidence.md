@@ -1106,3 +1106,14 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   在 Windows 必須 captured 且當前進程有 threads；不以 mock 宣稱 API 已驗證。
 - 這是為定位間歇停滯補證據，不是停滯修復；失敗時才記錄快照，不引入
   自動重試、放寬超時或 continue-on-error。Windows 實際收集與根因仍待驗。
+
+### 進程診斷 Windows 真實 API 驗證
+
+- `8a2ac80` / `36185827200` 已等待至終態並核對日誌。兩版本 Python 30 項
+  通過，Windows 專用 test_windows_process_diagnostics_capture_actual_live_threads
+  明確 ok：確實取得存活進程及執行緒，不是只驗 mock 白名單輸出。
+- 兩版本主測試、console allow／deny／cancel 與 cross-version 均成功；本轮
+  未重現停滯，沒有 DIAGNOSTIC timeout 快照。因此只證明收集器在正常 Windows
+  進程可用，不能證明停滯根因或宣稱已修復。後續遇到停滯仍須讀取現場證據。
+- 兩版本 long-workspace 的實際日誌仍為 CreateProcess WinError 267；整體
+  failure，全部未完成門檻保留，未用成功主測試替代完整驗收。
