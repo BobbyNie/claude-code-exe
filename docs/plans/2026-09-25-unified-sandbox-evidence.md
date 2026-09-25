@@ -765,3 +765,17 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - 整體 workflow 仍為 failure：long-workspace jobs `108169153499` 與
   `108169153585` 均 WinError 267，已核對日誌。不得將一般回歸成功寫成全量成功。
 - A10 仍缺實際串流中斷／gateway 故障端到端證據；A08 超長 cwd 仍未完成。
+
+### A18 401 故障：確認重複請求並固定禁止自動重試
+
+- `14338ad` / `36164951835` 兩版本 gateway rejection 超過 60 秒失敗。
+  `bc0d68a` / `36165902295` 補安全診斷後仍失敗；兩版本均收到 7 次
+  `/v1/messages`，stdout/stderr 皆為 0 bytes。不能宣稱遮罩或錯誤分類已通過，
+  也未僅因逾時就擅自增加時間或刪除不重放斷言。
+- 2026-09-26 查閱官方環境變量文件
+  https://code.claude.com/docs/en/env-vars.md ：提供 CLAUDE_CODE_MAX_RETRIES、
+  CLAUDE_CODE_RETRY_WATCHDOG、CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK。
+  子進程環境在別名展開後固定為 0、0、1，避免繼承設定重新啟用自動重試／後備請求。
+- 環境測試先在 MAX_RETRIES=0 斷言 RED，修復後六組本機 C++ 與 20 項 Python
+  GREEN；包含呼叫者用中性別名嘗試覆寫的案例。真實兩版本引擎的 401 行為仍待
+  Windows CI 證明，設定存在不等於引擎端到端已合格。整體仍未放行。
