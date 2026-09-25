@@ -28,14 +28,14 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 | A05 | 資料分離 | --data-dir、獨立 profile；工具 integration 檢查程式區無 session | 更新、搬移、重新打包排除資料、程式區無 temp 全面快照 |
 | A06 | 路徑一致 | runtime-paths.js 真實 mkdir/stat/讀寫/列舉/刪除/子進程 | 重命名、同工作區真實工具鏈和故障結果完整證據 |
 | A07 | 執行檔 | `36123600008` 兩版本通過：空格／中文程式與工作區、前端→真正 Grep/Glob；既有自啟動測試亦通過 | 本條所列 CI 場景通過；乾淨端點證據仍依 A01 |
-| A08 | 路徑邊界 | 工具 fixture 含中文／空格 | 長路徑、大小寫、junction；UNC 支援界線與明確拒絕／驗證 |
+| A08 | 路徑邊界 | 工具 fixture 含中文／空格；`87f7065` / `36135890793` 兩版本快照／候選超過 260 字元測試通過 | 全工具／全工作區長路徑、大小寫、junction；UNC 支援界線與明確拒絕／驗證 |
 | A09 | 基本工具 | tools-integration.py 驅動真實 Write/Edit/Read/Grep/Glob/Bash | 兩版本一般完整路徑工具成功與 8.3 短路徑拒絕已驗證；仍欠批准／取消、政策退出碼、實際 gateway 試運行 |
 | A10 | 串流 JSON | frontend-tests.cpp 每個文字 UTF-8 byte 分片點；穩定錯誤碼、失敗不可重啟 | `0097a5a` 補工具 JSON 每個 byte 分片點、無效 UTF-8、超限、缺終止／截斷後不可復活；仍欠大小邊界、斷流／故障端到端 |
 | A11 | 工具名稱 | init 宣告工具清單；空名、未知名、空／重複 ID、錯誤參數分類 | 缺終止事件、所有狀態轉移與新版本／擴展的真實事件相容 |
 | A12 | 權限 | PermissionRpc 預設拒絕；interactive console；Job Object；`e22cd72` / `36124014490` 兩版本真實 Bash→PowerShell 後代在 Ctrl+Break／前端強制終止後退出，無延遲寫入 | `cacdb06` / `36129711620` 兩版本真實 console 批准／拒絕／等待批准中取消通過；`199b57b` 同 profile 故障後重啟亦通過；仍需目標普通帳戶端點證據 |
 | A13 | 歷史 | --sessions、--resume、--continue、/resume；fixture 驗證請求歷史標記 | `6c92fdd` / `36131964792` 兩版本列表→選擇→兩輪→重啟 continue 通過；仍欠完整損壞資料可用性分類及穩定工作區 UUID 整合 |
 | A14 | 升級／搬移 | runtime 按 hash 分區；資料不綁 runtime hash | 引擎／profile 相容 manifest、重啟／搬移／更新／回退實測 |
-| A15 | 遷移 | 舊版 CopyMissing 保留來源及現有檔案；profile 測試 | 備份+hash、隔離候選、引擎驗證後原子切換、磁碟滿／中斷重試 |
+| A15 | 遷移 | SHA-256 快照、核驗後隔離候選；`87f7065` / `36135890793` 兩版本真實引擎在候選恢復多輪歷史，來源與備份逐位元組不變 | 產品內建引擎驗證回執及完整遷移流程、重名衝突處理、原子切換、磁碟滿／中斷重試 |
 | A16 | 並發 | profile-wide 排他鎖 | 故障釋鎖已由 `199b57b` 實測；仍欠同 session 單寫入、多 session 同工作區 |
 | A17 | 擴展 | CLI 參數可接設定／MCP／agents | 技能、子代理、核准 MCP 真實流程及明確版本相容矩陣 |
 | A18 | 網路 | gateway 設定入口；不宣稱 OS 網路隔離 | 不可達、TLS、過期憑證、429、斷流分類；不重放寫入；核准端點部署政策 |
@@ -205,3 +205,20 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   目的地後未轉成 Windows 原生分隔符；補在最終 I/O 邊界正規化分隔符，
   不更改 manifest 格式。既有短路徑及新長路徑測試全部保留，本機回歸通過，
   Windows 再驗中。
+
+## 快照紅燈結案證據（仍非整體放行）
+
+- 修復提交：`87f7065b1499b4c005460af526b0e901a4b6e074`。
+- Windows CI：`36135890793`，兩版本 `2.1.221`、`2.1.282` 全部成功。
+- 已查核兩個 job 的實際日誌，而非僅看綠色圖示：
+  - `Checking snapshot destination beyond 260 characters` 之後 profile tests 通過。
+  - `PASS: actual engine resumes isolated candidate history while active profile and backup remain byte-identical`。
+  - SHA-256 清單由 Python hashlib 獨立核對通過。
+  - 候選副本及篡改／缺檔／多檔／穿越拒絕案例通過。
+- 真實引擎測試經歷原始歷史、picker 兩輪及 restart continue 後，再建立快照／候選。
+  隔離候選恢復後的實際模型請求包含以上歷史標記，新輪次只落在候選；原 profile
+  與整個 snapshot 保持逐位元組一致。API 仍為本機 fixture，不代表企業端點驗收。
+- 前述 `57f660e` 真實 profile 快照紅燈，以及 `6bc5c0b` 最小長路徑紅燈已排除；
+  既有短路徑回歸亦通過。未縮短工作區／暫存路徑、未刪除失敗案例、未跳過資料。
+- 候選仍只有 `staged` 狀態，沒有產品級可信驗證回執、原子 active 指標或回滾流程。
+  下一步必須補這些狀態與對應故障驗收；不能把本次成功視為 A15 全部完成。
