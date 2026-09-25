@@ -157,4 +157,5 @@ ccode.exe --data-dir DATA --activate-rollback CANDIDATE_ID
 成功後原子切換 schema 2 回退指標，保留舊 active 與保全快照；重複啟用拒絕。
 若存在 pending 證據，先核對再使用既有明確歸檔命令，不手動覆寫或自動重放。
 
-公開提交的 Windows 端到端結果待 CI；這不代表真實跨版本回退或企業驗收完成。
+公開提交、Windows 替換失敗恢復及真正 2.1.221 → 2.1.282 → 2.1.221 回退
+已通過 CI（詳見驗收證據台帳）；模型回覆仍使用本機 API fixture，不代表企業驗收完成。

@@ -772,6 +772,39 @@ def verify(executable, previous_executable=None):
             assert profile_bytes(cross_source) == cross_source_bytes
             print("PASS: actual engines 2.1.221 -> 2.1.282 -> 2.1.221 preserve original history and newer data through verified rollback")
 
+            requests.clear()
+            active_after_rollback = cross_data / "rollback-candidates" / cross_id / "profile"
+            active_before_refusal = profile_bytes(active_after_rollback)
+            incompatible = subprocess.run([str(executable), "--sessions"], cwd=executable.parent,
+                env=cross_offline, capture_output=True, text=True, encoding="utf-8", timeout=60)
+            assert incompatible.returncode == 64 and incompatible.stderr.strip() == "E_ACTIVE_PROFILE", incompatible
+            assert profile_bytes(active_after_rollback) == active_before_refusal and not requests
+            identity_before_move = cross_command(previous_executable, "--workspace-id", offline=True).stdout.strip()
+            assert str(uuid.UUID(identity_before_move)) == identity_before_move
+            relocated_directory = executable.parent / "搬移 portable program"
+            relocated_directory.mkdir()
+            relocated_binary = relocated_directory / "ccode.exe"
+            shutil.move(str(previous_executable), relocated_binary)
+            assert not previous_executable.exists()
+            program_before = profile_bytes(relocated_directory)
+            identity_after_move = cross_command(relocated_binary, "--workspace-id", offline=True).stdout.strip()
+            assert identity_after_move == identity_before_move
+            assert cross_session in cross_command(relocated_binary, "--sessions", offline=True).stdout
+            assert not requests
+            cross_command(relocated_binary, "--resume", cross_session, "--print", "after program directory relocation")
+            assert len(requests) == 1
+            assert history_markers[0] in json.dumps(requests[0].get("messages", [])[:-1])
+            assert "after actual version rollback" in json.dumps(requests[0].get("messages", [])[:-1])
+            assert newer_marker not in json.dumps(requests[0].get("messages", []))
+            assert profile_bytes(relocated_directory) == program_before, "Program move must not redirect data into delivery files"
+            assert profile_bytes(next_profile) == newer_bytes
+            assert profile_bytes(cross_preserved) == newer_bytes
+            assert profile_bytes(cross_data / "profile") == legacy_bytes
+            assert profile_bytes(cross_source) == cross_source_bytes
+            assert json.loads((cross_data / "active-profile.json").read_text(encoding="utf-8")) == final_pointer
+            print("PASS: incompatible actual engine refuses selected profile; moved program preserves workspace identity, resumed history, and separate data")
+
+
 
 
 

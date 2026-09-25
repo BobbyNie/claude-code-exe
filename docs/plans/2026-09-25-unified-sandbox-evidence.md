@@ -646,3 +646,17 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - TDD 新增 standalone preparation 測試先以 0 != 1 失敗，再令 prepare 自行用
   exclusive-create 建立獨立無效歷史 fixture。不改產品或放寬原拒絕斷言；不覆寫
   既有檔案。20 項 Python、語法與 diff 檢查通過，Windows 重跑待驗。
+
+### 真正跨版本回退通過／程式搬移驗收補強
+
+- `13847b5` / `36156944431` completed/success：單版本 `2.1.221`
+  job `108143678763`、`2.1.282` job `108143678939` 及 cross-version
+  job `108145290363` 均成功。已讀取跨版本日誌，確認 actual engines
+  2.1.221 -> 2.1.282 -> 2.1.221 preserve original history and newer data PASS。
+- 此證據是兩個真實引擎二進位的建立／升級驗證／新版寫入／舊版回退／恢復；
+  不是 synthetic metadata。模型仍為本機 API fixture，企業端點未因此通過。
+- 下一個測試增量：回退後新版實際引擎拒絕舊版 active 且資料不變；將舊版 exe
+  真正搬至空格／中文新目錄，沿用明確 data-dir 與原工作區，核對 UUID 不變、
+  會話可列出與實際恢復包含回退後輪次，搬移後程式目錄不產生動態資料。
+- 搬移／不相容新案例本機 20 項 Python、語法及 diff 檢查通過，Windows 待驗。
+  工作區本身搬移、資料根搬移、全部路徑邊界與其餘驗收門檻仍未完成。
