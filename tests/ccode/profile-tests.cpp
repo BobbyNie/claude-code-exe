@@ -279,6 +279,13 @@ int main() try {
     assert(inventory.size() == 2);
     assert(inventory[0].session == historyId && ccode::SameWorkspace(inventory[0].workspace, root));
     assert(inventory[1].session == secondId && ccode::SameWorkspace(inventory[1].workspace, workspaceTwo));
+    const auto invalidLegacy = inventoryProfile / "home/.claude/projects/legacy/old-session.jsonl";
+    Write(invalidLegacy, "legacy-session-marker");
+    bool unknownTranscript = false;
+    try { ccode::CandidateSessionInventory(inventoryProfile); }
+    catch (const std::runtime_error& error) { unknownTranscript = std::string(error.what()) == "E_CANDIDATE_HISTORY"; }
+    assert(unknownTranscript && Read(invalidLegacy) == "legacy-session-marker");
+    fs::remove(invalidLegacy);
     const auto secondSaved = Read(secondTranscript);
     Write(secondTranscript, secondSaved + "{truncated");
     bool badInventory = false;

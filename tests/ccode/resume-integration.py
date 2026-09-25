@@ -284,31 +284,54 @@ def verify(executable):
         assert not (profile.parent / "active-profile.json").exists()
         print("PASS: product candidate verifier checks real recovered history, freezes SHA256-bound evidence, and rejects a wrong answer without replay or activation")
 
-        # A second real engine session belongs to a different cwd, with a distinct marker.
+        # The legacy migration fixture deliberately contains invalid JSONL filenames.
+        # All-session validation must reject that profile rather than skip those files.
+        mixed_id = stage_again()
+        mixed_root = profile.parent / "candidates" / mixed_id
+        mixed_before = profile_bytes(mixed_root)
+        requests.clear()
+        mixed_result = subprocess.run([str(executable), "--validate-profile", mixed_id, "--all-sessions"],
+                                      cwd=executable.parent, env=env, capture_output=True,
+                                      text=True, encoding="utf-8", timeout=60)
+        assert mixed_result.returncode == 64 and mixed_result.stderr.strip() == "E_CANDIDATE_HISTORY", mixed_result
+        assert not requests and profile_bytes(mixed_root) == mixed_before
+        assert profile_bytes(profile) == active_before and profile_bytes(snapshot) == snapshot_before
+        print("PASS: all-session preflight rejects mixed invalid legacy transcripts without API requests or data changes")
+
+        # Use a separate profile of real engine-created sessions for the success case.
+        # Do not delete or rewrite the deliberately invalid original migration fixture.
         probe_reply_correct = True
+        all_data = executable.parent / "all sessions data"
+        all_env = dict(env, CCODE_DATA_DIR=str(all_data))
         other_workspace = executable.parent / "second 工作區"
         other_workspace.mkdir()
-        created = subprocess.run([str(executable), "--print", history_markers[1]], cwd=other_workspace,
-                                 env=env, capture_output=True, text=True, encoding="utf-8", timeout=60)
-        assert created.returncode == 0, created
-        other_list = subprocess.run([str(executable), "--sessions"], cwd=other_workspace,
-                                    env=env, capture_output=True, text=True, encoding="utf-8", timeout=30)
-        assert other_list.returncode == 0, other_list
-        other_match = re.search(r"(?m)^\d+\. ([0-9a-f-]{36})  ", other_list.stdout)
-        assert other_match, other_list.stdout
-        other_session = str(uuid.UUID(other_match[1]))
-        assert other_session != session
-        active_all_before = profile_bytes(profile)
+        real_sessions = set()
+        for workspace, marker in zip((executable.parent, other_workspace), history_markers):
+            created = subprocess.run([str(executable), "--print", marker], cwd=workspace,
+                                     env=all_env, capture_output=True, text=True, encoding="utf-8", timeout=60)
+            assert created.returncode == 0, created
+            listed_all = subprocess.run([str(executable), "--sessions"], cwd=workspace,
+                                        env=all_env, capture_output=True, text=True, encoding="utf-8", timeout=30)
+            assert listed_all.returncode == 0, listed_all
+            match = re.search(r"(?m)^\d+\. ([0-9a-f-]{36})  ", listed_all.stdout)
+            assert match, listed_all.stdout
+            real_sessions.add(str(uuid.UUID(match[1])))
+        assert len(real_sessions) == 2
+        all_profile = all_data / "profile"
+        active_all_before = profile_bytes(all_profile)
         all_backup = subprocess.run([str(executable), "--snapshot-profile"], cwd=executable.parent,
-                                    env=env, capture_output=True, text=True, encoding="utf-8", timeout=30)
+                                    env=all_env, capture_output=True, text=True, encoding="utf-8", timeout=30)
         assert all_backup.returncode == 0, all_backup
-        snapshot_id = str(uuid.UUID(all_backup.stdout.strip()))
-        all_snapshot = profile.parent / "snapshots" / snapshot_id
+        all_snapshot_id = str(uuid.UUID(all_backup.stdout.strip()))
+        all_snapshot = all_data / "snapshots" / all_snapshot_id
         all_snapshot_before = profile_bytes(all_snapshot)
-        all_id = stage_again()
+        all_staged = subprocess.run([str(executable), "--stage-profile", all_snapshot_id], cwd=executable.parent,
+                                    env=all_env, capture_output=True, text=True, encoding="utf-8", timeout=30)
+        assert all_staged.returncode == 0, all_staged
+        all_id = str(uuid.UUID(all_staged.stdout.strip()))
         requests.clear()
         all_result = subprocess.run([str(executable), "--validate-profile", all_id, "--all-sessions"],
-                                    cwd=executable.parent, env=env, capture_output=True,
+                                    cwd=executable.parent, env=all_env, capture_output=True,
                                     text=True, encoding="utf-8", timeout=120)
         assert all_result.returncode == 0, all_result
         assert "Verified candidate sessions: 2" in all_result.stdout
@@ -316,20 +339,21 @@ def verify(executable):
         assert len(requests) == 2, "All-session validation omitted or replayed a session"
         for marker in history_markers:
             assert sum(marker in json.dumps(request.get("messages", [])[:-1]) for request in requests) == 1
-        all_root = profile.parent / "candidates" / all_id
+        all_root = all_data / "candidates" / all_id
         all_receipt = json.loads((all_root / "validation.json").read_text(encoding="utf-8"))
         assert all_receipt["scope"] == "all-top-level-sessions"
-        assert {item["sessionId"] for item in all_receipt["sessions"]} == {session, other_session}
+        assert {item["sessionId"] for item in all_receipt["sessions"]} == real_sessions
         assert len({item["workspaceId"] for item in all_receipt["sessions"]}) == 2
         assert not any(marker in json.dumps(all_receipt) for marker in history_markers)
         all_saved = profile_bytes(all_root / "profile")
-        all_frozen = profile.parent / "verified" / str(uuid.UUID(all_receipt["verificationId"]))
+        all_frozen = all_data / "verified" / str(uuid.UUID(all_receipt["verificationId"]))
         assert all_saved == profile_bytes(all_frozen / "profile")
         assert all_receipt["files"] == {name: {"size": len(value), "sha256": hashlib.sha256(value).hexdigest()}
                                          for name, value in all_saved.items()}
-        assert profile_bytes(profile) == active_all_before
+        assert profile_bytes(all_profile) == active_all_before
         assert profile_bytes(all_snapshot) == all_snapshot_before
-        assert not (profile.parent / "active-profile.json").exists()
+        assert profile_bytes(profile) == active_before and profile_bytes(snapshot) == snapshot_before
+        assert not (all_data / "active-profile.json").exists()
         print("PASS: all-session candidate validation restores two real sessions in distinct workspaces with complete SHA256-bound receipt and unchanged source")
 
     finally:

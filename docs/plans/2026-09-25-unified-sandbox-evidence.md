@@ -290,3 +290,12 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   一次恢復請求、兩工作區 UUID、完整 hashlib 回執及來源／快照不變的公共 CLI 案例。
   尚待 Windows CI 結果，不以本機 callback 代替引擎驗收。
 - 不啟用候選；巢狀子代理及技能／MCP 相容、搬移與回退、完整交付／端點驗收仍未完成。
+
+- `6b6165a` / `36139798291`：兩版本均在新增 all_result 成功斷言失敗，
+  實際為退出 64 / E_CANDIDATE_HISTORY。測試共用了 legacy migration fixture，
+  其中刻意有 old-session.jsonl／existing-session.jsonl 非 UUID、非 JSON 資料。
+  本機重現這種資料被 inventory 拒絕。產品不能跳過它們後宣稱全部歷史通過。
+- 修正測試分組，不放寬產品：原混合 profile 新增零 API、候選／來源／備份不變的
+  明確拒絕案例；成功案例使用另一 data-dir，由真實引擎分別於兩工作區建立會話。
+  不刪除原 fixture，並在成功案例結束仍核對它與原 snapshot 不變。
+  六組 C++、八項 Python、語法及 diff 檢查通過；修正後 Windows 結果待驗。
