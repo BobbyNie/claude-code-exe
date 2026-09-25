@@ -56,6 +56,14 @@ def prepare(executable):
         "".join(json.dumps(message) + "\n" for message in messages), encoding="utf-8")
     (root / "resume-fixture-id.txt").write_text(session, encoding="utf-8")
 
+    # The all-session rejection case must not depend on the PowerShell caller
+    # having installed its separate migration-conflict fixtures first.
+    invalid_project = root / "data/cc/profile/home/.cc/projects/invalid-history-fixture"
+    invalid_project.mkdir(parents=True, exist_ok=True)
+    with (invalid_project / "invalid-session.jsonl").open("x", encoding="utf-8") as output:
+        output.write("invalid-history-fixture\n")
+
+
 
 def fixture_answer(messages, history_markers, probe_reply_correct=True):
     # Native engines may append system context after the current user turn.

@@ -635,3 +635,14 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   新版輪次確實落盤且完整保全，舊快照、舊 profile、新版 active 前後不變。
 - 本機 Python 語法、19 項回歸及 diff 檢查通過；真正跨版本結果尚待 Windows。
   模型回覆仍使用本機假 API，不能替代企業 gateway／乾淨端點驗收；整體未放行。
+
+### 跨版本驗收前置 fixture 修復
+
+- `2592c60` / `36156016696`：兩個單版本 job 成功，cross-version job
+  `108142325697` 失敗，尚未進入真正兩引擎生命週期。已讀取日誌，失敗位於
+  mixed-profile preflight 的零 API／候選不變斷言。
+- 原 verify 依賴 test-windows.ps1 額外建立的無效 JSONL 名稱；獨立 cross-version
+  job 只呼叫 prepare，缺少該前置條件，因此測試進入引擎驗證而非 preflight 拒絕。
+- TDD 新增 standalone preparation 測試先以 0 != 1 失敗，再令 prepare 自行用
+  exclusive-create 建立獨立無效歷史 fixture。不改產品或放寬原拒絕斷言；不覆寫
+  既有檔案。20 項 Python、語法與 diff 檢查通過，Windows 重跑待驗。

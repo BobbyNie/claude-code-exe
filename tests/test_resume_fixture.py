@@ -9,6 +9,18 @@ resume = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(resume)
 
 
+class PreparationFixtureTests(unittest.TestCase):
+    def test_standalone_preparation_includes_invalid_history_for_preflight(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            executable = Path(directory) / "ccode.exe"
+            resume.prepare(executable)
+            legacy = Path(directory) / "data/cc/profile/home/.cc/projects"
+            invalid = list(legacy.rglob("invalid-session.jsonl"))
+            self.assertEqual(len(invalid), 1)
+            self.assertEqual(invalid[0].read_text(encoding="utf-8"), "invalid-history-fixture\n")
+
+
 class ResumeFixtureTests(unittest.TestCase):
     markers = ["legacy-resume-marker-7391", "second-workspace-marker-6842"]
     probe = "For profile recovery verification, repeat the first user message."
