@@ -66,6 +66,25 @@ int main() {
     fs::remove(source);
     assert(ccode::ListWorkspaceSessions(indexedProfile, root).empty());
     assert(loadIndex()["sessions"].empty());
+    // A long external profile must preserve identity and rebuild its cache on restart.
+    const auto longProfile = root / std::string(150, 'p') / std::string(110, 'q');
+    assert(longProfile.wstring().size() > 260);
+    const auto longNative = longProfile / "home" / ".claude" / "projects" / "native-key";
+    fs::create_directories(ccode::NativeIoPath(longNative));
+    fs::copy_file(project / (id + ".jsonl"), ccode::NativeIoPath(longNative / (id + ".jsonl")));
+    std::cout << "Checking workspace identity and rebuilt index beyond 260 characters" << std::endl;
+    const auto longIdentity = ccode::ResolveWorkspace(longProfile / "workspaces.json", root);
+    assert(ccode::ValidSessionId(longIdentity));
+    const auto longListed = ccode::ListWorkspaceSessions(longProfile, root);
+    assert(longListed.size() == 1 && longListed[0].id == id);
+    const auto longIndex = ccode::NativeIoPath(longProfile / "session-index" / (longIdentity + ".json"));
+    { std::ifstream input(longIndex); const auto document = ccode::Json::parse(input);
+      assert(document["workspaceId"] == longIdentity && document["sessions"][0]["id"] == id); }
+    fs::remove(longIndex);
+    assert(ccode::ResolveWorkspace(longProfile / "workspaces.json", root) == longIdentity);
+    assert(ccode::ListWorkspaceSessions(longProfile, root).size() == 1);
+    assert(fs::exists(longIndex));
+    fs::remove_all(ccode::NativeIoPath(root / std::string(150, 'p')));
     // Corrupt identity metadata must fail with a neutral, stable classification,
     // never disappear as an empty history or expose a JSON-library exception.
     const auto transcript = project / (id + ".jsonl");
