@@ -2,9 +2,55 @@
 #include <cassert>
 #include <iostream>
 
+void ExpectError(ccode::EventReader& reader, const std::string& wire, const std::string& code) {
+    bool rejected = false;
+    try { reader.Feed(wire); }
+    catch (const std::runtime_error& error) { rejected = error.what() == code; }
+    assert(rejected);
+}
+
 int main() {
+    // Protocol errors are stable neutral codes, never parser diagnostics containing input.
+    ccode::EventReader invalidJson;
+    ExpectError(invalidJson, "{secret-token:bad}\n", "E_PROTOCOL_JSON");
+    // Every byte boundary, including within UTF-8, must preserve a complete event.
+    const std::string wire = u8"{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"中文🙂\"}]}}\n"
+        "{\"type\":\"result\",\"subtype\":\"success\"}\n";
+    for (size_t split = 0; split <= wire.size(); ++split) {
+        ccode::EventReader fragmented;
+        auto output = fragmented.Feed(wire.substr(0, split));
+        output += fragmented.Feed(wire.substr(split));
+        fragmented.Finish();
+        assert(output == u8"中文🙂\n");
+    }
+    ccode::EventReader badShape;
+    ExpectError(badShape, "{\"type\":42}\n", "E_PROTOCOL_SCHEMA");
+    // After any invalid event, later input must not revive the failed turn.
+    ExpectError(invalidJson, wire, "E_PROTOCOL_FAILED");
+    const auto init = ccode::Json{{"type", "system"}, {"subtype", "init"},
+        {"session_id", "s1"}, {"tools", {"Read", "Write"}}}.dump() + "\n";
+    auto tool = [](const std::string& name, const std::string& id, const ccode::Json& input) {
+        return ccode::Json{{"type", "assistant"}, {"message", {{"content", ccode::Json::array({
+            {{"type", "tool_use"}, {"name", name}, {"id", id}, {"input", input}}
+        })}}}}.dump() + "\n";
+    };
+    for (const auto& test : std::vector<std::pair<std::string, std::string>>{
+        {tool("", "t1", ccode::Json::object()), "E_TOOL_NAME"},
+        {tool("Read", "", ccode::Json::object()), "E_TOOL_ID"},
+        {tool("Read", "t1", "not-an-object"), "E_TOOL_INPUT"},
+        {tool("NotRegistered", "t1", ccode::Json::object()), "E_TOOL_UNKNOWN"}
+    }) {
+        ccode::EventReader invalidTool;
+        invalidTool.Feed(init);
+        ExpectError(invalidTool, test.first, test.second);
+    }
+    ccode::EventReader duplicate;
+    duplicate.Feed(init);
+    const auto read = tool("Read", "t1", {{"file_path", "user/claude-original.txt"}});
+    assert(duplicate.Feed(read) == "[Tool request]\n");
+    ExpectError(duplicate, read, "E_TOOL_DUPLICATE_ID");
     ccode::EventReader reader;
-    auto start = reader.Feed("{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"s1\"}\n");
+    auto start = reader.Feed(init);
     assert(start.empty());
     assert(reader.session == "s1");
     assert(reader.Feed("{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"hello").empty());

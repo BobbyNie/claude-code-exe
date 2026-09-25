@@ -6,6 +6,10 @@
 
 namespace ccode {
 using Json = nlohmann::json;
+class ProtocolError : public std::runtime_error {
+public:
+    explicit ProtocolError(const char* code) : std::runtime_error(code) {}
+};
 inline std::string ConsoleText(const std::string& text) {
     std::string result;
     for (unsigned char ch : text)
@@ -17,24 +21,43 @@ inline std::string ConsoleText(const std::string& text) {
 // it never repairs or executes a model's incomplete tool call.
 class EventReader {
     std::string pending;
+    bool broken = false;
     std::set<std::string> toolIds;
+    std::set<std::string> registeredTools;
+    bool toolRegistryReceived = false;
     std::string Event(const Json& event) {
-        if (!event.is_object()) throw std::runtime_error("E_PROTOCOL");
+        if (!event.is_object()) throw ProtocolError("E_PROTOCOL");
         const auto type = event.value("type", std::string());
-        if (complete && (type == "assistant" || type == "result")) throw std::runtime_error("E_PROTOCOL_ORDER");
+        if (complete && (type == "assistant" || type == "result")) throw ProtocolError("E_PROTOCOL_ORDER");
         if (event.contains("session_id")) session = event.at("session_id").get<std::string>();
+        if (type == "system" && event.value("subtype", std::string()) == "init") {
+            const auto& tools = event.at("tools");
+            if (!tools.is_array()) throw ProtocolError("E_PROTOCOL_SCHEMA");
+            registeredTools.clear();
+            for (const auto& tool : tools) {
+                const auto name = tool.get<std::string>();
+                if (name.empty()) throw ProtocolError("E_TOOL_NAME");
+                registeredTools.insert(name);
+            }
+            toolRegistryReceived = true;
+            return "";
+        }
         if (type == "assistant") {
             std::string output;
             const auto& content = event.at("message").at("content");
-            if (!content.is_array()) throw std::runtime_error("E_PROTOCOL");
+            if (!content.is_array()) throw ProtocolError("E_PROTOCOL");
             for (const auto& block : content) {
                 auto kind = block.value("type", std::string());
                 if (kind == "text") output += ConsoleText(block.at("text").get<std::string>()) + "\n";
                 if (kind == "tool_use") {
                     const auto name = block.at("name").get<std::string>();
                     const auto id = block.at("id").get<std::string>();
-                    if (name.empty() || id.empty() || !block.at("input").is_object() ||
-                        !toolIds.insert(id).second) throw std::runtime_error("E_TOOL_PROTOCOL");
+                    if (name.empty()) throw ProtocolError("E_TOOL_NAME");
+                    if (id.empty()) throw ProtocolError("E_TOOL_ID");
+                    if (!block.at("input").is_object()) throw ProtocolError("E_TOOL_INPUT");
+                    if (!toolRegistryReceived) throw ProtocolError("E_PROTOCOL_ORDER");
+                    if (!registeredTools.count(name)) throw ProtocolError("E_TOOL_UNKNOWN");
+                    if (!toolIds.insert(id).second) throw ProtocolError("E_TOOL_DUPLICATE_ID");
                     // Do not expose internal tool names or paths as product chrome.
                     output += "[Tool request]\n";
                 }
@@ -42,7 +65,7 @@ class EventReader {
             return output;
         }
         if (type == "result") {
-            if (complete) throw std::runtime_error("E_PROTOCOL");
+            if (complete) throw ProtocolError("E_PROTOCOL");
             complete = true;
             failed = event.value("is_error", false) || event.value("subtype", std::string()) != "success";
             if (event.contains("permission_denials") && !event["permission_denials"].empty())
@@ -58,22 +81,36 @@ public:
     std::string session;
     bool complete = false, failed = false;
     std::string Feed(const std::string& bytes) {
-        pending += bytes;
-        if (pending.size() > 16 * 1024 * 1024) throw std::runtime_error("E_EVENT_LIMIT");
-        std::string output;
-        size_t end;
-        while ((end = pending.find('\n')) != std::string::npos) {
-            auto line = pending.substr(0, end);
-            pending.erase(0, end + 1);
-            if (!line.empty() && line != "\r") output += Event(Json::parse(line));
+        if (broken) throw ProtocolError("E_PROTOCOL_FAILED");
+        try {
+            pending += bytes;
+            if (pending.size() > 16 * 1024 * 1024) throw ProtocolError("E_EVENT_LIMIT");
+            std::string output;
+            size_t end;
+            while ((end = pending.find('\n')) != std::string::npos) {
+                auto line = pending.substr(0, end);
+                pending.erase(0, end + 1);
+                if (!line.empty() && line != "\r") {
+                    auto event = Json::parse(line, nullptr, false);
+                    if (event.is_discarded()) throw ProtocolError("E_PROTOCOL_JSON");
+                    output += Event(event);
+                }
+            }
+            return output;
+        } catch (const Json::exception&) {
+            broken = true;
+            throw ProtocolError("E_PROTOCOL_SCHEMA");
+        } catch (...) {
+            broken = true;
+            throw;
         }
-        return output;
     }
     void Finish() {
+        if (broken) throw ProtocolError("E_PROTOCOL_FAILED");
         if (!pending.empty()) {
-            if (pending != "\r") throw std::runtime_error("E_TRUNCATED_EVENT");
+            if (pending != "\r") throw ProtocolError("E_TRUNCATED_EVENT");
         }
-        if (!complete) throw std::runtime_error("E_MISSING_RESULT");
+        if (!complete) throw ProtocolError("E_MISSING_RESULT");
     }
 };
 }
