@@ -32,7 +32,7 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 | A09 | 基本工具 | tools-integration.py 驅動真實 Write/Edit/Read/Grep/Glob/Bash | 兩版本一般完整路徑工具成功與 8.3 短路徑拒絕已驗證；仍欠批准／取消、政策退出碼、實際 gateway 試運行 |
 | A10 | 串流 JSON | frontend-tests.cpp 每個文字 UTF-8 byte 分片點；穩定錯誤碼、失敗不可重啟 | `0097a5a` 補工具 JSON 每個 byte 分片點、無效 UTF-8、超限、缺終止／截斷後不可復活；仍欠大小邊界、斷流／故障端到端 |
 | A11 | 工具名稱 | init 宣告工具清單；空名、未知名、空／重複 ID、錯誤參數分類 | 缺終止事件、所有狀態轉移與新版本／擴展的真實事件相容 |
-| A12 | 權限 | PermissionRpc 預設拒絕；interactive console；Job Object；`e22cd72` / `36124014490` 兩版本真實 Bash→PowerShell 後代在 Ctrl+Break／前端強制終止後退出，無延遲寫入 | 互動批准／拒絕、等待批准中取消；不能以工具執行中取消代替等待批准中取消 |
+| A12 | 權限 | PermissionRpc 預設拒絕；interactive console；Job Object；`e22cd72` / `36124014490` 兩版本真實 Bash→PowerShell 後代在 Ctrl+Break／前端強制終止後退出，無延遲寫入 | `cacdb06` / `36129711620` 兩版本真實 console 批准／拒絕／等待批准中取消通過；仍需故障後重啟恢復與目標普通帳戶端點證據 |
 | A13 | 歷史 | --sessions、--resume、--continue、/resume；fixture 驗證請求歷史標記 | 列表→選擇→續接 UI 路徑與多輪、損壞資料分類、穩定工作區 UUID |
 | A14 | 升級／搬移 | runtime 按 hash 分區；資料不綁 runtime hash | 引擎／profile 相容 manifest、重啟／搬移／更新／回退實測 |
 | A15 | 遷移 | 舊版 CopyMissing 保留來源及現有檔案；profile 測試 | 備份+hash、隔離候選、引擎驗證後原子切換、磁碟滿／中斷重試 |
@@ -90,8 +90,16 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   因第一案失敗，後續拒絕及等待取消尚未執行，不能標記通過。
 - `7a2fe44` / `36128862191`：保留 console buffer 診斷後仍失敗；觀察到 console 為空，
   前端仍存活且停在 Tool request。尚不能判定是 MCP worker 的 console 歸屬還是其他通訊問題。
-  `e1aeec8` / `36129256405` 正在以 console PID 集合與 worker 進程資料定位，未更改產品權限政策。
+  `e1aeec8` / `36129256405` 兩版本失敗診斷確認：權限 worker 存活但不在前端 console PID 集合；未更改產品權限政策。
   本機六組 C++、八項 Python 及新增 Python 語法檢查通過，不能替代此失敗的 Windows 互動測試。
+
+- `cacdb06` / `36129711620`：修復 worker 明確 AttachConsole 至前端 PID，保留 MCP 標準輸入／輸出
+  pipe；找不到前端 console 時拒絕，不改成自動批准。兩固定引擎的全部 Windows 步驟通過。
+  真實 console 案例先確認檔案不存在且畫面已顯示該唯一檔名的批准提示，再注入按鍵：
+  `yes` 後實際 Write 內容相符；`no` 後 tool_result 為拒絕且無檔案；等待批准時
+  Ctrl+Break 後輸出 Cancelled、返回 130、無檔案。退出後 stdout/stderr 讀取者結束，
+  沒有後代持有管道阻止退出。既有工具與進程樹取消／crash 案例仍通過。
+  此為 Windows CI 帳戶及固定工具組合的證據，不擴大成企業端點或全部 MCP 的驗收。
 
 ## 下一批實施順序
 

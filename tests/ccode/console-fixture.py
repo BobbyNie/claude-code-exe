@@ -98,14 +98,6 @@ def check_permission(app, workspace, data, env, mode, target):
                 break
             time.sleep(0.05)
         else:
-            pids = (w.DWORD * 64)()
-            count = kernel.GetConsoleProcessList(pids, len(pids))
-            processes = subprocess.run(["powershell.exe", "-NoProfile", "-Command",
-                "Get-CimInstance Win32_Process | Where-Object { $_.Name -in @('ccode.exe','engine.exe') } | "
-                "Select-Object ProcessId,ParentProcessId,Name,CommandLine | ConvertTo-Json -Compress"],
-                capture_output=True, text=True, timeout=15)
-            print("Permission diagnostic: console PIDs", list(pids)[:count], "frontend PID", process.pid,
-                  "processes", processes.stdout, flush=True)
             raise AssertionError(("No real permission prompt", process.poll(), captured,
                                   "console", screen().rstrip(" \x00")[-8000:]))
         assert not target.exists(), "Write occurred before user approval"

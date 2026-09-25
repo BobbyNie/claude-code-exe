@@ -1,4 +1,5 @@
 """Public Windows launcher contract. No live credentials or model required."""
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -35,6 +36,21 @@ def check(executable):
                                 text=True, capture_output=True, timeout=30)
         assert result.returncode == 0, result.stderr
         assert not list(root.rglob("cc-runtime.dll")), "New launcher must not extract an injection DLL"
+        # A missing/invalid frontend console must never fall back to a hidden
+        # worker console, hang for approval, or silently authorize the tool.
+        request = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {
+            "name": "approve", "arguments": {"tool_name": "Write", "input": {
+                "file_path": "unapproved.txt", "content": "must not write"}}}}
+        for owner in ("", "0", "not-a-pid", "999999999999999999999", "4294967294"):
+            worker_env = dict(env, CCODE_INTERACTIVE="1", CCODE_FRONTEND_PID=owner)
+            result = subprocess.run([str(app), "--ccode-permission-server"], env=worker_env,
+                                    cwd=root, input=json.dumps(request) + "\n", text=True,
+                                    encoding="utf-8", capture_output=True, timeout=10)
+            assert result.returncode == 0, (owner, result.stderr)
+            response = json.loads(result.stdout)
+            decision = json.loads(response["result"]["content"][0]["text"])
+            assert response["id"] == 1 and decision["behavior"] == "deny", (owner, response)
+        print("PASS: unavailable frontend console fails closed without a hidden approval prompt")
         print("portable frontend integration passed")
 
 if __name__ == "__main__":
