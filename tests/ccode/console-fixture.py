@@ -60,7 +60,7 @@ def check_permission(app, workspace, data, env, mode, target):
             text = ctypes.create_unicode_buffer(length + 1)
             read = w.DWORD()
             assert kernel.ReadConsoleOutputCharacterW(output_handle, text, length, Coord(0, 0), ctypes.byref(read))
-            return text.value
+            return text[:read.value]
 
         def type_line(text):
             records = (Record * (len(text) * 2))()
@@ -98,7 +98,8 @@ def check_permission(app, workspace, data, env, mode, target):
                 break
             time.sleep(0.05)
         else:
-            raise AssertionError(("No real permission prompt", process.poll(), captured))
+            raise AssertionError(("No real permission prompt", process.poll(), captured,
+                                  "console", screen().rstrip(" \x00")[-8000:]))
         assert not target.exists(), "Write occurred before user approval"
         if mode == "cancel":
             process.send_signal(signal.CTRL_BREAK_EVENT)
