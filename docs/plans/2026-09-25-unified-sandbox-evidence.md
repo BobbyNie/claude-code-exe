@@ -1094,3 +1094,15 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - cross-version `108237019701` 實際舊→新→舊成功。long-workspace 兩版本
   仍在 CreateProcess WinError 267；整體 failure。下一步需蒐集進程／執行緒
   等待證據以定位 console 停滯，而不是加重試或將此類失敗忽略。
+
+### 權限停滯：加入有界、數值白名單的進程診斷
+
+- 在等待 permission prompt 逾時及 kill 後等待逾時、進程尚可觀察時取得
+  前端／後代 PID、parent PID、thread ID、state、wait reason 數值快照。
+  讀取有 10 秒上限，不收集命令列／環境／路徑／提示，不輸出原始 stderr。
+  診斷失敗僅輸出 unavailable；原本 assertion／timeout 仍拋出，不重啟或忽略。
+- TDD：先新增白名單與異常不洩漏測試，缺介面 RED；實作後本機 30 項測試
+  中 29 通過、1 個 Windows 真實進程／執行緒測試因平台跳過。該真實測試
+  在 Windows 必須 captured 且當前進程有 threads；不以 mock 宣稱 API 已驗證。
+- 這是為定位間歇停滯補證據，不是停滯修復；失敗時才記錄快照，不引入
+  自動重試、放寬超時或 continue-on-error。Windows 實際收集與根因仍待驗。

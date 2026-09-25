@@ -8,6 +8,59 @@ import threading
 import time
 
 
+def process_diagnostics(pid):
+    """Bounded, numeric-only process/thread snapshot; never replace the primary failure."""
+    unavailable = {"status": "unavailable", "processes": []}
+    if type(pid) is not int or pid <= 0:
+        return unavailable
+    script = r'''
+$ErrorActionPreference = 'Stop'
+$rootId = ROOT_PID
+$all = @(Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId)
+$ids = @($rootId)
+do {
+    $added = @($all | Where-Object { $_.ParentProcessId -in $ids -and $_.ProcessId -notin $ids } | ForEach-Object { [int]$_.ProcessId })
+    $ids += $added
+} while ($added.Count -gt 0)
+$rows = @($all | Where-Object { $_.ProcessId -in $ids } | ForEach-Object {
+    $row = $_
+    $threads = @()
+    try {
+        $threads = @((Get-Process -Id $row.ProcessId -ErrorAction Stop).Threads | ForEach-Object {
+            $state = [int]$_.ThreadState
+            $reason = -1
+            if ($state -eq 5) { try { $reason = [int]$_.WaitReason } catch {} }
+            @{id=[int]$_.Id; state=$state; wait=$reason}
+        })
+    } catch {}
+    @{pid=[int]$row.ProcessId; parent=[int]$row.ParentProcessId; threads=$threads}
+})
+ConvertTo-Json -InputObject $rows -Depth 5 -Compress
+'''.replace("ROOT_PID", str(pid))
+    try:
+        result = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+                                stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                                encoding="utf-8", errors="replace", timeout=10,
+                                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        if result.returncode != 0:
+            return unavailable
+        rows = json.loads(result.stdout)
+        if not isinstance(rows, list):
+            return unavailable
+        processes = []
+        def number(value):
+            if type(value) is not int:
+                raise ValueError("Non-numeric diagnostic field")
+            return value
+        for row in rows:
+            processes.append({"pid": number(row["pid"]), "parent": number(row["parent"]),
+                              "threads": [{key: number(thread[key]) for key in ("id", "state", "wait")}
+                                          for thread in row["threads"]]})
+        return {"status": "captured", "processes": processes}
+    except (OSError, subprocess.SubprocessError, ValueError, TypeError, KeyError):
+        return unavailable
+
+
 def wait_for_persisted_history(data, process, timeout=15):
     """Establish recovery evidence before killing an asynchronously writing engine."""
     deadline = time.monotonic() + timeout
@@ -123,6 +176,7 @@ def check_permission(app, workspace, data, env, mode, target):
                 break
             time.sleep(0.05)
         else:
+            print("DIAGNOSTIC permission-prompt-timeout:", json.dumps(process_diagnostics(process.pid)), flush=True)
             raise AssertionError(("No real permission prompt", process.poll(), captured,
                                   "console", screen().rstrip(" \x00")[-8000:]))
         assert not target.exists(), "Write occurred before user approval"
@@ -150,7 +204,11 @@ def check_permission(app, workspace, data, env, mode, target):
     finally:
         if process is not None and process.poll() is None:
             process.kill()
-            process.wait(timeout=15)
+            try:
+                process.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                print("DIAGNOSTIC permission-kill-timeout:", json.dumps(process_diagnostics(process.pid)), flush=True)
+                raise
         for handle in handles:
             kernel.CloseHandle(handle)
         if allocated:

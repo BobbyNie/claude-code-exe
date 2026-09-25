@@ -1,5 +1,8 @@
 """Cancellation recovery must establish persisted history before interrupting."""
 import importlib.util
+import json
+import os
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
@@ -12,6 +15,34 @@ spec.loader.exec_module(fixture)
 
 
 class ConsoleFixtureTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "nt", "Requires actual Windows process/thread API")
+    def test_windows_process_diagnostics_capture_actual_live_threads(self):
+        snapshot = fixture.process_diagnostics(os.getpid())
+        self.assertEqual(snapshot["status"], "captured")
+        current = next(row for row in snapshot["processes"] if row["pid"] == os.getpid())
+        self.assertTrue(current["threads"], "No actual thread state captured")
+
+    def test_process_diagnostics_discard_non_whitelisted_content(self):
+        result = Mock(returncode=0, stdout=json.dumps([
+            {"pid": 123, "parent": 12, "threads": [
+                {"id": 321, "state": 5, "wait": 4, "secret": "private prompt"}],
+             "command": "secret token", "environment": "private credential"}]), stderr="secret stderr")
+        with patch.object(fixture.subprocess, "run", return_value=result) as run:
+            snapshot = fixture.process_diagnostics(123)
+        self.assertEqual(snapshot, {"status": "captured", "processes": [
+            {"pid": 123, "parent": 12, "threads": [{"id": 321, "state": 5, "wait": 4}]}]})
+        self.assertEqual(run.call_args.kwargs["timeout"], 10)
+
+    def test_process_diagnostic_errors_do_not_expose_output_or_mask_primary_failure(self):
+        for outcome in (Mock(returncode=1, stdout="private", stderr="secret"),
+                        Mock(returncode=0, stdout="not-json secret", stderr=""),
+                        subprocess.TimeoutExpired("sensitive command", 10, output="secret")):
+            with self.subTest(outcome=type(outcome).__name__):
+                options = {"side_effect": outcome} if isinstance(outcome, Exception) else {"return_value": outcome}
+                with patch.object(fixture.subprocess, "run", **options):
+                    snapshot = fixture.process_diagnostics(123)
+                self.assertEqual(snapshot, {"status": "unavailable", "processes": []})
+
     def test_waits_for_persisted_user_record_not_just_file_creation(self):
         with tempfile.TemporaryDirectory() as folder:
             data = Path(folder)
