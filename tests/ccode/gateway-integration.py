@@ -51,10 +51,32 @@ def check_unauthorized(executable):
                if not key.startswith(("A_", "C_", "ANTHROPIC_", "CLAUDE_", "CCODE_"))}
         env.update(A_AUTH_TOKEN=token, A_BASE_URL=f"http://127.0.0.1:{server.server_port}")
         try:
-            result = subprocess.run([str(app), "--data-dir", str(data), "--print",
+            try:
+                result = subprocess.run([str(app), "--data-dir", str(data), "--print",
                                      "--tools", "", "gateway rejection fixture"],
                                     cwd=workspace, env=env, input="", capture_output=True,
                                     text=True, encoding="utf-8", timeout=60)
+            except subprocess.TimeoutExpired as error:
+                # Report only counts and booleans: never dump gateway bodies,
+                # prompts, credentials, or unfiltered engine output into CI.
+                stdout = error.stdout or b""
+                stderr = error.stderr or b""
+                if isinstance(stdout, str):
+                    stdout = stdout.encode("utf-8")
+                if isinstance(stderr, str):
+                    stderr = stderr.encode("utf-8")
+                terminal = stdout + stderr
+                diagnostics = {
+                    "message_requests": sum(path == "/v1/messages" for path, _ in requests),
+                    "token_count_requests": sum(path == "/v1/messages/count_tokens" for path, _ in requests),
+                    "other_requests": sum(path not in ("/v1/messages", "/v1/messages/count_tokens")
+                                          for path, _ in requests),
+                    "stdout_bytes": len(stdout), "stderr_bytes": len(stderr),
+                    "private_marker_visible": private_marker.encode() in terminal,
+                    "credential_visible": token.encode() in terminal,
+                    "neutral_error_visible": b"E_" in terminal,
+                }
+                raise AssertionError("Gateway rejection timed out: " + json.dumps(diagnostics)) from None
             assert result.returncode != 0, (result.returncode, result.stdout, result.stderr)
             messages = [body for path, body in requests if path == "/v1/messages"]
             assert len(messages) == 1, "401 must not replay the model request"
