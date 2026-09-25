@@ -156,6 +156,18 @@ int main() try {
     try { ccode::VerifyProfileSnapshot(verified, testDigest); }
     catch (const std::runtime_error& error) { wrongIdentity = std::string(error.what()) == "E_SNAPSHOT_DATA"; }
     assert(wrongIdentity);
+    // A valid short source can exceed MAX_PATH only after snapshot nesting.
+    const auto longActive = root / "long-active";
+    const auto longRelative = fs::path(std::string(70, 'a')) / std::string(70, 'b') / "history.jsonl";
+    Write(longActive / longRelative, "source transcript\n");
+    assert(Read(longActive / longRelative) == "source transcript\n");
+    const auto longBackups = root / "long-snapshots" / std::string(45, 's');
+    const std::string longId = "92345678-1234-1234-1234-123456789abc";
+    assert((longBackups / (longId + ".pending") / "profile" / longRelative).native().size() > 260);
+    std::cout << "Checking snapshot destination beyond 260 characters" << std::endl;
+    const auto longSnapshot = ccode::CreateProfileSnapshot(longActive, longBackups, longId, testDigest);
+    assert(ccode::VerifyProfileSnapshot(longSnapshot, testDigest)["files"].size() == 1);
+    assert(Read(longActive / longRelative) == "source transcript\n");
     fs::remove_all(root);
     std::cout << "ccode profile recovery tests passed\n";
 } catch (const std::exception& error) {

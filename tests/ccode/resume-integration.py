@@ -171,6 +171,19 @@ def verify(executable):
         active_before = profile_bytes(profile)
         backup = subprocess.run([str(executable), "--snapshot-profile"], cwd=executable.parent,
                                 env=env, capture_output=True, text=True, encoding="utf-8", timeout=30)
+        if backup.returncode != 0:
+            # Fixture-only structural diagnostics: no path names or file contents.
+            pending = list((profile.parent / "snapshots").glob("*.pending"))
+            missing = [(profile / name, folder / "profile" / name)
+                       for folder in pending for name in active_before
+                       if not (folder / "profile" / name).is_file()]
+            print("Snapshot fixture diagnostics:", json.dumps({
+                "pending_count": len(pending), "missing_count": len(missing),
+                "missing_source_exists": all(src.is_file() for src, _ in missing),
+                "max_source_chars": max((len(str(src)) for src, _ in missing), default=0),
+                "min_missing_destination_chars": min((len(str(dst)) for _, dst in missing), default=0),
+                "max_destination_chars": max((len(str(dst)) for _, dst in missing), default=0),
+            }), flush=True)
         assert backup.returncode == 0, backup.stderr
         snapshot_id = str(uuid.UUID(backup.stdout.strip()))
         snapshot = profile.parent / "snapshots" / snapshot_id
