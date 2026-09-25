@@ -315,3 +315,17 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   message 不包含 probe。假 API 只檢查最後一則 message 的假設需進一步核實。
   補充每則 message 的 role、probe/marker 布林值與 content/block 型別以定位，
   仍不輸出內容，不修改驗證成功條件。
+
+## 假 API 對原生尾隨 system 訊息的相容修正
+
+- `52661f2` / `36141420238` 的 2.1.282 job `108091913353` 日誌顯示
+  message 角色依序 user/system/assistant/user/system；驗證 probe 在倒數第二則
+  user 訊息，最後的 system 不包含 probe。舊假 API 只看 messages[-1]，因此回覆
+  resume-test-ok 而非歷史標記，產品嚴格核對後正確拒絕。
+- TDD：抽出原有 fixture_answer（不改邏輯），新增尾隨 system 案例並親見紅燈
+  resume-test-ok != legacy-resume-marker-7391；再改為定位最後一則 user，僅從
+  它之前的歷史找唯一標記，仍檢查當前提示不得含答案。不是搜尋任意舊 probe。
+- 六項 oracle 測試覆蓋尾隨 system、一般 probe、錯誤答案、答案洩漏、模糊歷史與
+  後續一般 user turn；加既有測試共 14 項 Python 通過，語法及 diff 檢查通過。
+- 本次只修測試 API，不改產品／驗收成功斷言。真實 Windows 雙版本回歸仍待驗，
+  不以本機 oracle 測試宣稱整體歷史恢復或方案驗收完成。

@@ -36,6 +36,22 @@ def prepare(executable):
     (root / "resume-fixture-id.txt").write_text(session, encoding="utf-8")
 
 
+def fixture_answer(messages, history_markers, probe_reply_correct=True):
+    # Native engines may append system context after the current user turn.
+    # Locate the final user message, never a historical probe or a system hint.
+    user_index = next((index for index in range(len(messages) - 1, -1, -1)
+                       if messages[index].get("role") == "user"), None)
+    if user_index is None:
+        return "resume-test-ok"
+    current = json.dumps(messages[user_index].get("content"))
+    if "For profile recovery verification" not in current:
+        return "resume-test-ok"
+    assert not any(marker in current for marker in history_markers), "Probe leaked the expected answer"
+    history = json.dumps(messages[:user_index])
+    recovered = [marker for marker in history_markers if marker in history]
+    return recovered[0] if probe_reply_correct and len(recovered) == 1 else "history-verification-failed"
+
+
 def verify(executable):
     requests = []
     probe_reply_correct = True
@@ -57,12 +73,7 @@ def verify(executable):
                 self.send_error(404)
                 return
             requests.append(body)
-            answer = "resume-test-ok"
-            messages = body.get("messages", [])
-            if messages and "For profile recovery verification" in json.dumps(messages[-1]):
-                assert not any(marker in json.dumps(messages[-1]) for marker in history_markers), "Probe leaked the expected answer"
-                recovered = [marker for marker in history_markers if marker in json.dumps(messages[:-1])]
-                answer = recovered[0] if probe_reply_correct and len(recovered) == 1 else "history-verification-failed"
+            answer = fixture_answer(body.get("messages", []), history_markers, probe_reply_correct)
             message = {"id": "msg_resume_test", "type": "message", "role": "assistant",
                        "model": body.get("model", "claude-sonnet-4-6"),
                        "content": [{"type": "text", "text": answer}],
