@@ -6,7 +6,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $source = (Resolve-Path $Executable).Path
-$testRoot = Join-Path $env:RUNNER_TEMP "ccode-test-$([Guid]::NewGuid().ToString('N'))"
+$testRoot = Join-Path $env:RUNNER_TEMP "ccode test-$([Guid]::NewGuid().ToString('N'))"
 $testExe = Join-Path $testRoot "ccode.exe"
 $locationPushed = $false
 
@@ -67,7 +67,7 @@ try {
         Copy-Item (Join-Path $PSScriptRoot '../../tests/ccode/runtime-paths.js') $fixture
         $env:TEMP = Join-Path $testRoot 'data/cc/profile/temp'
         $hookPath = Join-Path $testRoot 'data/cc/runtime/cc-runtime.dll'
-        python -c 'import subprocess,sys; sys.exit(subprocess.run(sys.argv[1:], timeout=30).returncode)' (Get-Command bun).Source $fixture $hookPath
+        python -c 'import subprocess,sys; sys.exit(subprocess.run(sys.argv[1:], timeout=60).returncode)' (Get-Command bun).Source $fixture $hookPath
         if ($LASTEXITCODE -ne 0) { throw 'Bun runtime filesystem regression failed' }
     }
     finally {

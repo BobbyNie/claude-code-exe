@@ -27,15 +27,30 @@ const child = spawnSync(process.env.ComSpec || 'cmd.exe', ['/d', '/c', 'type', f
 assert.ifError(child.error);
 assert.equal(child.status, 0, child.stderr);
 assert.match(child.stdout, /ccode-path-marker/);
-fs.unlinkSync(filename);
-fs.rmdirSync(tasks);
 console.log('ccode runtime path tests passed');
 
 // Bun must be able to respawn the official payload, just as Grep/Glob do.
 const payload = path.join(path.dirname(process.argv[2]), 'aa-runtime.exe');
+assert.ok(fs.existsSync(payload));
 const version = spawnSync(payload, ['--version'], { encoding: 'utf8', timeout: 15000 });
 assert.ifError(version.error);
 assert.equal(version.status, 0, version.stderr);
 assert.match(version.stdout, /Claude Code/);
 console.log('ccode runtime respawn test passed');
+
+const grep = spawnSync(payload, ['--ripgrep', '--fixed-strings', '--', 'ccode-path-marker', filename], {
+  encoding: 'utf8', timeout: 15000,
+});
+assert.ifError(grep.error);
+assert.equal(grep.status, 0, grep.stderr);
+assert.match(grep.stdout, /ccode-path-marker/);
+const glob = spawnSync(payload, ['--ripgrep', '--files', '--glob', '*.txt', tasks], {
+  encoding: 'utf8', timeout: 15000,
+});
+assert.ifError(glob.error);
+assert.equal(glob.status, 0, glob.stderr);
+assert.ok(glob.stdout.includes(path.basename(filename)), glob.stdout);
+fs.unlinkSync(filename);
+fs.rmdirSync(tasks);
+console.log('ccode built-in Grep/Glob backend tests passed');
 // Keep the DLL loaded until process exit: its hooks cannot be unloaded safely.
