@@ -59,8 +59,31 @@ int main() {
     }
     ccode::EventReader invalidUtf8;
     ExpectError(invalidUtf8, std::string("{\"type\":\"") + char(0xff) + "\"}\n", "E_PROTOCOL_JSON");
+    // The limit applies to one JSON line, independent of transport chunking.
+    const size_t eventLimit = 16 * 1024 * 1024;
+    const std::string paddingPrefix = "{\"type\":\"system\",\"padding\":\"";
+    const std::string paddingSuffix = "\"}";
+    const auto atLimit = paddingPrefix +
+        std::string(eventLimit - paddingPrefix.size() - paddingSuffix.size(), 'x') + paddingSuffix;
+    const std::string resultLine = "{\"type\":\"result\",\"subtype\":\"success\"}\n";
+    for (bool fragmented : {false, true}) {
+        ccode::EventReader boundary;
+        if (fragmented) {
+            assert(boundary.Feed(atLimit).empty());
+            assert(boundary.Feed("\n" + atLimit + "\n" + resultLine).empty());
+        } else {
+            assert(boundary.Feed(atLimit + "\n" + atLimit + "\n" + resultLine).empty());
+        }
+        boundary.Finish();
+        assert(boundary.complete && !boundary.failed);
+    }
     ccode::EventReader oversized;
     ExpectError(oversized, std::string(16 * 1024 * 1024 + 1, 'x'), "E_EVENT_LIMIT");
+    ExpectError(oversized, resultLine, "E_PROTOCOL_FAILED");
+    ccode::EventReader splitOversized;
+    assert(splitOversized.Feed(atLimit).empty());
+    ExpectError(splitOversized, " \n", "E_EVENT_LIMIT");
+    ExpectError(splitOversized, resultLine, "E_PROTOCOL_FAILED");
     for (const auto& entry : std::vector<std::pair<std::string, std::string>>{
         {"", "E_MISSING_RESULT"},
         {"{\"type\":\"result\"", "E_TRUNCATED_EVENT"}

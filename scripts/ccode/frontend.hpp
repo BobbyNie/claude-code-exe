@@ -83,18 +83,23 @@ public:
     std::string Feed(const std::string& bytes) {
         if (broken) throw ProtocolError("E_PROTOCOL_FAILED");
         try {
-            pending += bytes;
-            if (pending.size() > 16 * 1024 * 1024) throw ProtocolError("E_EVENT_LIMIT");
+            constexpr size_t eventLimit = 16 * 1024 * 1024;
             std::string output;
-            size_t end;
-            while ((end = pending.find('\n')) != std::string::npos) {
-                auto line = pending.substr(0, end);
-                pending.erase(0, end + 1);
-                if (!line.empty() && line != "\r") {
-                    auto event = Json::parse(line, nullptr, false);
+            size_t offset = 0;
+            while (offset < bytes.size()) {
+                const auto end = bytes.find('\n', offset);
+                const auto count = (end == std::string::npos ? bytes.size() : end) - offset;
+                // Bound each line before allocating; a read may contain many legal events.
+                if (count > eventLimit - pending.size()) throw ProtocolError("E_EVENT_LIMIT");
+                pending.append(bytes, offset, count);
+                if (end == std::string::npos) break;
+                if (!pending.empty() && pending != "\r") {
+                    auto event = Json::parse(pending, nullptr, false);
                     if (event.is_discarded()) throw ProtocolError("E_PROTOCOL_JSON");
                     output += Event(event);
                 }
+                pending.clear();
+                offset = end + 1;
             }
             return output;
         } catch (const Json::exception&) {
