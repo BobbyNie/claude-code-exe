@@ -189,11 +189,40 @@ def check(executable, short_path=False, lifecycle=None, permission=None):
         env = {key: value for key, value in os.environ.items()
                if not key.startswith(("A_", "C_", "ANTHROPIC_", "CLAUDE_", "CCODE_"))}
         env.update(A_AUTH_TOKEN="acceptance-test-only", A_BASE_URL=f"http://127.0.0.1:{server.server_port}")
+        def recover_after_interruption():
+            nonlocal plan
+            # Reuse the exact profile, without deleting a lock or repairing files
+            # in the test. A fresh turn must not mutate interrupted transcripts.
+            transcripts = {path: path.read_bytes() for path in data.rglob("*.jsonl")}
+            assert transcripts, "Interrupted run did not leave authoritative session evidence"
+            history = subprocess.run([str(app), "--data-dir", str(data), "--sessions"],
+                                     cwd=workspace, env=env, input="", capture_output=True,
+                                     text=True, encoding="utf-8", timeout=15)
+            assert history.returncode == 0, (history.returncode, history.stdout, history.stderr)
+            assert "No saved sessions" not in history.stdout, history.stdout
+            assert any(path.stem in history.stdout for path in transcripts), history.stdout
+            marker = workspace / "recovered-write.txt"
+            plan = [("Write", {"file_path": str(marker), "content": "recovered-turn\n"})]
+            received.clear()
+            recovered = subprocess.run([str(app), "--data-dir", str(data), "--print",
+                                        "--allowedTools", "Write", "Perform the recovery write."],
+                                       cwd=workspace, env=env, input="", capture_output=True,
+                                       text=True, encoding="utf-8", timeout=60)
+            assert recovered.returncode == 0, (recovered.returncode, recovered.stdout, recovered.stderr)
+            assert not received["acceptance_0"].get("is_error"), received
+            assert marker.read_text() == "recovered-turn\n"
+            for path, content in transcripts.items():
+                assert path.read_bytes() == content, "Recovery rewrote an interrupted transcript"
+            print("PASS: same-profile restart releases lock, lists history, executes Write, preserves prior transcripts")
+
         try:
             if permission:
                 import runpy
                 check_permission = runpy.run_path(str(Path(__file__).with_name("console-fixture.py")))["check_permission"]
                 check_permission(app, workspace, data, env, permission, target)
+                if permission == "cancel":
+                    recover_after_interruption()
+                    assert not target.exists(), "Recovery replayed the cancelled tool"
                 assert not handler_errors, handler_errors
                 if permission != "cancel":
                     assert len(received) == 1, received
@@ -201,6 +230,8 @@ def check(executable, short_path=False, lifecycle=None, permission=None):
                 return
             if lifecycle:
                 check_lifecycle(app, workspace, data, env, lifecycle)
+                recover_after_interruption()
+                assert not (workspace / "after-wait.txt").exists(), "Recovery replayed the interrupted tool"
                 assert not handler_errors, handler_errors
                 return
             result = subprocess.run([str(app), "--data-dir", str(data), "--print",
