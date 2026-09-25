@@ -33,7 +33,7 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 | A10 | 串流 JSON | frontend-tests.cpp 每個文字 UTF-8 byte 分片點；穩定錯誤碼、失敗不可重啟 | `0097a5a` 補工具 JSON 每個 byte 分片點、無效 UTF-8、超限、缺終止／截斷後不可復活；仍欠大小邊界、斷流／故障端到端 |
 | A11 | 工具名稱 | init 宣告工具清單；空名、未知名、空／重複 ID、錯誤參數分類 | 缺終止事件、所有狀態轉移與新版本／擴展的真實事件相容 |
 | A12 | 權限 | PermissionRpc 預設拒絕；interactive console；Job Object；`e22cd72` / `36124014490` 兩版本真實 Bash→PowerShell 後代在 Ctrl+Break／前端強制終止後退出，無延遲寫入 | `cacdb06` / `36129711620` 兩版本真實 console 批准／拒絕／等待批准中取消通過；`199b57b` 同 profile 故障後重啟亦通過；仍需目標普通帳戶端點證據 |
-| A13 | 歷史 | --sessions、--resume、--continue、/resume；fixture 驗證請求歷史標記 | 列表→選擇→續接 UI 路徑與多輪、損壞資料分類、穩定工作區 UUID |
+| A13 | 歷史 | --sessions、--resume、--continue、/resume；fixture 驗證請求歷史標記 | `6c92fdd` / `36131964792` 兩版本列表→選擇→兩輪→重啟 continue 通過；仍欠完整損壞資料可用性分類及穩定工作區 UUID 整合 |
 | A14 | 升級／搬移 | runtime 按 hash 分區；資料不綁 runtime hash | 引擎／profile 相容 manifest、重啟／搬移／更新／回退實測 |
 | A15 | 遷移 | 舊版 CopyMissing 保留來源及現有檔案；profile 測試 | 備份+hash、隔離候選、引擎驗證後原子切換、磁碟滿／中斷重試 |
 | A16 | 並發 | profile-wide 排他鎖 | 故障釋鎖已由 `199b57b` 實測；仍欠同 session 單寫入、多 session 同工作區 |
@@ -120,14 +120,17 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - 歷史損壞分類切片：新增 user metadata 的 type/sessionId/cwd/isSidechain 型別錯誤測試，
   本機先在 classified 斷言失敗，再加入 `E_SESSION_DATA` 明確分類後通過；
   不回傳內容、不改寫原始 JSONL。新增 Windows CLI 測試要求退出碼 64、只有中性錯誤碼
-  且原始檔案逐位元組不變。Windows 結果待驗；不代表截斷末行、完整歷史可用性分類、
+  且原始檔案逐位元組不變。`8579230` / `36131756172` 兩版本 Windows 成功，
+  `6c92fdd` / `36131964792` 亦確認該案例 PASS；不代表截斷末行、完整歷史可用性分類、
   遷移或會話索引已完成。
 
 - 歷史選擇／多輪驗收擴充：`resume-integration.py` 從真實 `--sessions` 輸出取得序號，
   經 `--resume` picker 選擇已知歷史，送出兩輪，再重啟 `--continue`。
   每一步檢查實際模型請求的歷史 messages，而不是只看輸出或 session ID；另檢查舊來源
   JSONL 逐位元組不變，測試環境移除繼承的供應商／前端設定後只放假 token。
-  這是既有功能的新增驗收測試，沒有先改產品實作；Windows 結果待驗。
+  這是既有功能的新增驗收測試，沒有先改產品實作；`6c92fdd` / `36131964792`
+  兩版本 Windows 全部步驟成功，日誌均確認 picker 多輪和重啟 continue 的 PASS。
+  此案例透過 stdin 操作文字 picker，不等同真實 console 按鍵測試；API 為本機 fixture。
 
 ## 下一批實施順序
 
