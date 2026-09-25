@@ -28,7 +28,18 @@ def check(executable):
         assert not any(name in result.stdout.lower() for name in ("claude", "anthropic"))
         assert not (root / "data").exists(), "Informational commands must not create profile data"
         test_id = "a2345678-1234-1234-1234-123456789abc"
-        for args in (("--prepare-rollback", test_id, "--sessions"),
+        for args in (("--validate-rollback",),
+                     ("--validate-rollback", test_id, "--sessions"),
+                     ("--validate-rollback", test_id, "--resume", test_id),
+                     ("--validate-rollback", test_id, "--all-sessions"),
+                     ("--validate-rollback", test_id, "--prepare-rollback", test_id),
+                     ("--validate-rollback", test_id, "--validate-profile", test_id, "--all-sessions"),
+                     ("--validate-rollback", test_id, "--activate-profile", test_id),
+                     ("--validate-rollback", test_id, "--snapshot-profile"),
+                     ("--validate-rollback", test_id, "--archive-activation-pending"),
+                     ("--validate-rollback", test_id, "--tools", "Bash"),
+                     ("--validate-rollback", test_id, "unexpected prompt"),
+                     ("--prepare-rollback", test_id, "--sessions"),
                      ("--prepare-rollback", test_id, "--snapshot-profile"),
                      ("--prepare-rollback", test_id, "--archive-activation-pending"),
                      ("--prepare-rollback", test_id, "--model", "test"),

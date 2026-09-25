@@ -589,6 +589,32 @@ def verify(executable):
         assert not (foreign_data / "candidates" / rollback_id).exists()
         assert not (rollback_candidate / "validation.json").exists()
         print("PASS: explicit rollback preparation preserves latest active data and pointer, isolates old snapshot, and needs no API")
+        no_credential = foreign_command("--validate-rollback", rollback_id)
+        assert no_credential.returncode == 64 and no_credential.stderr.startswith("E_CREDENTIAL:"), no_credential
+        assert not (rollback_candidate / "rollback-validation.json").exists() and not requests
+        rollback_env = dict(all_env, CCODE_DATA_DIR=str(foreign_data))
+        rollback_result = subprocess.run([str(executable), "--validate-rollback", rollback_id],
+            cwd=executable.parent, env=rollback_env, capture_output=True, text=True, encoding="utf-8", timeout=120)
+        assert rollback_result.returncode == 0, rollback_result
+        rollback_receipt = json.loads((rollback_candidate / "rollback-validation.json").read_text(encoding="utf-8"))
+        assert rollback_receipt["plan"] == plan
+        rollback_validation = rollback_receipt["validation"]
+        assert rollback_validation["scope"] == "all-top-level-sessions"
+        assert rollback_validation["engine"] == plan["targetEngine"]
+        assert {item["sessionId"] for item in rollback_validation["sessions"]} == set(real_sessions)
+        assert len(requests) == len(real_sessions)
+        for marker in history_markers:
+            assert any(marker in json.dumps(request.get("messages", [])[:-1]) for request in requests)
+        assert profile_bytes(foreign_candidate / "profile") == foreign_before
+        assert profile_bytes(old_source) == old_source_before
+        assert profile_bytes(foreign_data / "snapshots" / preservation_id / "profile") == foreign_before
+        assert foreign_pointer_path.read_bytes() == pointer_before
+        requests.clear()
+        duplicate = subprocess.run([str(executable), "--validate-rollback", rollback_id],
+            cwd=executable.parent, env=rollback_env, capture_output=True, text=True, encoding="utf-8", timeout=60)
+        assert duplicate.returncode == 64 and duplicate.stderr.strip() == "E_ROLLBACK_EXISTS", duplicate
+        assert not requests
+        print("PASS: public rollback verifier restores all real sessions with target engine, preserves current data, and refuses replay")
         foreign_receipt["verificationId"] = str(uuid.uuid4())
         foreign_receipt_path.write_text(json.dumps(foreign_receipt), encoding="utf-8")
         snapshots_before_refusal = profile_bytes(foreign_data / "snapshots")
