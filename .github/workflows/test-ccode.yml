@@ -38,6 +38,9 @@ jobs:
       - name: Test portable frontend contract
         shell: pwsh
         run: python tests/ccode/portable-integration.py ./ccode.exe
+      - name: Exercise actual engine tools through the frontend
+        shell: pwsh
+        run: python tests/ccode/tools-integration.py ./ccode.exe
       - uses: actions/upload-artifact@v4
         with:
           name: ccode-windows-tested-${{ matrix.version }}
