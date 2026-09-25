@@ -501,6 +501,60 @@ int main() try {
     try { ccode::ActivateProfileCandidate(activationRoot, secondId, engine, testDigest); }
     catch (const std::runtime_error& error) { alreadyActive = std::string(error.what()) == "E_ACTIVATION_ALREADY_ACTIVE"; }
     assert(alreadyActive && Read(activationRoot / "active-profile.json") == secondPointerBytes);
+    // Preparing an older rollback must preserve writes made since that snapshot.
+    const std::string preservationId = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+    const auto currentFiles = ccode::CandidateFiles(nextCandidate / "profile", testDigest);
+    assert(currentFiles != ccode::VerifyProfileSnapshot(activationRoot / "snapshots" / historyId,
+        testDigest)["files"]);
+    const auto rollback = ccode::PrepareProfileRollback(activationRoot, historyId,
+        historyId, preservationId, incompatibleEngine, testDigest);
+    assert(rollback["state"] == "prepared");
+    assert(rollback["priorActivePointer"] == ccode::Json::parse(secondPointerBytes));
+    assert(rollback["targetEngine"] == incompatibleEngine);
+    assert(Read(activationRoot / "active-profile.json") == secondPointerBytes);
+    assert(ccode::CandidateFiles(nextCandidate / "profile", testDigest) == currentFiles);
+    assert(ccode::VerifyProfileSnapshot(activationRoot / "snapshots" / preservationId,
+        testDigest)["files"] == currentFiles);
+    assert(ccode::CandidateFiles(activationRoot / "rollback-candidates" / historyId / "profile",
+        testDigest) == ccode::VerifyProfileSnapshot(activationRoot / "snapshots" / historyId,
+        testDigest)["files"]);
+    assert(ccode::ReadCandidateDocument(activationRoot / "rollback-candidates" / historyId /
+        "rollback.json") == rollback);
+    const std::string unusedPreservation = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+    bool rollbackCollision = false;
+    try { ccode::PrepareProfileRollback(activationRoot, historyId, historyId,
+        unusedPreservation, engine, testDigest); }
+    catch (const std::runtime_error& error) {
+        rollbackCollision = std::string(error.what()) == "E_ROLLBACK_EXISTS";
+    }
+    assert(rollbackCollision);
+    assert(!fs::exists(activationRoot / "snapshots" / unusedPreservation));
+    const auto linkedRollbackRoot = root / "linked-rollback";
+    fs::create_directories(linkedRollbackRoot);
+    linkError.clear();
+    fs::create_directory_symlink(activationRoot / "snapshots",
+        linkedRollbackRoot / "snapshots", linkError);
+    if (!linkError) {
+        bool rejectedLinkedSource = false;
+        try { ccode::PrepareProfileRollback(linkedRollbackRoot, historyId, secondId,
+            unusedPreservation, engine, testDigest); }
+        catch (const std::runtime_error& error) {
+            rejectedLinkedSource = std::string(error.what()) == "E_ROLLBACK_PATH";
+        }
+        assert(rejectedLinkedSource);
+        assert(!fs::exists(activationRoot / "snapshots" / unusedPreservation));
+    }
+    for (const auto& invalidSource : {std::string("../escape"), unusedPreservation}) {
+        const auto beforeSnapshots = ccode::CandidateFiles(activationRoot / "snapshots", testDigest);
+        bool rejectedSource = false;
+        try { ccode::PrepareProfileRollback(activationRoot, invalidSource, secondId,
+            unusedPreservation, engine, testDigest); }
+        catch (const std::runtime_error&) { rejectedSource = true; }
+        assert(rejectedSource);
+        assert(ccode::CandidateFiles(activationRoot / "snapshots", testDigest) == beforeSnapshots);
+        assert(!fs::exists(activationRoot / "rollback-candidates" / secondId));
+        assert(Read(activationRoot / "active-profile.json") == secondPointerBytes);
+    }
     auto partialReceipt = allReceipt;
     partialReceipt["sessions"].erase(1);
     Write(allCandidate / "validation.json", partialReceipt.dump());
