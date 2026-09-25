@@ -608,3 +608,16 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   transcript 的 cwd 或工作區身份，不使用 8.3 別名。
 - 本機六組 C++、19 項 Python 與 diff 檢查通過；Windows 最小測試及原始公開
   回退重啟案例仍須下一輪 CI 確認，不能先標記已修復或完整驗收通過。
+
+### 公開回退提交與長路徑 Windows 結果
+
+- `ec29bd3` / `36154511355` completed/success。兩版本全部步驟成功；已讀取
+  `2.1.282` job `108135669384` 與 `2.1.221` job `108135669988` 日誌，
+  均完成長路徑 session 最小測試及 public rollback activation 重啟列表 PASS。
+- 此結果證明原先空列表案例已修復；不是所有工具長路徑或真正跨引擎相容性證據。
+- 接續補公開端到端回歸：驗證後新寫入拒絕、真實 Windows 禁止 DELETE sharing
+  導致指標替換失敗、pending 保留及明確歸檔後重試、重複提交拒絕，並在兩個
+  原工作區以原 session ID 恢復，核對實際引擎請求中的原歷史標記。所有舊 active、
+  snapshots 與 frozen checkpoint 必須不變；無憑證提交階段零 API。
+- 新增案例本機 Python 語法、19 項回歸及 diff 檢查通過；Windows 待下一輪 run。
+  故障注入為真實檔案替換失敗，不等同磁碟滿或斷電。整體仍未放行。

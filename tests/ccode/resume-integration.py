@@ -628,6 +628,36 @@ def verify(executable):
 
         foreign_receipt_path.write_bytes(valid_foreign_receipt)
         rollback_saved = profile_bytes(rollback_candidate / "profile")
+        rollback_snapshots_before = profile_bytes(foreign_data / "snapshots")
+        rollback_frozen_before = profile_bytes(foreign_data / "rollback-verified")
+        changed_active = foreign_candidate / "profile" / "after-rollback-verification.txt"
+        changed_active.write_text("preserve newly written data", encoding="utf-8")
+        refused = foreign_command("--activate-rollback", rollback_id)
+        assert refused.returncode == 64 and refused.stderr.strip() == "E_ROLLBACK_CHANGED", refused
+        assert changed_active.read_text(encoding="utf-8") == "preserve newly written data"
+        assert foreign_pointer_path.read_bytes() == pointer_before and not requests
+        changed_active.unlink()  # Restore this controlled fixture, not a product recovery policy.
+        with deny_pointer_replacement(foreign_pointer_path):
+            failed_rollback = foreign_command("--activate-rollback", rollback_id)
+        assert failed_rollback.returncode == 64 and failed_rollback.stderr.strip() == "E_ACTIVATION_WRITE", failed_rollback
+        assert foreign_pointer_path.read_bytes() == pointer_before
+        rollback_pending = foreign_data / "active-profile.json.pending"
+        rollback_pending_bytes = rollback_pending.read_bytes()
+        assert json.loads(rollback_pending_bytes)["candidateId"] == rollback_id
+        assert json.loads(rollback_pending_bytes)["profileKind"] == "rollback"
+        assert profile_bytes(rollback_candidate / "profile") == rollback_saved
+        assert profile_bytes(foreign_candidate / "profile") == foreign_before
+        assert profile_bytes(foreign_data / "snapshots") == rollback_snapshots_before
+        assert profile_bytes(foreign_data / "rollback-verified") == rollback_frozen_before
+        retry = foreign_command("--activate-rollback", rollback_id)
+        assert retry.returncode == 64 and retry.stderr.strip() == "E_ACTIVATION_PENDING", retry
+        assert rollback_pending.read_bytes() == rollback_pending_bytes and not requests
+        archived = foreign_command("--archive-activation-pending")
+        assert archived.returncode == 0, archived
+        archive_id = str(uuid.UUID(archived.stdout.strip()))
+        assert (foreign_data / "activation-recovery" / archive_id / "pending.json").read_bytes() == rollback_pending_bytes
+        assert foreign_pointer_path.read_bytes() == pointer_before
+        assert not rollback_pending.exists() and not requests
         committed = foreign_command("--activate-rollback", rollback_id)
         assert committed.returncode == 0, committed
         rollback_pointer = json.loads(foreign_pointer_path.read_text(encoding="utf-8"))
@@ -650,6 +680,24 @@ def verify(executable):
             assert session_id in restarted.stdout, restarted
         assert not requests
         print("PASS: public rollback activation selects verified history on restart without API and preserves newer active data")
+
+        committed_pointer_bytes = foreign_pointer_path.read_bytes()
+        repeated_rollback = foreign_command("--activate-rollback", rollback_id)
+        assert repeated_rollback.returncode == 64 and repeated_rollback.stderr.strip() == "E_ACTIVATION_ALREADY_ACTIVE", repeated_rollback
+        assert foreign_pointer_path.read_bytes() == committed_pointer_bytes and not requests
+        for (workspace, session_id), marker in zip(workspace_sessions.items(), history_markers):
+            resumed = subprocess.run([str(executable), "--resume", session_id, "--print", "after verified rollback"],
+                cwd=workspace, env=rollback_env, capture_output=True, text=True, encoding="utf-8", timeout=60)
+            assert resumed.returncode == 0, resumed
+            assert marker in json.dumps(requests[-1].get("messages", [])[:-1]), "Rollback lost original session history"
+        assert len(requests) == len(workspace_sessions)
+        assert profile_bytes(rollback_candidate / "profile") != rollback_saved
+        assert profile_bytes(foreign_candidate / "profile") == foreign_before
+        assert profile_bytes(foreign_data / "snapshots") == rollback_snapshots_before
+        assert profile_bytes(foreign_data / "rollback-verified") == rollback_frozen_before
+        assert foreign_pointer_path.read_bytes() == committed_pointer_bytes
+        print("PASS: rollback rejects newer writes, preserves Windows replacement failure evidence, archives before retry, and resumes both real sessions")
+
 
 
 
