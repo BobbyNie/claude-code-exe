@@ -21,6 +21,7 @@ class EventReader {
     std::string Event(const Json& event) {
         if (!event.is_object()) throw std::runtime_error("E_PROTOCOL");
         const auto type = event.value("type", std::string());
+        if (complete && (type == "assistant" || type == "result")) throw std::runtime_error("E_PROTOCOL_ORDER");
         if (event.contains("session_id")) session = event.at("session_id").get<std::string>();
         if (type == "assistant") {
             std::string output;

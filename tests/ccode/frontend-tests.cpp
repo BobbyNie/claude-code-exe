@@ -24,5 +24,10 @@ int main() {
         assert(rejected);
     }
     assert(ccode::ConsoleText("\x1b[2Jhello\r") == "[2Jhello");
+    // A complete event must not be silently accepted after the terminal result.
+    bool afterResult = false;
+    try { reader.Feed("{\"type\":\"assistant\",\"message\":{\"content\":[]}}\n"); }
+    catch (...) { afterResult = true; }
+    assert(afterResult);
     std::cout << "frontend event tests passed\n";
 }
