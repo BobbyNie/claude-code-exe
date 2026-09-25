@@ -1,4 +1,7 @@
 """Acceptance: a modified embedded original payload must fail integrity checks."""
+from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import threading
 import ctypes
 import hashlib
 import json
@@ -7,6 +10,35 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+
+
+@contextmanager
+def rejecting_gateway():
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *_):
+            pass
+
+        def do_POST(self):
+            self.rfile.read(int(self.headers.get('Content-Length', '0')))
+            self.server.requests.append(self.path)
+            body = b'{"type":"error","error":{"type":"authentication_error","message":"test rejection"}}'
+            self.send_response(401)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+    server.requests = []
+    server.url = f'http://127.0.0.1:{server.server_address[1]}'
+    worker = threading.Thread(target=server.serve_forever, daemon=True)
+    worker.start()
+    try:
+        yield server
+    finally:
+        server.shutdown()
+        server.server_close()
+        worker.join(timeout=5)
 
 
 def tamper_payload(image, payload, expected_sha256):
@@ -92,8 +124,36 @@ def check(executable):
         assert startup.stderr.strip() == b'E_CHECKSUM', 'Normal startup missed integrity check'
         assert not list(root.rglob('engine.exe')), 'Modified payload was extracted'
         assert not list(root.rglob('*.jsonl')), 'Modified payload produced session history'
+        # A valid original must be extracted unchanged; a changed cached copy
+        # must be replaced before actual engine execution, not merely trusted by name.
+        candidate.write_bytes(source)
+        with rejecting_gateway() as gateway:
+            environment['A_BASE_URL'] = gateway.url
+            extracted = root / 'runtime' / metadata['sha256'] / 'engine.exe'
+            for attempt in range(2):
+                if attempt:
+                    with extracted.open('r+b') as cached:
+                        cached.seek(-1, 2)
+                        value = cached.read(1)
+                        cached.seek(-1, 2)
+                        cached.write(bytes([value[0] ^ 1]))
+                    assert hashlib.sha256(extracted.read_bytes()).hexdigest() != metadata['sha256']
+                before = len(gateway.requests)
+                turn = subprocess.run([str(candidate), '--data-dir', str(data), '--print',
+                                       '--tools', '', 'integrity-test-only'], cwd=root,
+                                      env=environment, input=b'', capture_output=True, timeout=60)
+                assert turn.returncode != 0, 'Fixture authentication rejection unexpectedly succeeded'
+                terminal = turn.stderr + turn.stdout
+                assert b'E_GATEWAY_AUTH' in terminal, 'Engine did not reach auth fixture'
+                assert b'test-only-integrity-token' not in terminal, 'Fixture token disclosed'
+                assert b'integrity-test-only' not in terminal, 'Fixture prompt disclosed'
+                assert gateway.requests[before:] == ['/v1/messages'], 'Expected one actual engine request'
+                restored = extracted.read_bytes()
+                assert hashlib.sha256(restored).hexdigest() == metadata['sha256'], 'Extracted hash differs'
+                assert restored == payload, 'Extracted bytes differ from original embedded payload'
+                assert not (extracted.parent / 'engine.new').exists(), 'Extraction candidate left behind'
         assert executable.read_bytes() == source, 'Original build was modified'
-    print('PASS: original embedded payload hash verified; tampered payload rejected by self-test and normal startup')
+    print('PASS: embedded tampering rejected; actual extracted payload and repaired cache match original hash and bytes')
 
 
 if __name__ == '__main__':
