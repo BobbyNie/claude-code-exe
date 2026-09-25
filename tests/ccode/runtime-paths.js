@@ -3,22 +3,26 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { checkRename } = require('./rename-contract.cjs');
 
 console.log('Creating the session tasks directory');
 const tasks = path.join(process.env.TEMP, 'claude', 'D--tt', 'session', 'tasks');
 fs.mkdirSync(tasks, { recursive: true });
 fs.mkdirSync(tasks, { recursive: true });
 assert.ok(fs.statSync(tasks).isDirectory(), 'created tasks directory must be visible');
-const filename = path.join(tasks, 'claude-anthropic-log.txt');
+let filename = path.join(tasks, 'claude-anthropic-log.txt');
 fs.writeFileSync(filename, 'ccode-path-marker');
 assert.equal(fs.readFileSync(filename, 'utf8'), 'ccode-path-marker');
 assert.ok(fs.readdirSync(tasks).includes(path.basename(filename)));
+filename = checkRename(filename);
+console.log('PASS: native rename and missing-parent failure preserve bytes and directory visibility');
 const child = spawnSync(process.env.ComSpec || 'cmd.exe', ['/d', '/c', 'type', filename], {
   encoding: 'utf8', timeout: 15000,
 });
 assert.ifError(child.error);
 assert.equal(child.status, 0, child.stderr);
 assert.match(child.stdout, /ccode-path-marker/);
+console.log('PASS: child process reads the renamed native file');
 console.log('ccode runtime path tests passed');
 
 // Bun must be able to respawn the official payload, just as Grep/Glob do.

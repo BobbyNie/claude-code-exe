@@ -89,6 +89,9 @@ try {
     try {
         $fixture = Join-Path $testRoot 'runtime-paths.js'
         Copy-Item (Join-Path $PSScriptRoot '../../tests/ccode/runtime-paths.js') $fixture
+        Copy-Item (Join-Path $PSScriptRoot '../../tests/ccode/rename-contract.cjs') (Join-Path $testRoot 'rename-contract.cjs')
+        bun test (Join-Path $PSScriptRoot '../../tests/ccode/rename-contract-tests.cjs')
+        if ($LASTEXITCODE -ne 0) { throw 'Rename acceptance oracle regression failed' }
         $env:TEMP = Join-Path $testRoot 'data/cc/profile/temp'
         $payloadPath = (Get-ChildItem (Join-Path $testRoot 'runtime') -Filter engine.exe -Recurse | Select-Object -First 1).FullName
         python -c 'import subprocess,sys; sys.exit(subprocess.run(sys.argv[1:], timeout=60).returncode)' (Get-Command bun).Source $fixture $payloadPath
