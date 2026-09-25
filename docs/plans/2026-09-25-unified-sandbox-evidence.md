@@ -511,3 +511,13 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   最新 active 的保全快照、原指標與來源不變、無 API、無相容驗證回執。
   這不是兩個真實版本間的相容性驗收。本機六組 C++、19 項 Python 通過；
   新 launcher 公開行為須由下一輪 Windows CI 證明，完整回退仍未完成。
+
+### 公開回退準備 Windows 結果
+
+- `154b5eb` / `36148979959` completed/success。兩版本 `2.1.221`
+  （job `108117151311`）、`2.1.282`（job `108117151367`）均完成全部步驟。
+- 已分別讀取日誌，兩者都有 `PASS: explicit rollback preparation preserves
+  latest active data and pointer, isolates old snapshot, and needs no API`。
+  portable 混合參數拒絕、既有 native/resume 及真實工具回歸亦成功。
+- 此結果只證明公開準備階段；尚未提供回退驗證／提交，不能等同完整跨引擎
+  回退或企業驗收放行。
