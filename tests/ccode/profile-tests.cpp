@@ -98,6 +98,21 @@ int main() try {
     assert(interrupted && !fs::exists(snapshots / interruptedId));
     assert(fs::exists(snapshots / (interruptedId + ".pending")));
     assert(Read(active / "home/history.jsonl") == "source transcript\n");
+    // Classify filesystem failures without leaking source paths or OS messages.
+    const std::string deniedId = "82345678-1234-1234-1234-123456789abc";
+    bool classifiedFilesystem = false;
+    try {
+        ccode::CreateProfileSnapshot(active, snapshots, deniedId, [](const fs::path&) -> std::string {
+            throw fs::filesystem_error("private diagnostic", fs::path("private-source"),
+                std::make_error_code(std::errc::permission_denied));
+        });
+    } catch (const std::runtime_error& error) {
+        classifiedFilesystem = std::string(error.what()) == "E_SNAPSHOT_FS: hash-source: generic: " +
+            std::to_string(static_cast<int>(std::errc::permission_denied));
+    }
+    assert(classifiedFilesystem);
+    assert(!fs::exists(snapshots / deniedId));
+    assert(fs::exists(snapshots / (deniedId + ".pending")));
     const std::string changedId = "32345678-1234-1234-1234-123456789abc";
     bool changed = false;
     try {

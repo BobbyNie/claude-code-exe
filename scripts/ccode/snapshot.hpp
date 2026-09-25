@@ -10,10 +10,13 @@ using SnapshotDigest = std::function<std::string(const std::filesystem::path&)>;
 inline std::filesystem::path CreateProfileSnapshot(const std::filesystem::path& profile,
     const std::filesystem::path& snapshots, const std::string& id, const SnapshotDigest& digest) {
     namespace fs = std::filesystem;
+    const char* operation = "location";
+    try {
     if (!ValidSessionId(id)) throw std::runtime_error("E_SNAPSHOT_ID");
     const auto relative = fs::weakly_canonical(snapshots).lexically_relative(fs::canonical(profile));
     if (relative.empty() || *relative.begin() != "..") throw std::runtime_error("E_SNAPSHOT_LOCATION");
     if (fs::is_symlink(fs::symlink_status(snapshots))) throw std::runtime_error("E_SNAPSHOT_LOCATION");
+    operation = "create-staging";
     fs::create_directories(snapshots);
     const auto target = snapshots / id;
     const auto staging = snapshots / (id + ".pending");
@@ -35,35 +38,55 @@ inline std::filesystem::path CreateProfileSnapshot(const std::filesystem::path& 
         }
         return files;
     };
+    operation = "inventory";
     const auto files = inventory();
     Json entries = Json::object();
+    operation = "create-directories";
     for (const auto& entry : fs::recursive_directory_iterator(profile)) {
         if (entry.is_directory() && !entry.is_symlink())
             fs::create_directories(copied / entry.path().lexically_relative(profile));
     }
     for (const auto& item : files) {
+        operation = "hash-source";
         const auto hash = digest(item.second);
+        operation = "source-size";
         const auto size = fs::file_size(item.second);
         const auto destination = copied / fs::u8path(item.first);
+        operation = "create-parent";
         fs::create_directories(destination.parent_path());
+        operation = "copy-file";
         fs::copy_file(item.second, destination, fs::copy_options::none);
+        operation = "timestamp";
         fs::last_write_time(destination, fs::last_write_time(item.second));
+        operation = "verify-copy";
         if (digest(destination) != hash || digest(item.second) != hash || fs::file_size(destination) != size)
             throw std::runtime_error("E_SNAPSHOT_CHANGED");
         entries[item.first] = {{"sha256", hash}, {"size", size}};
     }
+    operation = "verify-source";
     if (inventory() != files) throw std::runtime_error("E_SNAPSHOT_CHANGED");
     for (const auto& item : files)
         if (digest(item.second) != entries[item.first]["sha256"])
             throw std::runtime_error("E_SNAPSHOT_CHANGED");
     const Json manifest = {{"schema", 1}, {"snapshotId", id}, {"files", entries}};
+    operation = "manifest";
     std::ofstream output(staging / "manifest.json", std::ios::binary);
     output << manifest.dump(2) << '\n';
     output.close();
     if (!output) throw std::runtime_error("E_SNAPSHOT_WRITE");
+    operation = "publish";
     fs::rename(staging, target);
     return target;
+    } catch (const fs::filesystem_error& error) {
+        // Never expose filesystem_error::what(): it contains user paths.
+        const auto& category = error.code().category();
+        const char* domain = category == std::system_category() ? "system" :
+            category == std::generic_category() ? "generic" : "other";
+        throw std::runtime_error(std::string("E_SNAPSHOT_FS: ") + operation + ": " +
+            domain + ": " + std::to_string(error.code().value()));
+    }
 }
+
 inline Json VerifyProfileSnapshot(const std::filesystem::path& snapshot, const SnapshotDigest& digest) {
     namespace fs = std::filesystem;
     const auto manifestPath = snapshot / "manifest.json";
