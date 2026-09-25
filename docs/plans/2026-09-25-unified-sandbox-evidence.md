@@ -715,3 +715,12 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - 本機六組 C++、20 項 Python 及 diff 檢查通過；Windows 修復結果仍待下一輪。
   此案例覆蓋長 profile 的登記檔建立／重讀、歷史發現及刪除索引後重建，
   不代表全部工具或長工作區 cwd 已驗收，整體仍未放行。
+
+### 長 profile 身份與索引 Windows GREEN
+
+- `237eb50` / `36161251653` completed/success，兩版本單測與整合以及跨版本
+  job 均通過。已讀取實際日誌：`108158077223`（2.1.221）及 `108158077702`
+  （2.1.282）均在 Checking workspace identity and rebuilt index beyond 260
+  characters 後輸出 session discovery passed，先前失敗案例已完成 Windows RED→GREEN。
+- cross-version `108159847314` 亦完成資料根搬移續接 PASS。修復未改寫歷史內容，
+  也未放寬超長路徑斷言。此證據仍不涵蓋超長工作區 cwd、全工具鏈、UNC 或企業端點。
