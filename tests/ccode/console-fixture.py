@@ -10,9 +10,10 @@ import time
 
 def process_diagnostics(pid):
     """Bounded, numeric-only process/thread snapshot; never replace the primary failure."""
-    unavailable = {"status": "unavailable", "processes": []}
+    def unavailable(reason):
+        return {"status": "unavailable", "reason": reason, "processes": []}
     if type(pid) is not int or pid <= 0:
-        return unavailable
+        return unavailable("invalid_pid")
     script = r'''
 $ErrorActionPreference = 'Stop'
 $rootId = ROOT_PID
@@ -43,10 +44,10 @@ ConvertTo-Json -InputObject $rows -Depth 5 -Compress
                                 encoding="utf-8", errors="replace", timeout=10,
                                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         if result.returncode != 0:
-            return unavailable
+            return unavailable("collector_exit")
         rows = json.loads(result.stdout)
         if not isinstance(rows, list):
-            return unavailable
+            return unavailable("invalid_output")
         processes = []
         def number(value):
             if type(value) is not int:
@@ -57,8 +58,14 @@ ConvertTo-Json -InputObject $rows -Depth 5 -Compress
                               "threads": [{key: number(thread[key]) for key in ("id", "state", "wait")}
                                           for thread in row["threads"]]})
         return {"status": "captured", "processes": processes}
-    except (OSError, subprocess.SubprocessError, ValueError, TypeError, KeyError):
-        return unavailable
+    except subprocess.TimeoutExpired:
+        return unavailable("timeout")
+    except OSError:
+        return unavailable("launch_failed")
+    except subprocess.SubprocessError:
+        return unavailable("collector_failed")
+    except (ValueError, TypeError, KeyError):
+        return unavailable("invalid_output")
 
 
 def wait_for_persisted_history(data, process, timeout=15):

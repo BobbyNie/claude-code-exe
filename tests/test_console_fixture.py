@@ -18,7 +18,7 @@ class ConsoleFixtureTests(unittest.TestCase):
     @unittest.skipUnless(os.name == "nt", "Requires actual Windows process/thread API")
     def test_windows_process_diagnostics_capture_actual_live_threads(self):
         snapshot = fixture.process_diagnostics(os.getpid())
-        self.assertEqual(snapshot["status"], "captured")
+        self.assertEqual(snapshot["status"], "captured", snapshot)
         current = next(row for row in snapshot["processes"] if row["pid"] == os.getpid())
         self.assertTrue(current["threads"], "No actual thread state captured")
 
@@ -34,14 +34,21 @@ class ConsoleFixtureTests(unittest.TestCase):
         self.assertEqual(run.call_args.kwargs["timeout"], 10)
 
     def test_process_diagnostic_errors_do_not_expose_output_or_mask_primary_failure(self):
-        for outcome in (Mock(returncode=1, stdout="private", stderr="secret"),
-                        Mock(returncode=0, stdout="not-json secret", stderr=""),
-                        subprocess.TimeoutExpired("sensitive command", 10, output="secret")):
-            with self.subTest(outcome=type(outcome).__name__):
+        cases = (
+            (Mock(returncode=1, stdout="private", stderr="secret"), "collector_exit"),
+            (Mock(returncode=0, stdout="not-json secret", stderr=""), "invalid_output"),
+            (Mock(returncode=0, stdout='{"private":"secret"}', stderr=""), "invalid_output"),
+            (Mock(returncode=0, stdout='[{"pid":"secret"}]', stderr=""), "invalid_output"),
+            (subprocess.TimeoutExpired("sensitive command", 10, output="secret"), "timeout"),
+            (OSError("private path"), "launch_failed"),
+            (subprocess.SubprocessError("private command"), "collector_failed"),
+        )
+        for outcome, reason in cases:
+            with self.subTest(reason=reason):
                 options = {"side_effect": outcome} if isinstance(outcome, Exception) else {"return_value": outcome}
                 with patch.object(fixture.subprocess, "run", **options):
                     snapshot = fixture.process_diagnostics(123)
-                self.assertEqual(snapshot, {"status": "unavailable", "processes": []})
+                self.assertEqual(snapshot, {"status": "unavailable", "reason": reason, "processes": []})
 
     def test_waits_for_persisted_user_record_not_just_file_creation(self):
         with tempfile.TemporaryDirectory() as folder:

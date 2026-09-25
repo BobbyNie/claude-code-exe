@@ -26,19 +26,19 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 | A03 | 原始負載 | build 上游 checksum；啟動資源 SHA256、解出內容逐位元組校驗 | 隨包來源清單、實際 extracted hash 證據及篡改案例 |
 | A04 | 內部範圍 | ADR 明確允許引擎／使用者資料原名 | 隨包公開邊界清單、runtime 環境及 metadata 記錄、必要通知核實 |
 | A05 | 資料分離 | --data-dir、獨立 profile；工具 integration 檢查程式區無 session | 更新、搬移、重新打包排除資料、程式區無 temp 全面快照 |
-| A06 | 路徑一致 | runtime-paths.js 真實 mkdir/stat/讀寫/列舉/刪除/子進程；`05750fe` / `36182355211` 兩版本原生 rename、缺父目錄失敗保全、重命名後 cmd 讀取與內建 Grep/Glob 通過 | 模型驅動同工作區重命名工具鏈及完整故障結果仍欠；不代表長 cwd 通過 |
+| A06 | 路徑一致 | 原生 mkdir/stat/讀寫/列舉/刪除/子進程；`05750fe` 原生 rename；`7d579ce` / `36184360358` 兩版本一般／case／junction 的真實 Bash mv→Read→Edit→Grep→Glob 及失敗 rename 保全通過 | 本機 API fixture 不替代真實模型／企業 gateway；完整故障矩陣仍欠，不代表長 cwd 通過 |
 | A07 | 執行檔 | `36123600008` 兩版本通過：空格／中文程式與工作區、前端→真正 Grep/Glob；既有自啟動測試亦通過 | 本條所列 CI 場景通過；乾淨端點證據仍依 A01 |
 | A08 | 路徑邊界 | 工具 fixture 含中文／空格；`87f7065` / `36135890793` 兩版本快照／候選超過 260 字元測試通過 | `92f3e3a` / `36175453668` 兩版本大小寫及 junction 下六工具、UUID、列表與實際續接通過；全工作區長 cwd 仍 WinError 267，UNC 支援界線與明確拒絕／驗證仍欠 |
-| A09 | 基本工具 | tools-integration.py 驅動真實 Write/Edit/Read/Grep/Glob/Bash | 兩版本一般完整路徑工具成功與 8.3 短路徑拒絕已驗證；仍欠批准／取消、政策退出碼、實際 gateway 試運行 |
-| A10 | 串流 JSON | frontend-tests.cpp 每個文字 UTF-8 byte 分片點；穩定錯誤碼、失敗不可重啟 | `0097a5a` 補工具 JSON 每個 byte 分片點、無效 UTF-8、超限、缺終止／截斷後不可復活；仍欠大小邊界、斷流／故障端到端 |
-| A11 | 工具名稱 | init 宣告工具清單；空名、未知名、空／重複 ID、錯誤參數分類 | 缺終止事件、所有狀態轉移與新版本／擴展的真實事件相容 |
-| A12 | 權限 | PermissionRpc 預設拒絕；interactive console；Job Object；`e22cd72` / `36124014490` 兩版本真實 Bash→PowerShell 後代在 Ctrl+Break／前端強制終止後退出，無延遲寫入 | `cacdb06` / `36129711620` 兩版本真實 console 批准／拒絕／等待批准中取消通過；`199b57b` 同 profile 故障後重啟亦通過；仍需目標普通帳戶端點證據 |
-| A13 | 歷史 | --sessions、--resume、--continue、/resume；工作區 UUID 索引；fixture 驗證請求歷史標記 | `bcd18a5` / `36178387814` 兩版本已知歸屬損壞會話 unavailable、指定／最新／picker 拒絕、健康歷史實際兩輪續接及來源不變通過；未知歸屬仍整次拒絕，版本相容／完整損壞恢復及企業端點證據仍欠 |
+| A09 | 基本工具 | tools-integration.py 驅動真實 Write/Edit/Read/Grep/Glob/Bash；一般完整路徑成功、8.3 短路徑無批准拒絕；特定 console 批准／拒絕／取消見 A12 | 全工具政策／取消矩陣、實際 gateway 試運行仍欠；A12 間歇停滯尚未解決 |
+| A10 | 串流 JSON | UTF-8／工具 JSON 每個 byte 分片點、失敗不可復活；`3be31ae` / `36163996525` 每行 16 MiB 邊界及合併／分片等價通過；`36173166133`、`36174265807` 真實引擎截斷及正常 EOF 缺終止案例通過 | 特定 fixture 不代表所有串流／擴展狀態或企業 gateway；完整故障矩陣仍欠 |
+| A11 | 工具名稱 | 空／未知工具名、空／重複 ID、錯誤參數分類；`be9f26a` / `36186966481` 重複宣告拒絕；`7599787` / `36188226673` 重複及 result 後 init 拒絕；缺 block 終止案例見 A10 | 所有狀態轉移、新版本／擴展的真實事件相容仍欠；前端拒絕不等於能撤銷引擎已執行副作用 |
+| A12 | 權限 | 預設拒絕、interactive console、Job Object；既有兩版本批准／拒絕／取消及真實後代回收通過；`8a2ac80` / `36185827200` 數值白名單進程診斷 Windows API 通過 | `36184360358` 新版 console 空白停滯、kill wait 逾時及鎖占用未定位；後續綠燈不代表修復。`66d1836` / `36191269730` RPC 案例舊版通過、新版因診斷測試失敗被跳過；目標普通帳戶端點仍欠 |
+| A13 | 歷史 | --sessions／--resume／--continue／picker、工作區 UUID；`bcd18a5` 已知歸屬損壞會話 unavailable 及拒絕；`ad17981` / `36188662312` 固定 resume 身份、健康兩輪歷史及跨版本續接回歸通過 | 未知歸屬損壞仍整次拒絕；完整支援版本、損壞恢復及企業端點證據仍欠 |
 | A14 | 升級／搬移 | `ee9e8b5` / `36159427257` 真正 2.1.221 → 2.1.282 → 2.1.221 回退、程式目錄及外置資料根搬移後續接通過；不相容引擎拒絕 | 工作區本身搬移、完整支援版本／隨包相容 manifest、企業端點實測 |
-| A15 | 遷移 | SHA-256 快照、隔離候選、全會話 preflight／實際恢復驗證、來源變動拒絕、原子 active 切換及回退；`36159427257` 跨版本 job 通過；Windows 替換失敗、pending 歸檔重試有證據 | 重名衝突完整分類、磁碟滿／強制中斷邊界與重試、企業真實資料／gateway 驗收；檔案替換失敗不等於斷電 |
+| A15 | 遷移 | SHA-256 快照、隔離候選、全會話 preflight／恢復、來源變動拒絕、原子切換及回退；`c17b873` / `36190191804` 兩版本公開 --archive-workspace-pending 保全原 bytes／已提交身份及重試通過 | 重名衝突完整分類、磁碟滿／強制中斷邊界與重試、企業真實資料／gateway 驗收；預置 pending 或檔案替換失敗不等於斷電 |
 | A16 | 並發 | profile-wide 排他鎖 | 故障釋鎖已由 `199b57b` 實測；仍欠同 session 單寫入、多 session 同工作區 |
 | A17 | 擴展 | CLI 參數可接設定／MCP／agents | 技能、子代理、核准 MCP 真實流程及明確版本相容矩陣 |
-| A18 | 網路 | gateway 設定入口；不宣稱 OS 網路隔離 | 不可達、TLS、過期憑證、429、斷流分類；不重放寫入；核准端點部署政策 |
+| A18 | 網路 | gateway 設定入口；實際引擎本機 fixture 已覆蓋不可達、401、429、傳輸截斷、正常 EOF 未完成／完整參數但缺終止；指定案例要求非零退出、無寫入／洩漏，HTTP 案例一次模型請求 | TLS／DNS／過期憑證及完整分類、企業核准端點／部署政策仍欠；不得推廣為所有故障無重放，亦不宣稱 OS 網路隔離 |
 | A19 | 診斷 | 中性錯誤碼；parser 內容不直接外洩 | 操作／追蹤 ID、分類診斷包、憑證遮罩、預設不記提示／內容的實測 |
 | A20 | 更新 | SHA256、版本化 runtime | 可信簽名 manifest、固定依賴、簽名失敗、中斷、相容資料快照回退 |
 
@@ -1230,3 +1230,23 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - 六組 C++ 通過；Python 29 通過、1 Windows 專用跳過。portable 新增
   真實權限 worker 的批次無效請求案例及不回顯私人 ID 斷言。Windows 真實
   引擎 allow／deny／cancel 相容性與新 worker 案例待本輪 CI，不能沿用舊結果。
+
+### RPC 外層驗證實際結果與診斷收集器失敗
+
+- `66d1836` / `36191269730` 已終態，已讀取完整日誌。舊版主測試
+  `108256681816` 成功，真實 permission worker 拒絕 malformed RPC 案例明確
+  PASS；新版 `108256681548` 在 Python Windows 真實診斷測試回傳 unavailable，
+  而非 captured，導致 native runtime/resume 步驟失敗及 portable 步驟跳過。
+  因此新版 malformed RPC 案例本輪沒有執行，不能以舊版結果代替。
+- 兩版本獨立 tools 步驟的真實 console allow／deny／cancel 均 PASS，別名與
+  gateway 步驟成功；cross-version `108258585034` 升級／回退及資料根搬移
+  續接明確 PASS。long-workspace `108258584972`、`108258584986` 日誌仍為
+  WinError 267。整體 failure，未放行。
+- 原收集器把啟動、逾時、非零退出和格式錯誤都合併為 unavailable，現有日誌
+  不足以確認此次失敗根因；不能稱為 runner 波動或 console 停滯重現。
+  TDD 新增固定白名單原因分類斷言先 RED，再最小分類處理 GREEN；不輸出
+  原始命令／stdout／stderr／例外字串。Windows 真實測試失敗時顯示安全快照，
+  仍要求 captured 及真實 threads，不加重試、不提高 10 秒上限。
+- 本機 Python 30 項：29 通過、1 Windows 專用跳過，diff 檢查通過。
+  本次只改善根因可觀測性，不宣稱收集器或 console 間歇故障已修復。
+  同步 A06／A09–13／A15／A18 摘要與既有追加證據；未移除任何剩餘放行條件。
