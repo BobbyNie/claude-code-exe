@@ -340,7 +340,15 @@ def verify(executable):
                 messages = request.get("messages", [])
                 diagnostics["requests"].append({
                     "history_markers": [marker in json.dumps(messages[:-1]) for marker in history_markers],
-                    "probe_last": bool(messages) and "For profile recovery verification" in json.dumps(messages[-1])})
+                    "probe_last": bool(messages) and "For profile recovery verification" in json.dumps(messages[-1]),
+                    "message_shapes": [{"role": message.get("role"),
+                        "probe": "For profile recovery verification" in json.dumps(message),
+                        "markers": [marker in json.dumps(message) for marker in history_markers],
+                        "content_kind": type(message.get("content")).__name__,
+                        "block_types": [block.get("type") for block in message.get("content", [])
+                                        if isinstance(block, dict)]
+                                        if isinstance(message.get("content"), list) else []}
+                        for message in messages]})
             candidate_profile = all_data / "candidates" / all_id / "profile"
             for transcript in sorted((candidate_profile / "home/.claude/projects").glob("*/*.jsonl")):
                 info = {"known_id": transcript.stem in real_sessions, "records": []}
