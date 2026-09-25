@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -528,6 +529,50 @@ def verify(executable):
         assert repeated.returncode == 64 and repeated.stderr.strip() == "E_ACTIVATION_ALREADY_ACTIVE", repeated
         assert (all_data / "active-profile.json").read_bytes() == repeated_pointer
         print("PASS: second activation preserves old pointer on pending conflict, replaces it on success, and rejects reactivation without data changes")
+        # Synthetic engine-identity mismatch checks the management-only boundary;
+        # it is NOT evidence of actual cross-version history compatibility.
+        foreign_data = executable.parent / "foreign engine backup data"
+        shutil.copytree(all_data, foreign_data)
+        foreign_pointer_path = foreign_data / "active-profile.json"
+        foreign_pointer = json.loads(foreign_pointer_path.read_text(encoding="utf-8"))
+        foreign_pointer["engine"] = {"version": "0.0.0-fixture", "sha256": "f" * 64}
+        foreign_pointer_path.write_text(json.dumps(foreign_pointer), encoding="utf-8")
+        foreign_candidate = foreign_data / "candidates" / next_id
+        foreign_receipt_path = foreign_candidate / "validation.json"
+        foreign_receipt = json.loads(foreign_receipt_path.read_text(encoding="utf-8"))
+        foreign_receipt["engine"] = foreign_pointer["engine"]
+        foreign_receipt_path.write_text(json.dumps(foreign_receipt), encoding="utf-8")
+        foreign_env = {key: value for key, value in all_env.items()
+                       if not key.startswith(("A_", "ANTHROPIC_", "CLAUDE_"))}
+        foreign_env["CCODE_DATA_DIR"] = str(foreign_data)
+        def foreign_command(*arguments):
+            return subprocess.run([str(executable), *arguments], cwd=executable.parent,
+                                  env=foreign_env, capture_output=True, text=True, encoding="utf-8", timeout=60)
+        foreign_before = profile_bytes(foreign_candidate / "profile")
+        pointer_before = foreign_pointer_path.read_bytes()
+        runtime_refused = foreign_command("--sessions")
+        assert runtime_refused.returncode == 64 and runtime_refused.stderr.strip() == "E_ACTIVE_PROFILE", runtime_refused
+        preserved = foreign_command("--snapshot-profile")
+        assert preserved.returncode == 0, preserved
+        preserved_id = str(uuid.UUID(preserved.stdout.strip()))
+        preserved_snapshot = foreign_data / "snapshots" / preserved_id
+        assert profile_bytes(preserved_snapshot / "profile") == foreign_before
+        manifest = json.loads((preserved_snapshot / "manifest.json").read_text(encoding="utf-8"))
+        assert set(manifest["files"]) == set(foreign_before)
+        for name, content in foreign_before.items():
+            assert manifest["files"][name] == {"sha256": hashlib.sha256(content).hexdigest(), "size": len(content)}
+        assert profile_bytes(foreign_candidate / "profile") == foreign_before
+        assert foreign_pointer_path.read_bytes() == pointer_before and not requests
+        runtime_refused = foreign_command("--sessions")
+        assert runtime_refused.returncode == 64 and runtime_refused.stderr.strip() == "E_ACTIVE_PROFILE", runtime_refused
+        foreign_receipt["verificationId"] = str(uuid.uuid4())
+        foreign_receipt_path.write_text(json.dumps(foreign_receipt), encoding="utf-8")
+        snapshots_before_refusal = profile_bytes(foreign_data / "snapshots")
+        invalid_backup = foreign_command("--snapshot-profile")
+        assert invalid_backup.returncode == 64 and invalid_backup.stderr.strip() == "E_ACTIVE_PROFILE", invalid_backup
+        assert profile_bytes(foreign_data / "snapshots") == snapshots_before_refusal
+        print("PASS: engine-mismatched profile permits byte-preserving backup only; runtime and inconsistent pointer remain refused without API")
+
 
 
 

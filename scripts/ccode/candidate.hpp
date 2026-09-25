@@ -285,14 +285,15 @@ inline Json VerifyCandidateActivation(const std::filesystem::path& candidate,
 
 // Selection is read under the data-root coordination lock. A missing pointer
 // preserves legacy layout; an existing invalid pointer must never fall back.
-inline std::filesystem::path ResolveActiveProfile(const std::filesystem::path& data, const Json& engine) {
+// Only for byte-preserving backup: this does NOT authorize engine execution.
+inline std::filesystem::path ResolveProfileForBackup(const std::filesystem::path& data) {
     namespace fs = std::filesystem;
     const auto pointer = SnapshotIoPath(data / "active-profile.json");
     if (!fs::exists(fs::symlink_status(pointer))) return data / "profile";
     try {
         const auto state = ReadCandidateDocument(pointer);
         if (!state.is_object() || state.value("schema", 0) != 1 ||
-            !state.contains("engine") || !ValidCandidateEngine(engine) || state["engine"] != engine ||
+            !state.contains("engine") || !ValidCandidateEngine(state["engine"]) ||
             state.value("adapter", "") != "stream-json-v1") throw std::runtime_error("invalid");
         for (const auto* key : {"candidateId", "verificationId", "sourceSnapshotId"})
             if (!state.contains(key) || !state[key].is_string() ||
@@ -316,6 +317,18 @@ inline std::filesystem::path ResolveActiveProfile(const std::filesystem::path& d
     } catch (const std::exception&) {
         throw std::runtime_error("E_ACTIVE_PROFILE");
     }
+}
+
+// Runtime selection still requires exactly the engine bound to the pointer.
+inline std::filesystem::path ResolveActiveProfile(const std::filesystem::path& data, const Json& engine) {
+    const auto profile = ResolveProfileForBackup(data);
+    const auto pointer = SnapshotIoPath(data / "active-profile.json");
+    if (std::filesystem::exists(std::filesystem::symlink_status(pointer))) {
+        const auto state = ReadCandidateDocument(pointer);
+        if (!ValidCandidateEngine(engine) || state["engine"] != engine)
+            throw std::runtime_error("E_ACTIVE_PROFILE");
+    }
+    return profile;
 }
 
 // Caller holds the data-root coordination lock. Archive opaque interrupted

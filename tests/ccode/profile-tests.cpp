@@ -386,6 +386,11 @@ int main() try {
     Write(selectionRoot / "active-profile.json", pointer.dump());
     const auto selected = selectionRoot / "candidates" / historyId / "profile";
     assert(ccode::ResolveActiveProfile(selectionRoot, engine) == selected);
+    bool otherEngineRejected = false;
+    try { ccode::ResolveActiveProfile(selectionRoot, incompatibleEngine); }
+    catch (const std::runtime_error& error) { otherEngineRejected = std::string(error.what()) == "E_ACTIVE_PROFILE"; }
+    assert(otherEngineRejected);
+    assert(ccode::ResolveProfileForBackup(selectionRoot) == selected);
     // A live profile changes after activation; selection must not compare its
     // bytes to the immutable activation receipt on every normal restart.
     Write(selected / "new-live-turn.txt", "later session data");
@@ -400,6 +405,10 @@ int main() try {
         try { ccode::ResolveActiveProfile(selectionRoot, engine); }
         catch (const std::runtime_error& error) { rejected = std::string(error.what()) == "E_ACTIVE_PROFILE"; }
         assert(rejected && Read(selected / "new-live-turn.txt") == "later session data");
+        bool invalidBackupRejected = false;
+        try { ccode::ResolveProfileForBackup(selectionRoot); }
+        catch (const std::runtime_error& error) { invalidBackupRejected = std::string(error.what()) == "E_ACTIVE_PROFILE"; }
+        assert(invalidBackupRejected);
     }
     Write(selectionRoot / "active-profile.json", pointer.dump());
     fs::rename(selected, selected.parent_path() / "missing-profile");

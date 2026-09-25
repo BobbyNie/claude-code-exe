@@ -275,6 +275,11 @@ Options Parse(int argc, wchar_t** argv, const fs::path& module) {
         !options.session.empty() || !options.stageSnapshot.empty() || !options.validateCandidate.empty() ||
         !options.activateCandidate.empty() || !options.prompt.empty() || !options.engine.empty()))
         throw std::runtime_error("E_ARGUMENT");
+    if (options.snapshotProfile && (options.print || options.sessions || options.resumePicker ||
+        options.latest || options.workspaceId || options.allSessions || options.archivePending ||
+        !options.session.empty() || !options.stageSnapshot.empty() || !options.validateCandidate.empty() ||
+        !options.activateCandidate.empty() || !options.prompt.empty() || !options.engine.empty()))
+        throw std::runtime_error("E_ARGUMENT");
     options.data = fs::absolute(options.data).lexically_normal();
     return options;
 }
@@ -450,7 +455,8 @@ int Main(int argc, wchar_t** argv) {
         return 0;
     }
     const Json selectedEngine = {{"version", metadata.at("version")}, {"sha256", metadata.at("sha256")}};
-    auto profile = ccode::ResolveActiveProfile(options.data, selectedEngine);
+    auto profile = options.snapshotProfile ? ccode::ResolveProfileForBackup(options.data) :
+        ccode::ResolveActiveProfile(options.data, selectedEngine);
     fs::create_directories(profile);
     Handle lock(CreateFileW((profile / L"frontend.lock").c_str(), GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (!lock.valid()) throw std::runtime_error("E_PROFILE_BUSY");
