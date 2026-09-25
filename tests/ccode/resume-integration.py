@@ -782,11 +782,18 @@ def verify(executable, previous_executable=None):
             identity_before_move = cross_command(previous_executable, "--workspace-id", offline=True).stdout.strip()
             assert str(uuid.UUID(identity_before_move)) == identity_before_move
             relocated_directory = executable.parent / "搬移 portable program"
-            relocated_directory.mkdir()
+            # Relocate the complete program, including its immutable extracted runtime.
+            # Moving only the exe would legitimately materialize runtime on first use.
+            original_program_directory = previous_executable.parent
+            program_before = profile_bytes(original_program_directory)
+            assert "ccode.exe" in program_before
+            engine_name = "runtime/" + cross_plan["targetEngine"]["sha256"] + "/engine.exe"
+            assert engine_name in program_before
+            assert hashlib.sha256(program_before[engine_name]).hexdigest() == cross_plan["targetEngine"]["sha256"]
+            shutil.move(str(original_program_directory), relocated_directory)
             relocated_binary = relocated_directory / "ccode.exe"
-            shutil.move(str(previous_executable), relocated_binary)
-            assert not previous_executable.exists()
-            program_before = profile_bytes(relocated_directory)
+            assert not original_program_directory.exists()
+            assert profile_bytes(relocated_directory) == program_before
             identity_after_move = cross_command(relocated_binary, "--workspace-id", offline=True).stdout.strip()
             assert identity_after_move == identity_before_move
             assert cross_session in cross_command(relocated_binary, "--sessions", offline=True).stdout
