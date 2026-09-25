@@ -45,7 +45,16 @@ inline std::vector<Session> ListSessions(const std::filesystem::path& projects,
                 if (line.size() > 16 * 1024 * 1024) break;
                 auto event = Json::parse(line, nullptr, false);
                 if (event.is_discarded() || !event.is_object()) continue;
-                if (event.value("type", std::string()) != "user" || event.value("isSidechain", false)) continue;
+                // Do not let malformed identity metadata become a generic local
+                // error (or an apparently empty history). Never include its value.
+                if (event.contains("type") && !event["type"].is_string())
+                    throw std::runtime_error("E_SESSION_DATA");
+                if (event.value("type", std::string()) != "user") continue;
+                if ((event.contains("isSidechain") && !event["isSidechain"].is_boolean()) ||
+                    (event.contains("sessionId") && !event["sessionId"].is_string()) ||
+                    (event.contains("cwd") && !event["cwd"].is_string()))
+                    throw std::runtime_error("E_SESSION_DATA");
+                if (event.value("isSidechain", false)) continue;
                 if (event.value("sessionId", std::string()) != id || !event.contains("cwd")) continue;
                 if (!SameWorkspace(fs::u8path(event.at("cwd").get<std::string>()), workspace)) break;
                 std::string title = "Saved session";

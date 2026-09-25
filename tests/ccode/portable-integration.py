@@ -71,6 +71,22 @@ def check(executable):
         assert rejected.returncode != 0 and "E_WORKSPACE_DATA" in rejected.stderr, rejected
         assert registry.read_text() == '{"schema":999,"workspaces":{}}'
         print("PASS: persistent workspace UUID survives frontend relocation; corrupt registry fails without replacement")
+        history_data = root / "history data"
+        history = history_data / "profile" / "home" / ".claude" / "projects" / "fixture"
+        history.mkdir(parents=True)
+        session_id = str(uuid.uuid4())
+        transcript = history / (session_id + ".jsonl")
+        for field in ("type", "sessionId", "cwd", "isSidechain"):
+            event = {"type": "user", "sessionId": session_id, "cwd": str(root),
+                     "isSidechain": False, "message": {"content": "private-history-marker"}}
+            event[field] = 42
+            saved = (json.dumps(event) + "\n").encode("utf-8")
+            transcript.write_bytes(saved)
+            result = run("--data-dir", str(history_data), "--sessions")
+            assert result.returncode == 64 and result.stderr.strip() == "E_SESSION_DATA", result
+            assert "private-history-marker" not in result.stdout + result.stderr
+            assert transcript.read_bytes() == saved
+        print("PASS: corrupt history metadata is classified without disclosure or transcript changes")
         print("portable frontend integration passed")
 
 if __name__ == "__main__":

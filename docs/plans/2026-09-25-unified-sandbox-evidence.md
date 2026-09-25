@@ -110,8 +110,18 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - 工作區身份第一個切片：`--workspace-id` 持久 UUID v4，registry 放在獨立 profile，
   規範化工作區路徑作查找鍵，程式位置／runtime hash 不參與身份。原子替換 registry，
   損壞／未知 schema 停止而非重建 ID；本機 TDD 另捕捉並修復暫存 symlink 覆寫風險。
-  已補 Windows 程式位置變更及重啟的 CLI 測試，結果待驗。**工作區本身搬移仍需明確遷移，
+  已補 Windows 程式位置變更及重啟的 CLI 測試，`dac7a06` / `36131094843` 兩版本通過。**工作區本身搬移仍需明確遷移，
   會話仍按引擎 cwd 列舉；本切片不宣稱 A13–A16 或完整穩定身份生命週期已完成。**
+
+- `d1e8855` / `36130850626`：Windows 測試 fixture 使用文字模式還原 registry，造成
+  LF→CRLF，逐位元組比較失敗。`dac7a06` 改用 binary 還原，增加還原後立即比對，
+  並拆開 symlink 保護斷言，沒有放寬預期。`36131094843` 兩版本全部步驟成功；
+  日誌確認工作區 UUID、權限、實際工具和三種中斷後恢復案例均 PASS。
+- 歷史損壞分類切片：新增 user metadata 的 type/sessionId/cwd/isSidechain 型別錯誤測試，
+  本機先在 classified 斷言失敗，再加入 `E_SESSION_DATA` 明確分類後通過；
+  不回傳內容、不改寫原始 JSONL。新增 Windows CLI 測試要求退出碼 64、只有中性錯誤碼
+  且原始檔案逐位元組不變。Windows 結果待驗；不代表截斷末行、完整歷史可用性分類、
+  遷移或會話索引已完成。
 
 ## 下一批實施順序
 

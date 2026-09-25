@@ -20,6 +20,26 @@ int main() {
     assert(ccode::ListSessions(root / "projects", root / "other").empty());
     assert(!ccode::ValidSessionId("../../escape"));
     assert(!ccode::ValidSessionId("123"));
+    // Corrupt identity metadata must fail with a neutral, stable classification,
+    // never disappear as an empty history or expose a JSON-library exception.
+    const auto transcript = project / (id + ".jsonl");
+    const ccode::Json validEvent = {{"type", "user"}, {"sessionId", id},
+        {"cwd", root.u8string()}, {"isSidechain", false},
+        {"message", {{"content", "private-history-marker"}}}};
+    for (const auto& field : {"type", "sessionId", "cwd", "isSidechain"}) {
+        auto event = validEvent;
+        event[field] = 42;
+        const auto bytes = event.dump() + "\n";
+        { std::ofstream out(transcript, std::ios::binary); out << bytes; }
+        bool classified = false;
+        try { ccode::ListSessions(root / "projects", root); }
+        catch (const std::exception& error) {
+            classified = std::string(error.what()) == "E_SESSION_DATA";
+        }
+        assert(classified);
+        std::ifstream input(transcript, std::ios::binary);
+        assert(std::string(std::istreambuf_iterator<char>(input), {}) == bytes);
+    }
     const auto registry = root / "profile" / "workspaces.json";
     auto first = ccode::ResolveWorkspace(registry, root);
     assert(ccode::ValidSessionId(first));
