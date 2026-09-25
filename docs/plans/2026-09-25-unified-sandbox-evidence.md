@@ -359,3 +359,19 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - 本機六組 C++、14 項 Python 與 diff 檢查通過。本切片尚未接入公開 CLI，沒有
   原子切換指標，也不宣稱啟用／回滾已完成。呼叫端仍須持有資料根協調鎖與兩個
   profile 鎖至原子提交結束；後續必須完成這些連接與 Windows 公共流程測試。
+
+## Active profile 讀取與啟動協調鎖（Windows 待驗）
+
+- 啟動端先持有 data/active-profile.lock，再讀指標並鎖定所選 profile；目前仍是
+  粗粒度獨占，不宣稱同資料根多會話並發已實現。
+- 缺少指標沿用 data/profile；既有指標損壞、未知 schema/adapter、引擎不符、
+  非 UUID、回執身份不符或目標缺失均 E_ACTIVE_PROFILE，不默默退回舊 profile。
+  候選各層目錄及指標／metadata／receipt 拒絕 symlink。
+- 選取時核對已綁定的 engine/adapter/候選與驗證身份及全會話 scope；不把可變
+  live profile 每次都與凍結檔案雜湊比較，避免正常新會話寫入後無法重啟。
+- TDD：缺指標／損壞指標案例先因 API 缺失編譯紅燈；加入拒絕策略後通過；
+  再加合法候選選取案例，先 E_ACTIVE_PROFILE 紅燈，完成身份核對後通過。
+  另覆蓋 live 寫入後重選、錯誤 schema/engine/adapter/身份及缺失目標。
+- 本機六組 C++、14 項 Python、語法與 diff 檢查通過。Windows 公共 CLI 新增
+  損壞指標拒絕且不建立 fallback profile 案例，尚待驗證。
+- 尚無公開啟用指令／原子指標寫入或回滾；不能手工建立指標代替完整啟用流程。

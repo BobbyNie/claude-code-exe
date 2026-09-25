@@ -423,7 +423,12 @@ int Main(int argc, wchar_t** argv) {
         std::cout << "ccode self-test ok\n"; return 0;
     }
     auto options = Parse(argc, argv, module);
-    auto profile = options.data / L"profile";
+    fs::create_directories(options.data);
+    Handle coordinationLock(CreateFileW(ccode::SnapshotIoPath(options.data / L"active-profile.lock").c_str(),
+        GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+    if (!coordinationLock.valid()) throw std::runtime_error("E_PROFILE_BUSY");
+    const Json selectedEngine = {{"version", metadata.at("version")}, {"sha256", metadata.at("sha256")}};
+    auto profile = ccode::ResolveActiveProfile(options.data, selectedEngine);
     fs::create_directories(profile);
     Handle lock(CreateFileW((profile / L"frontend.lock").c_str(), GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (!lock.valid()) throw std::runtime_error("E_PROFILE_BUSY");

@@ -342,6 +342,43 @@ int main() try {
     assert(Read(inventoryProfile / "after-validation.txt") == "new source data must survive");
     assert(ccode::ReadCandidateDocument(allCandidate / "validation.json") == allReceipt);
     fs::remove(inventoryProfile / "after-validation.txt");
+    const auto selectionRoot = root / "selection";
+    fs::create_directories(selectionRoot);
+    assert(ccode::ResolveActiveProfile(selectionRoot, engine) == selectionRoot / "profile");
+    Write(selectionRoot / "active-profile.json", "{broken");
+    bool badPointer = false;
+    try { ccode::ResolveActiveProfile(selectionRoot, engine); }
+    catch (const std::runtime_error& error) { badPointer = std::string(error.what()) == "E_ACTIVE_PROFILE"; }
+    assert(badPointer && Read(selectionRoot / "active-profile.json") == "{broken");
+    fs::create_directories(selectionRoot / "candidates");
+    fs::copy(allCandidate, selectionRoot / "candidates" / historyId, fs::copy_options::recursive);
+    const ccode::Json pointer = {{"schema", 1}, {"candidateId", historyId},
+        {"verificationId", snapshotId}, {"sourceSnapshotId", historyId},
+        {"engine", engine}, {"adapter", "stream-json-v1"}};
+    Write(selectionRoot / "active-profile.json", pointer.dump());
+    const auto selected = selectionRoot / "candidates" / historyId / "profile";
+    assert(ccode::ResolveActiveProfile(selectionRoot, engine) == selected);
+    // A live profile changes after activation; selection must not compare its
+    // bytes to the immutable activation receipt on every normal restart.
+    Write(selected / "new-live-turn.txt", "later session data");
+    assert(ccode::ResolveActiveProfile(selectionRoot, engine) == selected);
+    for (const auto& patch : std::vector<ccode::Json>{
+        {{"schema", 2}}, {{"schema", nullptr}}, {{"candidateId", "../escape"}},
+        {{"verificationId", historyId}}, {{"adapter", "unknown"}}, {{"engine", incompatibleEngine}}}) {
+        auto invalidPointer = pointer;
+        invalidPointer.update(patch);
+        Write(selectionRoot / "active-profile.json", invalidPointer.dump());
+        bool rejected = false;
+        try { ccode::ResolveActiveProfile(selectionRoot, engine); }
+        catch (const std::runtime_error& error) { rejected = std::string(error.what()) == "E_ACTIVE_PROFILE"; }
+        assert(rejected && Read(selected / "new-live-turn.txt") == "later session data");
+    }
+    Write(selectionRoot / "active-profile.json", pointer.dump());
+    fs::rename(selected, selected.parent_path() / "missing-profile");
+    bool missingActive = false;
+    try { ccode::ResolveActiveProfile(selectionRoot, engine); }
+    catch (const std::runtime_error& error) { missingActive = std::string(error.what()) == "E_ACTIVE_PROFILE"; }
+    assert(missingActive);
     auto partialReceipt = allReceipt;
     partialReceipt["sessions"].erase(1);
     Write(allCandidate / "validation.json", partialReceipt.dump());

@@ -278,4 +278,39 @@ inline Json VerifyCandidateActivation(const std::filesystem::path& candidate,
     return receipt;
 }
 
+// Selection is read under the data-root coordination lock. A missing pointer
+// preserves legacy layout; an existing invalid pointer must never fall back.
+inline std::filesystem::path ResolveActiveProfile(const std::filesystem::path& data, const Json& engine) {
+    namespace fs = std::filesystem;
+    const auto pointer = SnapshotIoPath(data / "active-profile.json");
+    if (!fs::exists(fs::symlink_status(pointer))) return data / "profile";
+    try {
+        const auto state = ReadCandidateDocument(pointer);
+        if (!state.is_object() || state.value("schema", 0) != 1 ||
+            !state.contains("engine") || !ValidCandidateEngine(engine) || state["engine"] != engine ||
+            state.value("adapter", "") != "stream-json-v1") throw std::runtime_error("invalid");
+        for (const auto* key : {"candidateId", "verificationId", "sourceSnapshotId"})
+            if (!state.contains(key) || !state[key].is_string() ||
+                !ValidSessionId(state[key].get<std::string>())) throw std::runtime_error("invalid");
+        const auto candidate = data / "candidates" / state["candidateId"].get<std::string>();
+        for (const auto& directory : {data / "candidates", candidate, candidate / "profile"}) {
+            const auto status = fs::symlink_status(SnapshotIoPath(directory));
+            if (fs::is_symlink(status) || !fs::is_directory(status)) throw std::runtime_error("invalid");
+        }
+        const auto metadata = ReadCandidateDocument(candidate / "candidate.json");
+        const auto receipt = ReadCandidateDocument(candidate / "validation.json");
+        if (metadata.value("schema", 0) != 1 || metadata.value("state", "") != "staged" ||
+            receipt.value("schema", 0) != 1 || receipt.value("scope", "") != "all-top-level-sessions" ||
+            !receipt.contains("historyVerified") || receipt["historyVerified"] != true)
+            throw std::runtime_error("invalid");
+        for (const auto* key : {"candidateId", "sourceSnapshotId"})
+            if (!metadata.contains(key) || metadata[key] != state[key]) throw std::runtime_error("invalid");
+        for (const auto* key : {"candidateId", "sourceSnapshotId", "verificationId", "engine", "adapter"})
+            if (!receipt.contains(key) || receipt[key] != state[key]) throw std::runtime_error("invalid");
+        return candidate / "profile";
+    } catch (const std::exception&) {
+        throw std::runtime_error("E_ACTIVE_PROFILE");
+    }
+}
+
 }

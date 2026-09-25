@@ -61,6 +61,14 @@ def check(executable):
             decision = json.loads(response["result"]["content"][0]["text"])
             assert response["id"] == 1 and decision["behavior"] == "deny", (owner, response)
         print("PASS: unavailable frontend console fails closed without a hidden approval prompt")
+        broken_selection = root / "broken selection"
+        broken_selection.mkdir()
+        (broken_selection / "active-profile.json").write_text("{broken", encoding="utf-8")
+        rejected_selection = run("--data-dir", str(broken_selection), "--sessions")
+        assert rejected_selection.returncode == 64 and rejected_selection.stderr.strip() == "E_ACTIVE_PROFILE", rejected_selection
+        assert not (broken_selection / "profile").exists(), "Invalid active pointer must not create a fallback profile"
+        assert (broken_selection / "active-profile.json").read_text(encoding="utf-8") == "{broken"
+        print("PASS: invalid active-profile pointer fails closed without fallback or overwriting state")
         data = root / "external data"
         identity = run("--data-dir", str(data), "--workspace-id")
         assert identity.returncode == 0, identity.stderr
