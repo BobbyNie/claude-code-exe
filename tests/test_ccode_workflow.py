@@ -4,6 +4,14 @@ import unittest
 
 
 class AcceptanceWorkflowTests(unittest.TestCase):
+    def test_portable_failure_does_not_hide_tool_lifecycle_acceptance(self):
+        workflow = (Path(__file__).resolve().parents[1] /
+                    '.github/workflows/test-ccode.yml').read_text()
+        step = workflow.split('      - name: Exercise actual engine tools through the frontend', 1)[1].split('      - ', 1)[0]
+        self.assertIn("if: ${{ !cancelled() && steps.build.outcome == 'success' }}", step)
+        self.assertIn('python tests/ccode/tools-integration.py ./ccode.exe', step)
+        self.assertNotIn('continue-on-error:', step)
+
     def test_workspace_alias_acceptance_is_independent_and_required(self):
         workflow = (Path(__file__).resolve().parents[1] /
                     '.github/workflows/test-ccode.yml').read_text()
