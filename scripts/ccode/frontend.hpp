@@ -107,10 +107,14 @@ public:
     }
     void Finish() {
         if (broken) throw ProtocolError("E_PROTOCOL_FAILED");
-        if (!pending.empty()) {
-            if (pending != "\r") throw ProtocolError("E_TRUNCATED_EVENT");
+        if (!pending.empty() && pending != "\r") {
+            broken = true;
+            throw ProtocolError("E_TRUNCATED_EVENT");
         }
-        if (!complete) throw ProtocolError("E_MISSING_RESULT");
+        if (!complete) {
+            broken = true;
+            throw ProtocolError("E_MISSING_RESULT");
+        }
     }
 };
 }

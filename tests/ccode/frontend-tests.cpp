@@ -49,6 +49,30 @@ int main() {
     const auto read = tool("Read", "t1", {{"file_path", "user/claude-original.txt"}});
     assert(duplicate.Feed(read) == "[Tool request]\n");
     ExpectError(duplicate, read, "E_TOOL_DUPLICATE_ID");
+    // Tool argument fragments are transport bytes, not separate tool invocations.
+    for (size_t split = 0; split <= read.size(); ++split) {
+        ccode::EventReader fragmented;
+        fragmented.Feed(init);
+        auto output = fragmented.Feed(read.substr(0, split));
+        output += fragmented.Feed(read.substr(split));
+        assert(output == "[Tool request]\n");
+    }
+    ccode::EventReader invalidUtf8;
+    ExpectError(invalidUtf8, std::string("{\"type\":\"") + char(0xff) + "\"}\n", "E_PROTOCOL_JSON");
+    ccode::EventReader oversized;
+    ExpectError(oversized, std::string(16 * 1024 * 1024 + 1, 'x'), "E_EVENT_LIMIT");
+    for (const auto& entry : std::vector<std::pair<std::string, std::string>>{
+        {"", "E_MISSING_RESULT"},
+        {"{\"type\":\"result\"", "E_TRUNCATED_EVENT"}
+    }) {
+        ccode::EventReader incomplete;
+        incomplete.Feed(entry.first);
+        bool rejected = false;
+        try { incomplete.Finish(); }
+        catch (const ccode::ProtocolError& error) { rejected = error.what() == entry.second; }
+        assert(rejected);
+        ExpectError(incomplete, wire, "E_PROTOCOL_FAILED");
+    }
     ccode::EventReader reader;
     auto start = reader.Feed(init);
     assert(start.empty());
