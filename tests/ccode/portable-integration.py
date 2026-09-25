@@ -1,4 +1,5 @@
 """Public Windows launcher contract. No live credentials or model required."""
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -87,6 +88,25 @@ def check(executable):
             assert "private-history-marker" not in result.stdout + result.stderr
             assert transcript.read_bytes() == saved
         print("PASS: corrupt history metadata is classified without disclosure or transcript changes")
+        # Backup works without loading or repairing malformed history. The live
+        # profile lock is excluded; all other bytes are independently hashed.
+        profile = history_data / "profile"
+        before = {path.relative_to(profile).as_posix(): path.read_bytes()
+                  for path in profile.rglob("*") if path.is_file() and path.name != "frontend.lock"}
+        backup = run("--data-dir", str(history_data), "--snapshot-profile")
+        assert backup.returncode == 0, backup.stderr
+        backup_id = str(uuid.UUID(backup.stdout.strip()))
+        snapshot = history_data / "snapshots" / backup_id
+        manifest = json.loads((snapshot / "manifest.json").read_text(encoding="utf-8"))
+        assert manifest["schema"] == 1 and manifest["snapshotId"] == backup_id
+        assert set(manifest["files"]) == set(before)
+        for name, saved in before.items():
+            assert (profile / name).read_bytes() == saved
+            assert (snapshot / "profile" / name).read_bytes() == saved
+            assert manifest["files"][name] == {"sha256": hashlib.sha256(saved).hexdigest(), "size": len(saved)}
+        assert not (snapshot / "profile/frontend.lock").exists()
+        assert not (history_data / "snapshots" / (backup_id + ".pending")).exists()
+        print("PASS: locked profile snapshot preserves source bytes and independently verified SHA256 manifest")
         print("portable frontend integration passed")
 
 if __name__ == "__main__":

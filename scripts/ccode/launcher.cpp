@@ -11,6 +11,7 @@
 #include <thread>
 #include "environment.hpp"
 #include "profile.hpp"
+#include "snapshot.hpp"
 #include "sessions.hpp"
 #include "workspaces.hpp"
 #include "session-index.hpp"
@@ -104,6 +105,29 @@ std::string Digest(Resource resource) {
     for (auto byte : digest) { result += hex[byte >> 4]; result += hex[byte & 15]; }
     return result;
 }
+std::string FileDigest(const fs::path& path) {
+    struct HashHandle {
+        BCRYPT_HASH_HANDLE value = nullptr;
+        ~HashHandle() { if (value) BCryptDestroyHash(value); }
+    } hash;
+    if (BCryptCreateHash(BCRYPT_SHA256_ALG_HANDLE, &hash.value, nullptr, 0, nullptr, 0, 0) < 0)
+        throw std::runtime_error("E_SNAPSHOT_HASH");
+    std::ifstream input(path, std::ios::binary);
+    if (!input) throw std::runtime_error("E_SNAPSHOT_READ");
+    unsigned char buffer[65536];
+    while (input.read(reinterpret_cast<char*>(buffer), sizeof(buffer)) || input.gcount()) {
+        if (BCryptHashData(hash.value, buffer, static_cast<ULONG>(input.gcount()), 0) < 0)
+            throw std::runtime_error("E_SNAPSHOT_HASH");
+    }
+    if (!input.eof()) throw std::runtime_error("E_SNAPSHOT_READ");
+    unsigned char bytes[32];
+    if (BCryptFinishHash(hash.value, bytes, sizeof(bytes), 0) < 0)
+        throw std::runtime_error("E_SNAPSHOT_HASH");
+    const char* hex = "0123456789abcdef";
+    std::string result;
+    for (auto byte : bytes) { result += hex[byte >> 4]; result += hex[byte & 15]; }
+    return result;
+}
 fs::path PrepareRuntime(const fs::path& directory, const Json& metadata) {
     auto resource = Load(101);
     auto hash = Digest(resource);
@@ -181,7 +205,7 @@ int PermissionServer() {
     return 0;
 }
 struct Options {
-    bool print = false, sessions = false, resumePicker = false, latest = false, workspaceId = false;
+    bool print = false, sessions = false, resumePicker = false, latest = false, workspaceId = false, snapshotProfile = false;
     fs::path data;
     std::string prompt, session;
     std::vector<std::wstring> engine;
@@ -201,6 +225,7 @@ Options Parse(int argc, wchar_t** argv, const fs::path& module) {
         else if (!literal && (arg == L"--print" || arg == L"-p")) options.print = true;
         else if (!literal && arg == L"--sessions") options.sessions = true;
         else if (!literal && arg == L"--workspace-id") options.workspaceId = true;
+        else if (!literal && arg == L"--snapshot-profile") options.snapshotProfile = true;
         else if (!literal && (arg == L"--resume" || arg == L"-r")) {
             if (i + 1 < argc && argv[i + 1][0] != L'-') options.session = Utf8(next());
             else options.resumePicker = true;
@@ -357,6 +382,7 @@ int Main(int argc, wchar_t** argv) {
             "  --data-dir PATH        Persistent data (or CCODE_DATA_DIR)\n"
             "  --model NAME           Select a model\n"
             "  --workspace-id         Show persistent workspace identity\n"
+            "  --snapshot-profile     Create verified backup; print snapshot ID\n"
             "  --allowedTools RULE    Explicit tool permission rule\n"
             "  --settings PATH        Engine settings file\n"
             "  --mcp-config PATH      Additional tool servers\n"
@@ -378,6 +404,12 @@ int Main(int argc, wchar_t** argv) {
     fs::create_directories(profile);
     Handle lock(CreateFileW((profile / L"frontend.lock").c_str(), GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (!lock.valid()) throw std::runtime_error("E_PROFILE_BUSY");
+    if (options.snapshotProfile) {
+        const auto id = ccode::NewWorkspaceId();
+        ccode::CreateProfileSnapshot(profile, options.data / L"snapshots", id, FileDigest);
+        std::cout << id << '\n';
+        return 0;
+    }
     for (auto name : {L"home", L"roaming", L"local", L"temp"}) fs::create_directories(profile / name);
     const auto workspaceId = ccode::ResolveWorkspace(profile / L"workspaces.json", fs::current_path());
     if (options.workspaceId) { std::cout << workspaceId << '\n'; return 0; }
