@@ -1,5 +1,6 @@
 #include "../../scripts/ccode/profile.hpp"
 #include "../../scripts/ccode/snapshot.hpp"
+#include "../../scripts/ccode/candidate.hpp"
 
 #include <cassert>
 #include <chrono>
@@ -171,6 +172,44 @@ int main() try {
         root / "long-candidates" / std::string(45, 'c'), candidateId, testDigest);
     assert(Read(ccode::SnapshotIoPath(longCandidate / "profile" / longRelative)) == "source transcript\n");
     assert(Read(longActive / longRelative) == "source transcript\n");
+    // Validation must be tied to real recovered history, engine and frozen bytes.
+    const auto candidateProfile = root / "probe-source";
+    const auto historyId = "a2345678-1234-1234-1234-123456789abc";
+    Write(candidateProfile / "home/.claude/projects/work" / (std::string(historyId) + ".jsonl"),
+        ccode::Json{{"type", "user"}, {"sessionId", historyId}, {"cwd", root.u8string()},
+            {"message", {{"role", "user"}, {"content", "private historical marker"}}}}.dump() + "\n");
+    const auto probeSnapshot = ccode::CreateProfileSnapshot(candidateProfile, snapshots, historyId, testDigest);
+    const auto probeCandidate = ccode::StageProfileCandidate(probeSnapshot, root / "probe-candidates", historyId, testDigest);
+    assert(ccode::CandidateHistoryText(probeCandidate / "profile", root, historyId) == "private historical marker");
+    const ccode::Json engine = {{"version", "test-engine"}, {"sha256", std::string(64, 'e')}};
+    bool failedProbe = false;
+    try {
+        ccode::ValidateProfileCandidate(probeCandidate, probeSnapshot, root / "verified", snapshotId,
+            root, historyId, engine, testDigest, [](const fs::path&, const std::string&, const std::string&) { return false; });
+    } catch (const std::runtime_error& error) { failedProbe = std::string(error.what()) == "E_CANDIDATE_HISTORY"; }
+    assert(failedProbe && !fs::exists(probeCandidate / "validation.json"));
+    bool sawPrivateHistory = false;
+    auto receipt = ccode::ValidateProfileCandidate(probeCandidate, probeSnapshot, root / "verified", snapshotId,
+        root, historyId, engine, testDigest, [&](const fs::path& profile, const std::string& id, const std::string& expected) {
+            sawPrivateHistory = fs::equivalent(profile, probeCandidate / "profile") && id == historyId && expected == "private historical marker";
+            Write(profile / "engine-recovered.txt", "source transcript\n");
+            return true;
+        });
+    assert(sawPrivateHistory && receipt["scope"] == "single-session");
+    assert(receipt["engine"] == engine && receipt["sessionId"] == historyId);
+    assert(receipt.dump().find("private historical marker") == std::string::npos);
+    assert(ccode::VerifyCandidateValidation(probeCandidate, root / "verified", engine, testDigest) == receipt);
+    auto incompatibleEngine = engine;
+    incompatibleEngine["sha256"] = std::string(64, 'f');
+    bool incompatible = false;
+    try { ccode::VerifyCandidateValidation(probeCandidate, root / "verified", incompatibleEngine, testDigest); }
+    catch (const std::runtime_error& error) { incompatible = std::string(error.what()) == "E_CANDIDATE_DATA"; }
+    assert(incompatible);
+    Write(probeCandidate / "profile/engine-recovered.txt", "changed after verification");
+    bool staleReceipt = false;
+    try { ccode::VerifyCandidateValidation(probeCandidate, root / "verified", engine, testDigest); }
+    catch (const std::runtime_error& error) { staleReceipt = std::string(error.what()) == "E_CANDIDATE_CHANGED"; }
+    assert(staleReceipt);
     fs::remove_all(ccode::SnapshotIoPath(root));
     std::cout << "ccode profile recovery tests passed\n";
 } catch (const std::exception& error) {

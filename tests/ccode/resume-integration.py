@@ -1,4 +1,5 @@
 """Exercise real --resume against a local fake API, without user credentials."""
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -37,6 +38,7 @@ def prepare(executable):
 
 def verify(executable):
     requests = []
+    probe_reply_correct = True
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *_):
@@ -54,16 +56,22 @@ def verify(executable):
                 self.send_error(404)
                 return
             requests.append(body)
+            answer = "resume-test-ok"
+            messages = body.get("messages", [])
+            if messages and "For profile recovery verification" in json.dumps(messages[-1]):
+                assert "legacy-resume-marker-7391" not in json.dumps(messages[-1]), "Probe leaked the expected answer"
+                answer = "legacy-resume-marker-7391" if probe_reply_correct and \
+                    "legacy-resume-marker-7391" in json.dumps(messages[:-1]) else "history-verification-failed"
             message = {"id": "msg_resume_test", "type": "message", "role": "assistant",
                        "model": body.get("model", "claude-sonnet-4-6"),
-                       "content": [{"type": "text", "text": "resume-test-ok"}],
+                       "content": [{"type": "text", "text": answer}],
                        "stop_reason": "end_turn", "stop_sequence": None,
                        "usage": {"input_tokens": 100, "output_tokens": 5}}
             if body.get("stream"):
                 events = [
                     ("message_start", {"message": dict(message, content=[], stop_reason=None)}),
                     ("content_block_start", {"index": 0, "content_block": {"type": "text", "text": ""}}),
-                    ("content_block_delta", {"index": 0, "delta": {"type": "text_delta", "text": "resume-test-ok"}}),
+                    ("content_block_delta", {"index": 0, "delta": {"type": "text_delta", "text": answer}}),
                     ("content_block_stop", {"index": 0}),
                     ("message_delta", {"delta": {"stop_reason": "end_turn", "stop_sequence": None},
                                        "usage": {"output_tokens": 5}}),
@@ -213,6 +221,50 @@ def verify(executable):
         assert json.loads((candidate / "candidate.json").read_text(encoding="utf-8"))["state"] == "staged"
         assert not (profile.parent / "active-profile.json").exists()
         print("PASS: actual engine resumes isolated candidate history while active profile and backup remain byte-identical")
+        # The product verifier, unlike the previous raw resume, publishes bound evidence.
+        def stage_again():
+            result = subprocess.run([str(executable), "--stage-profile", snapshot_id], cwd=executable.parent,
+                                    env=env, capture_output=True, text=True, encoding="utf-8", timeout=30)
+            assert result.returncode == 0, result.stderr
+            return str(uuid.UUID(result.stdout.strip()))
+
+        validation_id = stage_again()
+        requests.clear()
+        validated = subprocess.run([str(executable), "--validate-profile", validation_id, "--resume", session],
+                                   cwd=executable.parent, env=env, capture_output=True,
+                                   text=True, encoding="utf-8", timeout=60)
+        assert validated.returncode == 0, validated.stdout + validated.stderr
+        assert "legacy-resume-marker-7391" not in validated.stdout + validated.stderr
+        assert len(requests) == 1, "Verifier replayed a model request"
+        assert has_history("For profile recovery verification", ["legacy-resume-marker-7391", first, second, continued])
+        validated_root = profile.parent / "candidates" / validation_id
+        receipt = json.loads((validated_root / "validation.json").read_text(encoding="utf-8"))
+        assert receipt["scope"] == "single-session" and receipt["historyVerified"] is True
+        assert receipt["candidateId"] == validation_id and receipt["sourceSnapshotId"] == snapshot_id
+        assert receipt["sessionId"] == session and receipt["workspaceId"] == workspace_id
+        assert len(receipt["engine"]["sha256"]) == 64 and receipt["engine"]["version"]
+        assert "legacy-resume-marker-7391" not in json.dumps(receipt)
+        frozen = profile.parent / "verified" / str(uuid.UUID(receipt["verificationId"]))
+        manifest = json.loads((frozen / "manifest.json").read_text(encoding="utf-8"))
+        assert receipt["files"] == manifest["files"]
+        saved = profile_bytes(validated_root / "profile")
+        assert saved == profile_bytes(frozen / "profile")
+        assert set(saved) == set(receipt["files"])
+        for name, value in saved.items():
+            assert receipt["files"][name] == {"sha256": hashlib.sha256(value).hexdigest(), "size": len(value)}
+        assert profile_bytes(profile) == active_before and profile_bytes(snapshot) == snapshot_before
+        failed_id = stage_again()
+        probe_reply_correct = False
+        requests.clear()
+        failed = subprocess.run([str(executable), "--validate-profile", failed_id, "--resume", session],
+                                cwd=executable.parent, env=env, capture_output=True,
+                                text=True, encoding="utf-8", timeout=60)
+        assert failed.returncode == 64 and failed.stderr.strip() == "E_CANDIDATE_HISTORY", failed
+        assert len(requests) == 1 and not (profile.parent / "candidates" / failed_id / "validation.json").exists()
+        assert profile_bytes(profile) == active_before and profile_bytes(snapshot) == snapshot_before
+        assert not (profile.parent / "active-profile.json").exists()
+        print("PASS: product candidate verifier checks real recovered history, freezes SHA256-bound evidence, and rejects a wrong answer without replay or activation")
+
 
 
     finally:
