@@ -65,6 +65,9 @@ try {
     Set-Content (Join-Path $legacyProject 'old-session.jsonl') 'legacy-session-marker'
     Set-Content (Join-Path $legacyProject 'existing-session.jsonl') 'old-copy'
     Set-Content (Join-Path $currentProject 'existing-session.jsonl') 'new-copy'
+    $resumeFixture = Join-Path $PSScriptRoot '../../tests/ccode/resume-integration.py'
+    python $resumeFixture prepare $testExe
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to prepare legacy resume fixture' }
 
     & $testExe --version
     if ($LASTEXITCODE -ne 0) {
@@ -79,6 +82,8 @@ try {
     if (-not (Test-Path (Join-Path $legacyProject 'old-session.jsonl'))) {
         throw 'Upgrade removed the original session backup'
     }
+    python $resumeFixture verify $testExe
+    if ($LASTEXITCODE -ne 0) { throw 'Official runtime could not resume recovered history' }
 
     $savedTemp = $env:TEMP
     try {
