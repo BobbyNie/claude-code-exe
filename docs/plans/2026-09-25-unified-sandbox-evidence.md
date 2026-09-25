@@ -847,3 +847,21 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   訊息／tool_use／tool_result／工具錯誤數與工作區是否改變，不輸出原始內容。
   建置成功且未取消時獨立執行 gateway 步驟，前一步失敗仍保留 workflow 失敗，
   無 continue-on-error，不放寬任何驗收斷言。下一輪須分別追查兩個失敗。
+
+### 正常 HTTP EOF 重放已定位；獨立驗收不再被 gateway 紅燈遮蔽
+
+- 已重新查核 `0b4eecd` / `36171418367` 的狀態與失敗日誌：整體 failure；
+  2.1.221 job `108191604052` 成功，2.1.282 job `108191604315` 的正常 HTTP
+  EOF 案例失敗。兩次模型請求 body 完全相同，均 stream=true、兩則歷史訊息、
+  沒有 tool_use／tool_result／工具錯誤；工作區沒有改變。這證明新版重放一次，
+  不是工具執行後的正常下一輪。401、429、HTTP 傳輸截斷案例仍通過。
+- 本輪兩版本既有工具／lifecycle 步驟成功，但不能因此結案前輪 crash 清理逾時；
+  根因仍未確認。cross-version 與 long-workspace 因 needs:test 失敗而 skipped，
+  沒有新的通過證據；先前長 cwd 的 WinError 267 仍是未解門檻。
+- CI 增加獨立驗收調度：建置成功且未取消即上傳「built」產物，不再命名為
+  「tested」；缺失產物明確失敗。跨版本與長工作區在上游測試失敗時仍執行，
+  取消時不啟動。保留所有測試斷言及整體 failure，不使用 continue-on-error。
+  若建置失敗導致缺產物，下游下載同樣失敗，不製造虛假驗收通過。
+- 新 workflow 契約測試先 RED（產物上傳受預設 success 條件限制），調整後本機
+  21 項 Python GREEN、diff 檢查通過。這只驗證調度設定；實際 Windows job
+  調度與各驗收結果仍須新 run 證明，沒有宣稱已修復 EOF 重放或長工作區。

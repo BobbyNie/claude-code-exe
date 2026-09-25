@@ -47,14 +47,17 @@ jobs:
         shell: pwsh
         run: python tests/ccode/gateway-integration.py ./ccode.exe
       - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         with:
-          name: ccode-windows-tested-${{ matrix.version }}
+          name: ccode-windows-built-${{ matrix.version }}
           path: ccode.exe
+          if-no-files-found: error
 
   long-workspace:
     # Keep this acceptance gate required/failing, but do not let an OS cwd limit
     # hide the independent lifecycle and cross-version regression results.
     needs: test
+    if: ${{ !cancelled() }}
     runs-on: windows-latest
     timeout-minutes: 5
     strategy:
@@ -65,7 +68,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: ccode-windows-tested-${{ matrix.version }}
+          name: ccode-windows-built-${{ matrix.version }}
           path: long-workspace-bin
       - name: Require actual tools in workspace cwd beyond MAX_PATH
         shell: pwsh
@@ -73,17 +76,18 @@ jobs:
 
   cross-version:
     needs: test
+    if: ${{ !cancelled() }}
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: ccode-windows-tested-2.1.221
+          name: ccode-windows-built-2.1.221
           path: cross/old
       - uses: actions/download-artifact@v4
         with:
-          name: ccode-windows-tested-2.1.282
+          name: ccode-windows-built-2.1.282
           path: cross/new
       - name: Exercise actual upgrade and rollback between both engines
         shell: pwsh
