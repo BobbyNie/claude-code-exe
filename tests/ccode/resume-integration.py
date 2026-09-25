@@ -615,6 +615,7 @@ def verify(executable):
         assert duplicate.returncode == 64 and duplicate.stderr.strip() == "E_ROLLBACK_EXISTS", duplicate
         assert not requests
         print("PASS: public rollback verifier restores all real sessions with target engine, preserves current data, and refuses replay")
+        valid_foreign_receipt = foreign_receipt_path.read_bytes()
         foreign_receipt["verificationId"] = str(uuid.uuid4())
         foreign_receipt_path.write_text(json.dumps(foreign_receipt), encoding="utf-8")
         snapshots_before_refusal = profile_bytes(foreign_data / "snapshots")
@@ -622,6 +623,31 @@ def verify(executable):
         assert invalid_backup.returncode == 64 and invalid_backup.stderr.strip() == "E_ACTIVE_PROFILE", invalid_backup
         assert profile_bytes(foreign_data / "snapshots") == snapshots_before_refusal
         print("PASS: engine-mismatched profile permits byte-preserving backup only; runtime and inconsistent pointer remain refused without API")
+
+        foreign_receipt_path.write_bytes(valid_foreign_receipt)
+        rollback_saved = profile_bytes(rollback_candidate / "profile")
+        committed = foreign_command("--activate-rollback", rollback_id)
+        assert committed.returncode == 0, committed
+        rollback_pointer = json.loads(foreign_pointer_path.read_text(encoding="utf-8"))
+        assert rollback_pointer["schema"] == 2 and rollback_pointer["profileKind"] == "rollback"
+        assert rollback_pointer["candidateId"] == rollback_id
+        assert rollback_pointer["verificationId"] == rollback_validation["verificationId"]
+        assert rollback_pointer["sourceSnapshotId"] == all_snapshot_id
+        assert rollback_pointer["preservationSnapshotId"] == preservation_id
+        assert rollback_pointer["engine"] == plan["targetEngine"]
+        assert rollback_pointer["adapter"] == "stream-json-v1"
+        assert not (foreign_data / "active-profile.json.pending").exists()
+        assert profile_bytes(rollback_candidate / "profile") == rollback_saved
+        assert profile_bytes(foreign_candidate / "profile") == foreign_before
+        assert profile_bytes(foreign_data / "snapshots" / preservation_id / "profile") == foreign_before
+        assert profile_bytes(old_source) == old_source_before and not requests
+        restarted = foreign_command("--sessions")
+        assert restarted.returncode == 0, restarted
+        for session_id in real_sessions:
+            assert session_id in restarted.stdout, restarted
+        assert not requests
+        print("PASS: public rollback activation selects verified history on restart without API and preserves newer active data")
+
 
 
 
