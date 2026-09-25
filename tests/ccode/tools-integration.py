@@ -123,6 +123,35 @@ def check(executable):
             assert result.returncode == 0, (result.returncode, result.stdout, result.stderr, received)
             assert "tools-acceptance-complete" in result.stdout, result.stdout
             assert len(received) == len(plan), received
+            if any(block.get("is_error") for block in received.values()):
+                print("Frontend tool results:", json.dumps(received, ensure_ascii=True), flush=True)
+                # Differential diagnosis only: never a production fallback. Identical fake API,
+                # workspace and profile environment, using the unmodified embedded engine.
+                payload = next(app_dir.glob("runtime/*/engine.exe"))
+                native_env = env.copy()
+                profile = data / "profile"
+                native_env.update(ANTHROPIC_AUTH_TOKEN=env["A_AUTH_TOKEN"],
+                                  ANTHROPIC_BASE_URL=env["A_BASE_URL"],
+                                  HOME=str(profile / "home"), USERPROFILE=str(profile / "home"),
+                                  APPDATA=str(profile / "roaming"), LOCALAPPDATA=str(profile / "local"),
+                                  TEMP=str(profile / "temp"), TMP=str(profile / "temp"),
+                                  CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1", DISABLE_AUTOUPDATER="1")
+                debug = root / "native-debug.txt"
+                saved_results = received.copy()
+                received.clear()
+                native = subprocess.run([str(payload), "--print", "--output-format", "stream-json", "--verbose",
+                                         "--allowedTools", "Write,Edit,Read,Grep,Glob,Bash", "--debug-file", str(debug)],
+                                        input="Exercise fixture tools.", cwd=workspace, env=native_env,
+                                        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
+                print("Native comparison exit:", native.returncode, flush=True)
+                print("Native tool results:", json.dumps(received, ensure_ascii=True), flush=True)
+                if debug.exists():
+                    lines = [line for line in debug.read_text(encoding="utf-8", errors="replace").splitlines()
+                             if "permission" in line.lower() or "allowedtools" in line.lower()]
+                    print("Fixture-only native permission diagnostics:",
+                          json.dumps(lines[-30:], ensure_ascii=True), flush=True)
+                received.clear()
+                received.update(saved_results)
             for i, (name, _) in enumerate(plan):
                 assert not received[f"acceptance_{i}"].get("is_error"), (name, received[f"acceptance_{i}"])
             for i, marker in [(2, "marker-after"), (3, "marker-after"),
