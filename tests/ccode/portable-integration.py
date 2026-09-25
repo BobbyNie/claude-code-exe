@@ -27,6 +27,14 @@ def check(executable):
         assert "--data-dir" in result.stdout and "--sessions" in result.stdout
         assert not any(name in result.stdout.lower() for name in ("claude", "anthropic"))
         assert not (root / "data").exists(), "Informational commands must not create profile data"
+        test_id = "a2345678-1234-1234-1234-123456789abc"
+        for args in (("--all-sessions",),
+                     ("--validate-profile", test_id),
+                     ("--validate-profile", test_id, "--all-sessions", "--resume", test_id),
+                     ("--validate-profile", test_id, "--all-sessions", "--print")):
+            invalid = run(*args)
+            assert invalid.returncode == 64 and invalid.stderr.strip() == "E_ARGUMENT", invalid
+        assert not (root / "data").exists(), "Invalid validation arguments must not create data"
         env.update(A_AUTH_TOKEN="fake-token", A_BASE_URL="http://127.0.0.1:1")
         result = run("--sessions")
         assert result.returncode == 0, result.stderr

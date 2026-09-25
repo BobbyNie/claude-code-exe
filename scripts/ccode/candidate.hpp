@@ -6,6 +6,8 @@ namespace ccode {
 // This is local integrity evidence, not an authenticated security boundary.
 // Callers hold both the active-profile and candidate-profile exclusive locks.
 using CandidateProbe = std::function<bool(const std::filesystem::path&, const std::string&, const std::string&)>;
+using CandidateWorkspaceProbe = std::function<bool(const std::filesystem::path&, const std::filesystem::path&,
+    const std::string&, const std::string&)>;
 inline Json ReadCandidateDocument(const std::filesystem::path& file) {
     namespace fs = std::filesystem;
     const auto path = SnapshotIoPath(file);
@@ -78,6 +80,59 @@ inline std::string CandidateHistoryText(const std::filesystem::path& profile,
     if (matches != 1) throw std::runtime_error("E_CANDIDATE_HISTORY");
     return result;
 }
+struct CandidateSession {
+    std::string session;
+    std::filesystem::path workspace;
+    std::string expected;
+};
+// Enumerate authoritative top-level transcripts across every native project.
+// Nested subagent transcripts are preserved, not claimed as independently resumed.
+inline std::vector<CandidateSession> CandidateSessionInventory(const std::filesystem::path& profile) {
+    namespace fs = std::filesystem;
+    const auto projects = SnapshotIoPath(profile / "home/.claude/projects");
+    if (!fs::is_directory(projects) || fs::is_symlink(fs::symlink_status(projects)))
+        throw std::runtime_error("E_CANDIDATE_HISTORY");
+    std::vector<CandidateSession> result;
+    std::set<std::string> identities;
+    for (const auto& project : fs::directory_iterator(projects)) {
+        if (project.is_symlink()) throw std::runtime_error("E_CANDIDATE_HISTORY");
+        if (!project.is_directory()) continue;
+        for (const auto& file : fs::directory_iterator(project.path())) {
+            if (file.path().extension() != ".jsonl") continue;
+            if (file.is_symlink() || !file.is_regular_file()) throw std::runtime_error("E_CANDIDATE_HISTORY");
+            const auto id = file.path().stem().u8string();
+            if (!ValidSessionId(id) || !identities.insert(id).second) throw std::runtime_error("E_CANDIDATE_HISTORY");
+            std::ifstream input(file.path(), std::ios::binary);
+            if (!input) throw std::runtime_error("E_CANDIDATE_HISTORY");
+            fs::path workspace;
+            std::string line;
+            while (std::getline(input, line)) {
+                if (line.size() > 16 * 1024 * 1024) throw std::runtime_error("E_CANDIDATE_HISTORY");
+                const auto event = Json::parse(line, nullptr, false);
+                if (!event.is_object()) throw std::runtime_error("E_CANDIDATE_HISTORY");
+                if (!event.contains("type") || event["type"] != "user") continue;
+                if (event.contains("isSidechain") && !event["isSidechain"].is_boolean())
+                    throw std::runtime_error("E_CANDIDATE_HISTORY");
+                if (event.value("isSidechain", false)) continue;
+                if (!event.contains("sessionId") || event["sessionId"] != id ||
+                    !event.contains("cwd") || !event["cwd"].is_string()) throw std::runtime_error("E_CANDIDATE_HISTORY");
+                const auto cwd = fs::u8path(event["cwd"].get<std::string>());
+                if (!cwd.is_absolute() || !fs::is_directory(cwd)) throw std::runtime_error("E_CANDIDATE_WORKSPACE");
+                if (!workspace.empty() && !SameWorkspace(workspace, cwd)) throw std::runtime_error("E_CANDIDATE_HISTORY");
+                workspace = cwd;
+            }
+            if (input.bad() || workspace.empty()) throw std::runtime_error("E_CANDIDATE_HISTORY");
+            // Preflight every marker before any engine request starts.
+            const auto expected = CandidateHistoryText(profile, workspace, id);
+            result.push_back({id, workspace, expected});
+        }
+    }
+    if (result.empty()) throw std::runtime_error("E_CANDIDATE_HISTORY");
+    std::sort(result.begin(), result.end(), [](const CandidateSession& a, const CandidateSession& b) {
+        return a.session < b.session;
+    });
+    return result;
+}
 inline bool ValidCandidateEngine(const Json& engine) {
     if (!engine.is_object() || !engine.contains("version") || !engine["version"].is_string() ||
         engine["version"].get<std::string>().empty() || !engine.contains("sha256") || !engine["sha256"].is_string()) return false;
@@ -88,7 +143,8 @@ inline Json ValidateProfileCandidate(const std::filesystem::path& candidatePath,
     const std::filesystem::path& sourceSnapshot, const std::filesystem::path& activeProfile,
     const std::filesystem::path& verifiedRoot,
     const std::string& verificationId, const std::filesystem::path& workspace,
-    const std::string& session, const Json& engine, const SnapshotDigest& digest, const CandidateProbe& probe) {
+    const std::string& session, const Json& engine, const SnapshotDigest& digest, const CandidateProbe& probe,
+    const CandidateWorkspaceProbe& allProbe = {}) {
     namespace fs = std::filesystem;
     const auto candidate = SnapshotIoPath(candidatePath);
     if (!ValidCandidateEngine(engine) || !ValidSessionId(verificationId)) throw std::runtime_error("E_CANDIDATE_DATA");
@@ -110,21 +166,46 @@ inline Json ValidateProfileCandidate(const std::filesystem::path& candidatePath,
     if (ReadCandidateDocument(candidate / "manifest.json") != expectedManifest ||
         CandidateFiles(candidate / "profile", digest) != source["files"])
         throw std::runtime_error("E_CANDIDATE_CHANGED");
-    const auto expected = CandidateHistoryText(candidate / "profile", workspace, session);
-    if (!probe(candidatePath / "profile", session, expected)) throw std::runtime_error("E_CANDIDATE_HISTORY");
+    if ((allProbe && !session.empty()) || (!allProbe && !probe)) throw std::runtime_error("E_ARGUMENT");
+    const auto targets = allProbe ? CandidateSessionInventory(candidate / "profile") :
+        std::vector<CandidateSession>{{session, workspace, CandidateHistoryText(candidate / "profile", workspace, session)}};
+    Json sessions = Json::array();
+    for (const auto& target : targets) {
+        const auto& expected = target.expected;
+        if (CandidateHistoryText(candidate / "profile", target.workspace, target.session) != expected)
+            throw std::runtime_error("E_CANDIDATE_CHANGED");
+        const bool restored = allProbe ? allProbe(candidatePath / "profile", target.workspace, target.session, expected) :
+            probe(candidatePath / "profile", target.session, expected);
+        if (!restored) throw std::runtime_error("E_CANDIDATE_HISTORY");
+    }
     if (VerifyProfileSnapshot(sourceSnapshot, digest) != source ||
         ReadCandidateDocument(candidate / "candidate.json") != metadata)
         throw std::runtime_error("E_CANDIDATE_CHANGED");
     if (CandidateFiles(activeProfile, digest) != source["files"]) throw std::runtime_error("E_SOURCE_CHANGED");
-    const auto workspaceId = ResolveWorkspace(SnapshotIoPath(candidate / "profile/workspaces.json"), workspace);
+    if (allProbe) {
+        const auto after = CandidateSessionInventory(candidate / "profile");
+        if (after.size() != targets.size()) throw std::runtime_error("E_CANDIDATE_CHANGED");
+        for (size_t i = 0; i < targets.size(); ++i)
+            if (after[i].session != targets[i].session || after[i].expected != targets[i].expected ||
+                !SameWorkspace(after[i].workspace, targets[i].workspace)) throw std::runtime_error("E_CANDIDATE_CHANGED");
+    }
+    for (const auto& target : targets) {
+        const auto id = ResolveWorkspace(SnapshotIoPath(candidate / "profile/workspaces.json"), target.workspace);
+        sessions.push_back({{"sessionId", target.session}, {"workspaceId", id}});
+    }
     const auto checkpoint = CreateProfileSnapshot(candidate / "profile", verifiedRoot, verificationId, digest);
     const auto frozen = VerifyProfileSnapshot(checkpoint, digest);
     if (CandidateFiles(candidate / "profile", digest) != frozen["files"]) throw std::runtime_error("E_CANDIDATE_CHANGED");
-    const Json receipt = {{"schema", 1}, {"candidateId", metadata["candidateId"]},
+    Json receipt = {{"schema", 1}, {"candidateId", metadata["candidateId"]},
         {"sourceSnapshotId", source["snapshotId"]}, {"verificationId", verificationId},
-        {"scope", "single-session"}, {"sessionId", session}, {"workspaceId", workspaceId},
+        {"scope", allProbe ? "all-top-level-sessions" : "single-session"},
         {"engine", engine}, {"adapter", "stream-json-v1"}, {"historyVerified", true},
         {"files", frozen["files"]}};
+    if (allProbe) receipt["sessions"] = sessions;
+    else {
+        receipt["sessionId"] = sessions[0]["sessionId"];
+        receipt["workspaceId"] = sessions[0]["workspaceId"];
+    }
     const auto pending = candidate / "validation.json.pending";
     std::ofstream output(pending, std::ios::binary);
     output << receipt.dump(2) << '\n';
@@ -140,13 +221,24 @@ inline Json VerifyCandidateValidation(const std::filesystem::path& candidate,
         !receipt.contains("candidateId") || receipt["candidateId"] != candidate.filename().u8string() ||
         !receipt.contains("verificationId") || !receipt["verificationId"].is_string() ||
         !ValidSessionId(receipt["verificationId"].get<std::string>()) ||
-        !receipt.contains("sessionId") || !receipt["sessionId"].is_string() || !ValidSessionId(receipt["sessionId"].get<std::string>()) ||
-        !receipt.contains("workspaceId") || !receipt["workspaceId"].is_string() || !ValidSessionId(receipt["workspaceId"].get<std::string>()) ||
-        !receipt.contains("scope") || receipt["scope"] != "single-session" ||
+        !receipt.contains("scope") || (receipt["scope"] != "single-session" && receipt["scope"] != "all-top-level-sessions") ||
         !receipt.contains("historyVerified") || receipt["historyVerified"] != true ||
         !receipt.contains("adapter") || receipt["adapter"] != "stream-json-v1" ||
         !receipt.contains("engine") || !ValidCandidateEngine(engine) || receipt["engine"] != engine ||
         !receipt.contains("files")) throw std::runtime_error("E_CANDIDATE_DATA");
+    const auto validIdentity = [](const Json& item) {
+        return item.is_object() && item.contains("sessionId") && item["sessionId"].is_string() &&
+            ValidSessionId(item["sessionId"].get<std::string>()) && item.contains("workspaceId") &&
+            item["workspaceId"].is_string() && ValidSessionId(item["workspaceId"].get<std::string>());
+    };
+    if (receipt["scope"] == "single-session") {
+        if (!validIdentity(receipt)) throw std::runtime_error("E_CANDIDATE_DATA");
+    } else {
+        if (!receipt.contains("sessions") || !receipt["sessions"].is_array() || receipt["sessions"].empty() ||
+            receipt.contains("sessionId") || receipt.contains("workspaceId")) throw std::runtime_error("E_CANDIDATE_DATA");
+        for (const auto& item : receipt["sessions"])
+            if (!validIdentity(item)) throw std::runtime_error("E_CANDIDATE_DATA");
+    }
     const auto metadata = ReadCandidateDocument(candidate / "candidate.json");
     if (!metadata.contains("schema") || metadata["schema"] != 1 ||
         !metadata.contains("state") || metadata["state"] != "staged" ||
@@ -158,6 +250,19 @@ inline Json VerifyCandidateValidation(const std::filesystem::path& candidate,
     const auto frozen = VerifyProfileSnapshot(verifiedRoot / receipt["verificationId"].get<std::string>(), digest);
     if (receipt["files"] != frozen["files"] || CandidateFiles(candidate / "profile", digest) != frozen["files"])
         throw std::runtime_error("E_CANDIDATE_CHANGED");
+    if (receipt["scope"] == "all-top-level-sessions") {
+        const auto targets = CandidateSessionInventory(candidate / "profile");
+        const auto registry = ReadCandidateDocument(candidate / "profile/workspaces.json");
+        if (!registry.contains("schema") || registry["schema"] != 1 ||
+            !registry.contains("workspaces") || !registry["workspaces"].is_object()) throw std::runtime_error("E_CANDIDATE_DATA");
+        Json expected = Json::array();
+        for (const auto& target : targets) {
+            const auto key = WorkspaceKey(target.workspace);
+            if (!registry["workspaces"].contains(key)) throw std::runtime_error("E_CANDIDATE_DATA");
+            expected.push_back({{"sessionId", target.session}, {"workspaceId", registry["workspaces"][key]}});
+        }
+        if (receipt["sessions"] != expected) throw std::runtime_error("E_CANDIDATE_DATA");
+    }
     return receipt;
 }
 }

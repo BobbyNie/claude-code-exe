@@ -272,3 +272,21 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 
 - 前一個 metadata 核驗修正 `33cb808` / `36138276610`：兩引擎所有 Windows
   步驟成功（已核對 job 步驟及 run 終態）；此結果不包含本節來源衝突新增案例。
+
+## 所有頂層會話驗證切片（Windows 待驗）
+
+- `c64a067` / `36138791902` 兩版本全部成功；已查核兩份實際日誌的
+  changed active source PASS，確認來源衝突在 API 前拒絕且保留所有資料。
+- 新增 `--validate-profile ID --all-sessions`，與指定 resume 互斥。從所有原生
+  project 頂層 JSONL 盤點，預檢完整記錄，逐一以原 cwd 恢復並核對原始歷史標記。
+- 回執範圍明列 all-top-level-sessions，凍結整個驗證後 profile 並綁定所有
+  session/workspace UUID；讀取端再次盤點，不能刪去某 session 後仍通過。
+- 本機 TDD：先新增跨工作區盤點與全部會話介面測試（介面缺失紅燈），完成後通過；
+  再新增 probe 偷換另一會話歷史標記測試，inventoryDrift 斷言先失敗，固定保存
+  初始 marker 並在每次 probe 前與最後盤點比對後通過。
+- 回歸測試另覆蓋損壞末行、重複 ID、第二次 probe 失敗不寫回執、刪減回執會話清單拒絕。
+  本機六組 C++、八項 Python、Python 語法及 diff 檢查通過。
+- Windows 新增真實引擎建立另一中文／空格工作區會話，兩個不同歷史標記各恰好
+  一次恢復請求、兩工作區 UUID、完整 hashlib 回執及來源／快照不變的公共 CLI 案例。
+  尚待 Windows CI 結果，不以本機 callback 代替引擎驗收。
+- 不啟用候選；巢狀子代理及技能／MCP 相容、搬移與回退、完整交付／端點驗收仍未完成。

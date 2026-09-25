@@ -266,6 +266,82 @@ int main() try {
     try { ccode::VerifyCandidateValidation(probeCandidate, root / "verified", engine, testDigest); }
     catch (const std::runtime_error& error) { staleReceipt = std::string(error.what()) == "E_CANDIDATE_CHANGED"; }
     assert(staleReceipt);
+    // Inventory is derived from all native projects, not the caller's cwd/cache.
+    const auto inventoryProfile = root / "inventory-source";
+    const auto workspaceTwo = root / "second workspace";
+    fs::create_directories(workspaceTwo);
+    const std::string secondId = "b2345678-1234-1234-1234-123456789abc";
+    fs::copy(candidateProfile, inventoryProfile, fs::copy_options::recursive);
+    const auto secondTranscript = inventoryProfile / "home/.claude/projects/second" / (secondId + ".jsonl");
+    Write(secondTranscript, ccode::Json{{"type", "user"}, {"sessionId", secondId}, {"cwd", workspaceTwo.u8string()},
+        {"message", {{"role", "user"}, {"content", "second private marker"}}}}.dump() + "\n");
+    const auto inventory = ccode::CandidateSessionInventory(inventoryProfile);
+    assert(inventory.size() == 2);
+    assert(inventory[0].session == historyId && ccode::SameWorkspace(inventory[0].workspace, root));
+    assert(inventory[1].session == secondId && ccode::SameWorkspace(inventory[1].workspace, workspaceTwo));
+    const auto secondSaved = Read(secondTranscript);
+    Write(secondTranscript, secondSaved + "{truncated");
+    bool badInventory = false;
+    try { ccode::CandidateSessionInventory(inventoryProfile); }
+    catch (const std::runtime_error& error) { badInventory = std::string(error.what()) == "E_CANDIDATE_HISTORY"; }
+    assert(badInventory && Read(secondTranscript) == secondSaved + "{truncated");
+    Write(secondTranscript, secondSaved);
+    const auto duplicateTranscript = inventoryProfile / "home/.claude/projects/duplicate" / (secondId + ".jsonl");
+    Write(duplicateTranscript, secondSaved);
+    bool duplicateInventory = false;
+    try { ccode::CandidateSessionInventory(inventoryProfile); }
+    catch (const std::runtime_error& error) { duplicateInventory = std::string(error.what()) == "E_CANDIDATE_HISTORY"; }
+    assert(duplicateInventory);
+    fs::remove(duplicateTranscript);
+    const auto allSnapshot = ccode::CreateProfileSnapshot(inventoryProfile, root / "all-snapshots", historyId, testDigest);
+    const auto allCandidate = ccode::StageProfileCandidate(allSnapshot, root / "all-candidates", historyId, testDigest);
+    size_t failedProbeCount = 0;
+    bool failedAll = false;
+    try {
+        ccode::ValidateProfileCandidate(allCandidate, allSnapshot, inventoryProfile,
+            root / "all-verified", snapshotId, root, "", engine, testDigest, {},
+            [&](const fs::path&, const fs::path&, const std::string&, const std::string&) {
+                return ++failedProbeCount == 1;
+            });
+    } catch (const std::runtime_error& error) { failedAll = std::string(error.what()) == "E_CANDIDATE_HISTORY"; }
+    assert(failedAll && failedProbeCount == 2 && !fs::exists(allCandidate / "validation.json"));
+    std::vector<std::string> probedSessions;
+    const auto allReceipt = ccode::ValidateProfileCandidate(allCandidate, allSnapshot, inventoryProfile,
+        root / "all-verified", snapshotId, root, "", engine, testDigest, {},
+        [&](const fs::path& isolated, const fs::path& cwd, const std::string& id, const std::string& expected) {
+            assert(fs::equivalent(isolated, allCandidate / "profile"));
+            assert(ccode::SameWorkspace(cwd, id == historyId ? root : workspaceTwo));
+            assert(expected == (id == historyId ? "private historical marker" : "second private marker"));
+            probedSessions.push_back(id);
+            return true;
+        });
+    assert(probedSessions == std::vector<std::string>({historyId, secondId}));
+    assert(allReceipt["scope"] == "all-top-level-sessions" && allReceipt["sessions"].size() == 2);
+    assert(!allReceipt.contains("sessionId") && allReceipt.dump().find("private marker") == std::string::npos);
+    assert(ccode::VerifyCandidateValidation(allCandidate, root / "all-verified", engine, testDigest) == allReceipt);
+    auto partialReceipt = allReceipt;
+    partialReceipt["sessions"].erase(1);
+    Write(allCandidate / "validation.json", partialReceipt.dump());
+    bool omittedSession = false;
+    try { ccode::VerifyCandidateValidation(allCandidate, root / "all-verified", engine, testDigest); }
+    catch (const std::runtime_error& error) { omittedSession = std::string(error.what()) == "E_CANDIDATE_DATA"; }
+    assert(omittedSession);
+    Write(allCandidate / "validation.json", allReceipt.dump());
+    const auto driftCandidate = ccode::StageProfileCandidate(allSnapshot, root / "all-candidates", secondId, testDigest);
+    bool inventoryDrift = false;
+    try {
+        ccode::ValidateProfileCandidate(driftCandidate, allSnapshot, inventoryProfile,
+            root / "drift-verified", snapshotId, root, "", engine, testDigest, {},
+            [&](const fs::path& isolated, const fs::path&, const std::string& id, const std::string&) {
+                if (id == historyId) {
+                    auto changed = ccode::Json::parse(secondSaved);
+                    changed["message"]["content"] = "replaced original marker";
+                    Write(isolated / "home/.claude/projects/second" / (secondId + ".jsonl"), changed.dump() + "\n");
+                }
+                return true;
+            });
+    } catch (const std::runtime_error& error) { inventoryDrift = std::string(error.what()) == "E_CANDIDATE_CHANGED"; }
+    assert(inventoryDrift && !fs::exists(driftCandidate / "validation.json"));
     fs::remove_all(ccode::SnapshotIoPath(root));
     std::cout << "ccode profile recovery tests passed\n";
 } catch (const std::exception& error) {

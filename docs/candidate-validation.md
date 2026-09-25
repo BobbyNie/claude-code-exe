@@ -32,7 +32,7 @@ ccode.exe --data-dir DATA --validate-profile CANDIDATE_ID --resume SESSION_ID
 6. 寫入候選的 `validation.json`，記錄引擎版本及 SHA-256、adapter、workspace UUID、
    session ID、來源及驗證快照 UUID、驗證後檔案雜湊清單。原 `candidate.json` 仍為 staged。
 
-回執的 `scope` 固定為 `single-session`。它是本機一致性證據，**不是數位簽章或
+指定 `--resume` 時回執的 `scope` 為 `single-session`。它是本機一致性證據，**不是數位簽章或
 對同帳戶惡意程式的安全保證**。讀取端須重新核對引擎、驗證快照及候選目前檔案；
 不能僅信任 `historyVerified: true`。目錄／ACL 等完整語義仍須另行驗收。
 
@@ -42,8 +42,33 @@ ccode.exe --data-dir DATA --validate-profile CANDIDATE_ID --resume SESSION_ID
 - 引擎嘗試恢復後可能已改變候選，即使驗證失敗。保留候選供診斷，重新從原快照
   stage 新候選再試，不覆蓋舊資料、不盲目合併 JSONL。
 - 成功回執不得覆寫。候選後續正常使用造成變動後，先前回執不再證明目前檔案。
-- 此命令目前只驗證所選會話；其他會話、搬移、版本回退、原子啟用、磁碟滿及
+- 單一會話模式只驗證所選會話；其他會話、搬移、版本回退、原子啟用、磁碟滿及
   中斷恢復不因本命令成功而視為通過。
 
 來源檢查只證明本次驗證檢查點的檔案一致性。後續啟用仍必須持鎖重新核對，
 不能用本回執跳過啟用時的來源衝突檢查；同帳戶外部程式仍可能不遵守操作鎖。
+
+## 所有頂層會話模式
+
+```text
+ccode.exe --data-dir DATA --validate-profile CANDIDATE_ID --all-sessions
+```
+
+`--all-sessions` 與 `--resume` 互斥，而且只能與 `--validate-profile` 一起使用。
+仍可指定 `--model`。此模式會對每個頂層會話提交一次恢復請求，API 成本隨會話數增加。
+
+- 從所有原生 project 目錄的頂層 JSONL 盤點，不依賴可重建索引或目前 cwd。
+- 先預檢全部檔案，拒絕重複 session ID、損壞 JSON／末行、未知會話檔名、
+  無主會話 user 記錄、非純文字首訊息；沒有可驗證會話也拒絕，不把空集合當通過。
+- 每個會話的絕對 cwd 必須仍存在；不存在回傳 `E_CANDIDATE_WORKSPACE`。
+  不猜測搬移映射、不修改歷史路徑；明確遷移流程仍另行實作。
+- 逐一以該會話原 cwd 啟動實際引擎，不改前端程序的全域 cwd。任何一次失敗停止，
+  不重放、不發布部分成功回執。候選可能已被前幾次恢復修改，應重新 stage 再試。
+- 初始歷史標記保留在記憶體，後續 probe 不能把已替換的標記當新預期答案。
+  結束後再核對會話集合／工作區／標記，才建立整體凍結快照及回執。
+- 回執 `scope` 為 `all-top-level-sessions`，`sessions` 陣列記錄每個 session UUID
+  與 workspace UUID。讀取端重新盤點並核對完整清單，拒絕遺漏／重複項目。
+
+此範圍不是「所有功能相容」：巢狀子代理資料會隨 profile 保留，但不宣稱已獨立
+恢復每個子代理；技能／MCP、目錄 ACL、搬移、版本回退及企業端點仍須各自驗收。
+候選仍為 staged，這個命令不切換 active profile。

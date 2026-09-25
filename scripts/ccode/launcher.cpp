@@ -206,7 +206,7 @@ int PermissionServer() {
     return 0;
 }
 struct Options {
-    bool print = false, sessions = false, resumePicker = false, latest = false, workspaceId = false, snapshotProfile = false;
+    bool print = false, sessions = false, resumePicker = false, latest = false, workspaceId = false, snapshotProfile = false, allSessions = false;
     fs::path data;
     std::string prompt, session, stageSnapshot, validateCandidate;
     std::vector<std::wstring> engine;
@@ -228,6 +228,7 @@ Options Parse(int argc, wchar_t** argv, const fs::path& module) {
         else if (!literal && arg == L"--workspace-id") options.workspaceId = true;
         else if (!literal && arg == L"--snapshot-profile") options.snapshotProfile = true;
         else if (!literal && arg == L"--stage-profile") options.stageSnapshot = Utf8(next());
+        else if (!literal && arg == L"--all-sessions") options.allSessions = true;
         else if (!literal && arg == L"--validate-profile") options.validateCandidate = Utf8(next());
         else if (!literal && (arg == L"--resume" || arg == L"-r")) {
             if (i + 1 < argc && argv[i + 1][0] != L'-') options.session = Utf8(next());
@@ -251,9 +252,10 @@ Options Parse(int argc, wchar_t** argv, const fs::path& module) {
     }
     if (!options.stageSnapshot.empty() && !ccode::ValidSessionId(options.stageSnapshot)) throw std::runtime_error("E_SNAPSHOT_ID");
     if (!options.session.empty() && !ccode::ValidSessionId(options.session)) throw std::runtime_error("E_SESSION_ID");
+    if (options.allSessions && options.validateCandidate.empty()) throw std::runtime_error("E_ARGUMENT");
     if (!options.validateCandidate.empty()) {
         if (!ccode::ValidSessionId(options.validateCandidate)) throw std::runtime_error("E_CANDIDATE_DATA");
-        if (options.session.empty() || options.print || options.sessions || options.resumePicker || options.latest ||
+        if ((options.allSessions == !options.session.empty()) || options.print || options.sessions || options.resumePicker || options.latest ||
             options.workspaceId || options.snapshotProfile || !options.stageSnapshot.empty() || !options.prompt.empty())
             throw std::runtime_error("E_ARGUMENT");
         for (size_t i = 0; i < options.engine.size(); i += 2)
@@ -277,7 +279,7 @@ std::vector<wchar_t> ChildEnvironment(const fs::path& profile, bool interactive)
     return result;
 }
 int RunTurn(const fs::path& module, const fs::path& payload, const fs::path& profile,
-            const Options& options, bool interactive, const std::string& prompt, std::string& session, std::string* captured = nullptr) {
+            const Options& options, bool interactive, const std::string& prompt, std::string& session, std::string* captured = nullptr, const fs::path* workspace = nullptr) {
     auto environment = ChildEnvironment(profile, interactive);
     Json mcp = {{"mcpServers", {{"ccode_permissions", {{"type", "stdio"},
         {"command", module.u8string()}, {"args", {"--ccode-permission-server"}}}}}}};
@@ -317,7 +319,7 @@ int RunTurn(const fs::path& module, const fs::path& payload, const fs::path& pro
     PROCESS_INFORMATION child{};
     BOOL created = CreateProcessW(payload.c_str(), cmd.data(), nullptr, nullptr, TRUE,
         CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT | EXTENDED_STARTUPINFO_PRESENT | CREATE_NEW_PROCESS_GROUP,
-        environment.data(), nullptr, &startup.StartupInfo, &child);
+        environment.data(), workspace ? workspace->c_str() : nullptr, &startup.StartupInfo, &child);
     DeleteProcThreadAttributeList(list);
     if (!created) throw std::runtime_error("E_START");
     Handle process(child.hProcess), thread(child.hThread);
@@ -402,7 +404,8 @@ int Main(int argc, wchar_t** argv) {
             "  --workspace-id         Show persistent workspace identity\n"
             "  --snapshot-profile     Create verified backup; print snapshot ID\n"
             "  --stage-profile ID     Copy verified snapshot to isolated candidate\n"
-            "  --validate-profile ID  Verify one candidate session (requires --resume ID)\n"
+            "  --validate-profile ID  Verify candidate (--resume ID or --all-sessions)\n"
+            "  --all-sessions         Verify every top-level session in its workspace\n"
             "  --allowedTools RULE    Explicit tool permission rule\n"
             "  --settings PATH        Engine settings file\n"
             "  --mcp-config PATH      Additional tool servers\n"
@@ -454,21 +457,28 @@ int Main(int argc, wchar_t** argv) {
         auto payload = PrepareRuntime(module.parent_path(), metadata);
         SetConsoleCtrlHandler(OnControl, TRUE);
         const Json engine = {{"version", metadata.at("version")}, {"sha256", metadata.at("sha256")}};
-        const auto receipt = ccode::ValidateProfileCandidate(candidate,
-            options.data / L"snapshots" / Wide(document["sourceSnapshotId"].get<std::string>()),
-            profile, options.data / L"verified", ccode::NewWorkspaceId(), fs::current_path(), options.session, engine, FileDigest,
-            [&](const fs::path& isolated, const std::string& id, const std::string& expected) {
+        const ccode::CandidateWorkspaceProbe runProbe =
+            [&](const fs::path& isolated, const fs::path& workspace, const std::string& id, const std::string& expected) {
                 auto probeOptions = options;
                 probeOptions.engine.insert(probeOptions.engine.end(), {L"--tools", L"", L"--max-turns", L"1"});
                 auto resumed = id;
                 std::string answer;
-                // The answer is never included in the probe prompt or printed to the user.
+                // Never put the expected answer into the prompt or terminal output.
                 const auto code = RunTurn(module, payload, isolated, probeOptions, false,
                     "For profile recovery verification, repeat verbatim the complete text of the first user message "
-                    "in this conversation. Return only that text. Do not call tools.", resumed, &answer);
+                    "in this conversation. Return only that text. Do not call tools.", resumed, &answer, &workspace);
                 return code == 0 && resumed == id && answer == expected + "\n";
-            });
-        std::cout << "Verified candidate session: " << receipt.at("sessionId").get<std::string>() << '\n';
+            };
+        const auto cwd = fs::current_path();
+        const ccode::CandidateProbe singleProbe = [&](const fs::path& isolated, const std::string& id, const std::string& expected) {
+            return runProbe(isolated, cwd, id, expected);
+        };
+        const auto receipt = ccode::ValidateProfileCandidate(candidate,
+            options.data / L"snapshots" / Wide(document["sourceSnapshotId"].get<std::string>()),
+            profile, options.data / L"verified", ccode::NewWorkspaceId(), cwd, options.session, engine, FileDigest,
+            singleProbe, options.allSessions ? runProbe : ccode::CandidateWorkspaceProbe{});
+        if (options.allSessions) std::cout << "Verified candidate sessions: " << receipt.at("sessions").size() << '\n';
+        else std::cout << "Verified candidate session: " << receipt.at("sessionId").get<std::string>() << '\n';
         return 0;
     }
     for (auto name : {L"home", L"roaming", L"local", L"temp"}) fs::create_directories(profile / name);

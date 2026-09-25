@@ -39,6 +39,7 @@ def prepare(executable):
 def verify(executable):
     requests = []
     probe_reply_correct = True
+    history_markers = ["legacy-resume-marker-7391", "second-workspace-marker-6842"]
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *_):
@@ -59,9 +60,9 @@ def verify(executable):
             answer = "resume-test-ok"
             messages = body.get("messages", [])
             if messages and "For profile recovery verification" in json.dumps(messages[-1]):
-                assert "legacy-resume-marker-7391" not in json.dumps(messages[-1]), "Probe leaked the expected answer"
-                answer = "legacy-resume-marker-7391" if probe_reply_correct and \
-                    "legacy-resume-marker-7391" in json.dumps(messages[:-1]) else "history-verification-failed"
+                assert not any(marker in json.dumps(messages[-1]) for marker in history_markers), "Probe leaked the expected answer"
+                recovered = [marker for marker in history_markers if marker in json.dumps(messages[:-1])]
+                answer = recovered[0] if probe_reply_correct and len(recovered) == 1 else "history-verification-failed"
             message = {"id": "msg_resume_test", "type": "message", "role": "assistant",
                        "model": body.get("model", "claude-sonnet-4-6"),
                        "content": [{"type": "text", "text": answer}],
@@ -283,7 +284,53 @@ def verify(executable):
         assert not (profile.parent / "active-profile.json").exists()
         print("PASS: product candidate verifier checks real recovered history, freezes SHA256-bound evidence, and rejects a wrong answer without replay or activation")
 
-
+        # A second real engine session belongs to a different cwd, with a distinct marker.
+        probe_reply_correct = True
+        other_workspace = executable.parent / "second 工作區"
+        other_workspace.mkdir()
+        created = subprocess.run([str(executable), "--print", history_markers[1]], cwd=other_workspace,
+                                 env=env, capture_output=True, text=True, encoding="utf-8", timeout=60)
+        assert created.returncode == 0, created
+        other_list = subprocess.run([str(executable), "--sessions"], cwd=other_workspace,
+                                    env=env, capture_output=True, text=True, encoding="utf-8", timeout=30)
+        assert other_list.returncode == 0, other_list
+        other_match = re.search(r"(?m)^\d+\. ([0-9a-f-]{36})  ", other_list.stdout)
+        assert other_match, other_list.stdout
+        other_session = str(uuid.UUID(other_match[1]))
+        assert other_session != session
+        active_all_before = profile_bytes(profile)
+        all_backup = subprocess.run([str(executable), "--snapshot-profile"], cwd=executable.parent,
+                                    env=env, capture_output=True, text=True, encoding="utf-8", timeout=30)
+        assert all_backup.returncode == 0, all_backup
+        snapshot_id = str(uuid.UUID(all_backup.stdout.strip()))
+        all_snapshot = profile.parent / "snapshots" / snapshot_id
+        all_snapshot_before = profile_bytes(all_snapshot)
+        all_id = stage_again()
+        requests.clear()
+        all_result = subprocess.run([str(executable), "--validate-profile", all_id, "--all-sessions"],
+                                    cwd=executable.parent, env=env, capture_output=True,
+                                    text=True, encoding="utf-8", timeout=120)
+        assert all_result.returncode == 0, all_result
+        assert "Verified candidate sessions: 2" in all_result.stdout
+        assert not any(marker in all_result.stdout + all_result.stderr for marker in history_markers)
+        assert len(requests) == 2, "All-session validation omitted or replayed a session"
+        for marker in history_markers:
+            assert sum(marker in json.dumps(request.get("messages", [])[:-1]) for request in requests) == 1
+        all_root = profile.parent / "candidates" / all_id
+        all_receipt = json.loads((all_root / "validation.json").read_text(encoding="utf-8"))
+        assert all_receipt["scope"] == "all-top-level-sessions"
+        assert {item["sessionId"] for item in all_receipt["sessions"]} == {session, other_session}
+        assert len({item["workspaceId"] for item in all_receipt["sessions"]}) == 2
+        assert not any(marker in json.dumps(all_receipt) for marker in history_markers)
+        all_saved = profile_bytes(all_root / "profile")
+        all_frozen = profile.parent / "verified" / str(uuid.UUID(all_receipt["verificationId"]))
+        assert all_saved == profile_bytes(all_frozen / "profile")
+        assert all_receipt["files"] == {name: {"size": len(value), "sha256": hashlib.sha256(value).hexdigest()}
+                                         for name, value in all_saved.items()}
+        assert profile_bytes(profile) == active_all_before
+        assert profile_bytes(all_snapshot) == all_snapshot_before
+        assert not (profile.parent / "active-profile.json").exists()
+        print("PASS: all-session candidate validation restores two real sessions in distinct workspaces with complete SHA256-bound receipt and unchanged source")
 
     finally:
         server.shutdown()
