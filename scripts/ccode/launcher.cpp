@@ -390,7 +390,7 @@ int RunTurn(const fs::path& module, const fs::path& payload, const fs::path& pro
         }
         inWrite.reset();
     });
-    ccode::EventReader reader;
+    ccode::EventReader reader(session);
     std::string protocolError;
     char buffer[16384]; DWORD read;
     while (ReadFile(outRead, buffer, sizeof(buffer), &read, nullptr) && read) {

@@ -86,6 +86,31 @@ int main() {
     completedBeforeInit.Feed("{\"type\":\"result\",\"subtype\":\"success\"}\n");
     ExpectError(completedBeforeInit, init, "E_PROTOCOL_ORDER");
     ExpectError(completedBeforeInit, wire, "E_PROTOCOL_FAILED");
+    // Once an engine identifies the turn, later events cannot redirect resume.
+    const auto changedSession = ccode::Json{{"type", "result"}, {"subtype", "success"},
+        {"session_id", "s2"}}.dump() + "\n";
+    for (size_t split = 0; split < changedSession.size(); ++split) {
+        ccode::EventReader identity;
+        identity.Feed(init);
+        assert(identity.Feed(changedSession.substr(0, split)).empty());
+        ExpectError(identity, changedSession.substr(split), "E_SESSION_MISMATCH");
+        assert(identity.session == "s1" && !identity.complete);
+        ExpectError(identity, wire, "E_PROTOCOL_FAILED");
+    }
+    // A resumed turn is pinned before the very first engine event.
+    ccode::EventReader resumedIdentity("expected-session");
+    ExpectError(resumedIdentity, init, "E_SESSION_MISMATCH");
+    assert(resumedIdentity.session == "expected-session");
+    ExpectError(resumedIdentity, wire, "E_PROTOCOL_FAILED");
+    ccode::EventReader matchingResume("s1");
+    matchingResume.Feed(init);
+    matchingResume.Feed("{\"type\":\"result\",\"subtype\":\"success\",\"session_id\":\"s1\"}\n");
+    matchingResume.Finish();
+    ccode::EventReader stableIdentity;
+    stableIdentity.Feed(init);
+    stableIdentity.Feed("{\"type\":\"result\",\"subtype\":\"success\",\"session_id\":\"s1\"}\n");
+    stableIdentity.Finish();
+    assert(stableIdentity.session == "s1" && !stableIdentity.failed);
     auto tool = [](const std::string& name, const std::string& id, const ccode::Json& input) {
         return ccode::Json{{"type", "assistant"}, {"message", {{"content", ccode::Json::array({
             {{"type", "tool_use"}, {"name", name}, {"id", id}, {"input", input}}

@@ -1143,3 +1143,16 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - 另外以獨立 RED/GREEN 驗證 result 完成後不能首次初始化。六組 C++、Node
   2 項通過；Python 30 項中 29 通過、1 項 Windows 專用測試跳過。新增狀態
   限制的 Windows 實際引擎回歸待驗；不宣稱前端能撤銷引擎已執行的工具。
+
+### A13 回合會話身份不可被事件改寫
+
+- `RunTurn` 原本使用未綁定身份的 EventReader，任何帶 session_id 的事件都會
+  改寫 reader.session，最後可能成為下一回合的 resume 目標。現在回合首次
+  宣告後固定身份；若呼叫者正在 resume，建構 reader 時即綁定預期 session。
+  不符時 E_SESSION_MISMATCH、保留原身份、不接受成功 result，後續輸入失敗。
+- TDD：先以每個 byte 分片點注入不同 session 的 result，ExpectError RED，
+  最小修復後 GREEN；再加入預綁 resume 身份測試，缺建構介面 RED，實作後
+  GREEN。同身份事件／正常 result 與未指定身份的新回合維持相容。
+- 六組 C++、Node 2 項通過；Python 30 項中 29 通過、1 Windows 專用項跳過。
+  本輪兩個實際引擎的 resume／跨版本相容性尚待 Windows 驗證，不以 parser
+  單測宣稱完整歷史驗收，不聲稱可以撤回引擎在拒絕之前的內部操作。

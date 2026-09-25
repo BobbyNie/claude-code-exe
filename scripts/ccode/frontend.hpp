@@ -38,7 +38,11 @@ class EventReader {
         // before it can mutate the session identity or registered tool names.
         if (type == "system" && event.value("subtype", std::string()) == "init" &&
             (toolRegistryReceived || complete)) throw ProtocolError("E_PROTOCOL_ORDER");
-        if (event.contains("session_id")) session = event.at("session_id").get<std::string>();
+        if (event.contains("session_id")) {
+            const auto eventSession = event.at("session_id").get<std::string>();
+            if (!session.empty() && eventSession != session) throw ProtocolError("E_SESSION_MISMATCH");
+            session = eventSession;
+        }
         if (type == "system" && event.value("subtype", std::string()) == "init") {
             const auto& tools = event.at("tools");
             if (!tools.is_array()) throw ProtocolError("E_PROTOCOL_SCHEMA");
@@ -99,6 +103,7 @@ class EventReader {
 public:
     std::string session;
     bool complete = false, failed = false;
+    explicit EventReader(const std::string& expectedSession = "") : session(expectedSession) {}
     std::string Feed(const std::string& bytes) {
         if (broken) throw ProtocolError("E_PROTOCOL_FAILED");
         try {
