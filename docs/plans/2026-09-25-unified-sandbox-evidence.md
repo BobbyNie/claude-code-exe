@@ -1066,3 +1066,17 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   舊名殘留、內容破壞、目的地殘留與健康情境；Python 27 項、Node 2 項 GREEN。
 - 本輪只修改驗收 fixture，沒有改動產品或略過既有門檻。Windows 結果待驗；
   模型回覆是本機 deterministic API，不宣稱真實模型／企業端點已驗收。
+
+### 跨工具重命名 Windows 結果及 fixture 換行修正
+
+- `8908d32` / `36183450145` 已完成並核對日誌。2.1.282 `108231071150`、
+  2.1.221 `108231071625` 的工具及別名步驟均明確 PASS：Bash rename、
+  Read/Edit/Grep/Glob 新路徑、失敗後 edited bytes 保全。各版本一般、case、
+  junction 共三案例通過。cross-version `108232898352` 成功。
+- 主測試兩版本在新增 Python oracle 測試第 27 行失敗，尚未進入原生 runtime
+  與 portable 驗收：write_text 的 Windows 換行轉換與精確 LF bytes 斷言衝突。
+  本機強制 text writer newline=CRLF 重現同一 RED；改用固定 write_bytes 後
+  相同重現環境 GREEN，完整 Python 27 項 GREEN。額外明確測試 CRLF 應拒絕，
+  不放寬產品／oracle 的 bytes 要求。Windows 修正後回歸待驗。
+- long-workspace `108232898299`、`108232898430` 仍 WinError 267，整體
+  failure。不得將通過的工具步驟等同本輪全部原生與 portable 案例通過。

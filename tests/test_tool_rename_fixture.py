@@ -15,17 +15,20 @@ class ToolRenameFixtureTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / 'original.txt'
             target = Path(directory) / 'renamed 中文.txt'
-            source.write_text('marker-after\n')
-            target.write_text('marker-renamed\n')
+            source.write_bytes(b'marker-after\n')
+            target.write_bytes(b'marker-renamed\n')
             with self.assertRaisesRegex(AssertionError, 'old name'):
                 tools.verify_rename_files(source, target)
             source.unlink()
-            target.write_text('damaged')
+            target.write_bytes(b'marker-renamed\r\n')
             with self.assertRaisesRegex(AssertionError, 'bytes'):
                 tools.verify_rename_files(source, target)
-            target.write_text('marker-renamed\n')
+            target.write_bytes(b'damaged')
+            with self.assertRaisesRegex(AssertionError, 'bytes'):
+                tools.verify_rename_files(source, target)
+            target.write_bytes(b'marker-renamed\n')
             tools.verify_rename_files(source, target)
             (target.parent / 'absent-rename-parent').mkdir()
-            (target.parent / 'absent-rename-parent/file.txt').write_text('unexpected')
+            (target.parent / 'absent-rename-parent/file.txt').write_bytes(b'unexpected')
             with self.assertRaisesRegex(AssertionError, 'destination'):
                 tools.verify_rename_files(source, target)
