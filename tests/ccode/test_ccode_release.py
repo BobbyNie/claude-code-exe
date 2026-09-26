@@ -6,18 +6,18 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class CcodeReleaseTests(unittest.TestCase):
-    def test_ccode_is_appended_by_an_independent_follow_up_workflow(self):
-        workflow = (ROOT / ".github/workflows/append-ccode-release.yml").read_text(
-            encoding="utf-8"
-        )
+    def test_ccode_is_never_published_to_the_mixed_public_bundle(self):
+        legacy = ROOT / ".github/workflows/append-ccode-release.yml"
+        self.assertFalse(legacy.exists())
 
-        self.assertIn("workflow_run:", workflow)
-        self.assertIn("Auto Release AI Tools Portable", workflow)
-        self.assertIn("workflow_dispatch:", workflow)
-        self.assertIn("gh release upload", workflow)
-        self.assertIn("ccode.exe", workflow)
-        self.assertNotIn("gh release create", workflow)
-        self.assertNotIn("gh release delete", workflow)
+        for workflow_path in (ROOT / ".github/workflows").glob("*.yml"):
+            workflow = workflow_path.read_text(encoding="utf-8")
+            publishes_ccode = "gh release upload" in workflow and "ccode.exe" in workflow
+            targets_mixed_bundle = "Auto Release AI Tools Portable" in workflow
+            self.assertFalse(
+                publishes_ccode and targets_mixed_bundle,
+                f"{workflow_path.name} still publishes ccode into the mixed bundle",
+            )
 
     def test_native_tests_cover_public_isolation_rules(self):
         native_test = (ROOT / "tests/ccode/native-tests.cpp").read_text(encoding="utf-8")

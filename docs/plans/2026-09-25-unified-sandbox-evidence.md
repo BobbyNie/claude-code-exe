@@ -23,7 +23,7 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 | ID | 原矩陣項目 | 現有實作／證據入口 | 尚欠證據或實作（全部保留為門檻） |
 |---|---|---|---|
 | A01 | 離線安裝 | 資源內嵌引擎；Windows 建置／啟動；已實作獨立斷網驗收器，檢查 Windows 11 x64 普通帳戶、default route／adapter、服務／驅動差異及真實 engine／tool 試運行 | 尚須乾淨 Windows 11 x64 普通帳戶真正斷網實跑並保存成功 evidence；loopback fixture 不替代企業 gateway／真實模型 |
-| A02 | 交付名稱 | 中性入口及 help；`package_audit.py` 已實作 ZIP／解包唯讀配對掃描；`build_enterprise_package.py` 已實作 Windows 11 x64 白名單組裝、必要通知 hash 綁定及固定 metadata ZIP，本機 13 項 audit＋5 項組裝測試通過 | 核准名稱政策、核准必要通知／再分發權、實際 Windows 11 x64 ZIP／解包掃描及更新殘留核實；既有混合公共 release 不是企業交付；工具測試不等於放行 |
+| A02 | 交付名稱 | 中性入口及 help；`package_audit.py` 已實作 ZIP／解包唯讀配對掃描；`build_enterprise_package.py` 已實作 Windows 11 x64 白名單組裝、必要通知 hash 綁定及固定 metadata ZIP；舊混合公共發布 workflow 已移除；本機 13 項 audit＋5 項組裝測試通過 | 核准名稱政策、核准必要通知／再分發權、正式獨立發布流程、實際 Windows 11 x64 ZIP／解包掃描及更新殘留核實；工具測試不等於放行 |
 | A03 | 原始負載 | build 上游 checksum；啟動資源 SHA256、解出內容逐位元組校驗；已實作 schema 1 隨包來源清單、`--package-manifest` 及 extracted hash 證據 fixture | 尚須 Windows 11 x64 普通帳戶兩版本實跑並保存 `package-provenance.json`；來源清單未簽名，不替代 A20 可信簽署 |
 | A04 | 內部範圍 | ADR 明確允許引擎／使用者資料原名 | 隨包公開邊界清單、runtime 環境及 metadata 記錄、必要通知核實 |
 | A05 | 資料分離 | --data-dir、獨立 profile；工具 integration 檢查程式區無 session；離線驗收器記錄 program before／after、外置 data 及 workspace manifest，僅允許 hash 相符的版本化 runtime | 尚須 Windows 11 x64 離線實跑；更新、搬移、重新打包排除資料及程式區無 temp 的完整矩陣仍欠 |
@@ -1341,7 +1341,9 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - 輸入 provenance 必須是 schema 1、Windows/x64、完整 40/64 hex adapter revision、引擎／官方 manifest hash 和 HTTPS 來源；每份通知必須是 regular file 並匹配顯式 SHA-256。通知原 bytes 同時在解包鏡像與 ZIP 驗證，缺少、hash 不符、link、Windows 危險檔名或大小寫重名均 fail closed。
 - ZIP 使用固定 entry timestamp／mode／順序；候選 `manifest.json` 記錄 Windows 11 build 22000+、wrapper hash、engine/adapter provenance、檔案與通知 hash、公開文字／opaque 二進位邊界、排除的動態資料及 `external-gate-not-asserted`。完成後直接重用 `package_audit.py` 比對 archive／unpacked path、size、SHA-256 及名稱報告；衝突時不發布輸出。
 - 本機完整 Python 回歸 59 項通過、1 項 Windows API 專用跳過；六組 C++ 回歸通過。這只證明固定本機工具鏈下的 deterministic 組裝行為，尚未在 Windows 11 x64 以真實 `ccode.exe`、核准禁用名稱及法律／合規方提供的通知執行。
-- 既有 `.github/workflows/append-ccode-release.yml` 仍把單一 `ccode.exe` 附加到混合公共 release，明確**不是**本企業包路徑，也不能作 A02 證據。仍須另行切換發布流程、取得再分發／通知核准、保存實際 Windows 11 x64 archive hash 與掃描報告；A02 仍未通過，A20 簽署門檻亦未因此完成。
+- 下一個 TDD 切片先把 release contract 改為禁止任何 workflow 同時指向 `Auto Release AI Tools Portable` 並以 `gh release upload` 發布 `ccode.exe`，確認舊檔存在時 RED；再移除 `.github/workflows/append-ccode-release.yml` 至 GREEN。這只停止已知錯誤發布路徑；在再分發／通知、核准名稱及簽署門檻完成前，刻意不建立自動企業 release。
+- 組裝器提交 `0a65e222d2805ae9c75dd70cdec17814e845e424` 已推送。補充 Windows Server workflow run `36207722704` 的兩個 test、兩個 workspace-boundary 及 cross-version 共五個 jobs 全部為零 steps；每個 check annotation 均指出帳戶近期付款失敗或 spending limit 需提高。這不是產品測試失敗，亦沒有執行組裝器或產生 Windows 11 x64 證據。
+- 仍須取得再分發／通知核准、建立受保護的獨立發布流程並保存實際 Windows 11 x64 archive hash 與掃描報告；A02 仍未通過，A20 簽署門檻亦未因此完成。
 
 ### A03／A20 內嵌原始負載篡改：新增獨立 Windows 驗收門檻
 
