@@ -129,6 +129,46 @@ class AcceptanceWorkflowTests(unittest.TestCase):
             workflow = (root / '.github/workflows' / workflow_name).read_text()
             self.assertNotIn('accept-offline-windows11-x64.ps1', workflow)
 
+    def test_enterprise_lifecycle_acceptance_uses_complete_candidate_and_external_data(self):
+        root = Path(__file__).resolve().parents[1]
+        verifier_path = root / 'scripts/ccode/accept-enterprise-lifecycle-windows11-x64.ps1'
+        self.assertTrue(verifier_path.is_file())
+        verifier = verifier_path.read_text()
+        for requirement in (
+            '[string]$CandidateRoot',
+            '[string]$EvidencePath',
+            'enterprise_lifecycle.py',
+            "'inspect'",
+            'package-audit.json',
+            'assert-windows11-x64.ps1',
+            'portable app 中文',
+            'workspace 中文 with spaces',
+            'persistent data',
+            '--package-manifest',
+            '--boundary-manifest',
+            'tools-integration.py',
+            'lifecycle-resume.py',
+            'Move-Item',
+            'workspaceIdentityBefore',
+            'workspaceIdentityAfter',
+            'E_LIFECYCLE_IDENTITY',
+            'build_enterprise_package.py',
+            "'compare'",
+            'excludedDynamicData',
+            'not a live model or enterprise gateway',
+            'ConvertTo-Json',
+        ):
+            self.assertIn(requirement, verifier)
+        self.assertNotIn('accept-enterprise-lifecycle-windows11-x64.ps1',
+                         (root / '.github/workflows/test-ccode.yml').read_text())
+
+        resume = (root / 'tests/ccode/lifecycle-resume.py')
+        self.assertTrue(resume.is_file())
+        resume_text = resume.read_text()
+        self.assertIn('--continue', resume_text)
+        self.assertIn('original_prompt_marker', resume_text)
+        self.assertIn('not a live model or enterprise gateway', resume_text)
+
     def test_failed_gateway_does_not_hide_independent_acceptance(self):
         workflow = (Path(__file__).resolve().parents[1] /
                     '.github/workflows/test-ccode.yml').read_text()

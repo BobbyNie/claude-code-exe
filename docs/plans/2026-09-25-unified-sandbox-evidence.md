@@ -1616,3 +1616,35 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - `package_audit.py` 仍掃描 manifest 公開文字。因此若核准受限名稱禁止 boundary 中必須如實記錄的原始 runtime 名稱，候選會 fail closed；不能刪除／改寫清單規避。此時是 A02／A04 政策衝突，須由需求／合規決策解決。
 - 本地測試只能證明 static contract 與組裝器拒絕行為；尚未在 Windows 11 x64 普通帳戶以真實封裝確認零副作用，也沒有核准名稱／通知政策，因此 A04 仍為「部分」，不是放行。
 - 本輪完整本地回歸為 Python 61 項（60 通過、1 項 Windows process/thread API 專用跳過）、六組 C++ 全通過；另有 `py_compile` 與 `git diff --check` 通過。loopback 測試需在允許本機 bind 的執行環境完成。這些仍不是 Windows 11 x64 實機證據。
+
+### A05 完整企業候選資料分離／搬移／重新打包驗收器（待 Windows 11 x64 實跑）
+
+- 2026-09-26 依 TDD 先新增 `tests/test_enterprise_lifecycle.py` 與 workflow contract；因
+  `enterprise_lifecycle.py`、完整候選驗收 PowerShell 及搬移後 resume fixture 不存在而
+  RED，再作最小實作至 GREEN。
+- `scripts/ccode/enterprise_lifecycle.py inspect` 不信任既有 `package-audit.json` 的
+  passed 字樣：只接受 `unpacked/`、audit 及唯一 ZIP，從 audit scope 取核准受限名稱後
+  重新掃描 archive／directory，重算 archive SHA256 與逐檔 path/size/SHA256，並核對
+  Windows/x64、minimum build 22000、manifest 白名單、notice hashes 及
+  `excludedDynamicData`。保存 audit 未更新而解包內容被篡改時回 `E_LIFECYCLE_AUDIT`。
+- `scripts/ccode/accept-enterprise-lifecycle-windows11-x64.ps1` 現以完整 enterprise candidate
+  為輸入；複製整個 `unpacked/` 至中文／空格 program path，外置 workspace/data，先核對
+  真實 `--package-manifest`／`--boundary-manifest`，再由既有 loopback fixture 驅動真實
+  engine 與 Write/Edit/Read/Grep/Glob/Bash。執行後原 package files 必須不變，program root
+  只允許 hash 相符的版本化 engine 與 prepare lock，data/profile/sessions/temp 不得滲入。
+- 驗收器搬移完整 program directory，要求相同外置 workspace/data 的 UUID 不變；新增
+  `tests/ccode/lifecycle-resume.py` 會列出既有會話並真實執行 `--continue`，檢查 loopback
+  上游請求包含第一次六工具輪次的原提示。fixture 只替代模型回覆，仍不是 live model 或
+  enterprise gateway。
+- 搬移後以 executable 實際輸出的 provenance／boundary、原 usage／必要通知及 audit scope
+  重新呼叫 `build_enterprise_package.py`。`enterprise_lifecycle.py compare` 強制 fresh
+  repack 的 manifest 與解包 path/size/SHA256 和原候選完全一致，因此運行後 runtime、外置
+  data、profile、session、temp 不能被帶入重新交付；兩個 archive SHA256 分別保存，且只
+  記錄 byte-identical 狀態，不把跨 Python/zlib 壓縮 bytes 相同當唯一門檻。
+- 本輪只有 macOS 上可執行的 helper／contract 測試，沒有 PowerShell 7，也未在 Windows 11
+  x64 普通帳戶執行完整 candidate。故 A05 仍為待實機驗收；此案例亦不替代跨版本
+  更新／回滾、簽署更新、正式 gateway 或真正斷網 A01。
+- 本輪完整本地回歸為 Python 65 項（64 通過、1 項 Windows process/thread API 專用跳過）；
+  六組 C++17 native/profile/environment/frontend/session/permission 測試全部通過，另有
+  `py_compile` 與 `git diff --check` 通過。曾以 C++20 編譯會碰到既有 `u8string`／`char8_t`
+  相容問題，依專案既有標準改回 C++17 後全綠；這不構成本輪產品測試失敗。

@@ -178,6 +178,14 @@ Windows 11 x64 企業候選必須由 `scripts/ccode/build_enterprise_package.py`
 
 此入口的程式碼及本機 contract test 通過，只代表驗收工具已備妥。必須在真正斷網的 Windows 11 x64 普通帳戶實機保存成功 JSON，A01／A05 才能引用；connected workflow 不會呼叫此腳本。
 
+### 8.2 Windows 11 x64 完整企業候選生命週期驗收
+
+A05 的正式資料分離／程式搬移／重新打包證據必須以 `scripts/ccode/accept-enterprise-lifecycle-windows11-x64.ps1` 對 `build_enterprise_package.py` 的完整輸出根執行，不能再以單獨複製 `ccode.exe` 冒充企業候選。輸入根只接受 `unpacked/`、`package-audit.json` 及唯一版本 ZIP；`enterprise_lifecycle.py inspect` 會從 audit 保存的核准受限名稱重新掃描 ZIP／解包鏡像、重算 archive 與逐檔 hash、核對 Windows/x64/build 22000 manifest、通知及白名單。保存的 `passed/matched` audit 不能掩蓋驗收前篡改。
+
+驗收器把完整 `unpacked/` 複製到中文／空格 program path，資料和 workspace 放在平行外置根。第一次真實引擎／六工具執行後，原 package 檔案必須逐位元組不變，只允許 `runtime/<engine-sha256>/engine.exe` 及可選 prepare lock；data/profile/sessions/temp 不得出現在 program root。搬移整個 program directory 後，必須以相同外置 data/workspace 取得同一 workspace ID、列出既有會話，並由 `lifecycle-resume.py` 經 loopback fixture 執行真實 `--continue`，核對上游請求實際包含第一次工具輪次的提示，而不是只看 UI 列表。
+
+最後以搬移後的 `ccode.exe` 實際輸出 `--package-manifest`／`--boundary-manifest`，搭配原候選 usage、必要通知 hash 與 audit scope 的受限名稱，從不存在的 fresh output 再呼叫組裝器。`enterprise_lifecycle.py compare` 強制原／fresh 候選的 manifest 與解包 path/size/SHA256 完全一致，因而證明運行後 runtime、外置 data、profile、session、temp 沒有被重新交付。archive SHA256 分別記錄；不同 Python／zlib 工具鏈不要求壓縮 bytes 必然一致。這仍不是跨版本更新／回滾、正式 gateway 或 Windows 11 實跑已通過的替代證據。
+
 ## 9. 實施順序與放行條件
 
 1. 按最新澄清採 A；確認目標 Windows 版本、工作負載及交付掃描規則，特別區分公開設定與實際 runtime 環境。B/C 不實作。
