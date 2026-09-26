@@ -164,6 +164,14 @@ guest 可寫 profile 跨次啟動保存，temp 可清理但不可每次丟掉整
 
 官方允許 SDK 整合使用自己的產品品牌，但品牌選項不等同免除各組件授權及必要通知。發行前核實再分發和通知要求；不得刪除必須保留的聲明。如果名稱禁令涵蓋必要通知且沒有允許例外，交付門檻不成立。[官方品牌及條款說明](https://code.claude.com/docs/en/agent-sdk/overview)
 
+### 8.1 Windows 11 x64 獨立離線驗收端點
+
+真正斷開外網的證據不得由仍連線 GitHub 的 self-hosted runner 冒充。`scripts/ccode/accept-offline-windows11-x64.ps1` 必須複製到一台實際 Windows 11 x64 Client，由不具提升 token、且不屬本機 Administrators 群組的普通帳戶，在停用或物理斷開全部非 loopback 網卡後人工執行。腳本會拒絕任何非 loopback default route 或仍為 Up 的非 loopback adapter，並記錄經雜湊的 route／adapter 摘要；這是該次端點狀態的驗收 gate，不把單一 HTTP／DNS probe 宣稱為所有網路隔離證明。
+
+驗收器在中文及空格路徑建立乾淨 program／workspace／data root，先後執行版本、自檢、隨包來源清單、workspace identity，再由 `tools-integration.py --acceptance-root` 使用 loopback deterministic response fixture 驅動真正引擎及 Write／Edit／Read／Grep／Glob／Bash。fixture 只取代模型回覆，**不是**真實模型或企業 gateway。執行前後保存 program manifest、外置 data manifest、服務及 `Win32_SystemDriver` inventory hash／差異；新增服務、驅動、非核准 program 檔案或 runtime hash 不符即失敗。證據會遮罩使用者 profile、repository、來源執行檔及工作根路徑，不記錄真實憑證或完整提示。PowerShell／Python 是驗收工具依賴，不因此成為交付包 runtime 依賴。
+
+此入口的程式碼及本機 contract test 通過，只代表驗收工具已備妥。必須在真正斷網的 Windows 11 x64 普通帳戶實機保存成功 JSON，A01／A05 才能引用；connected workflow 不會呼叫此腳本。
+
 ## 9. 實施順序與放行條件
 
 1. 按最新澄清採 A；確認目標 Windows 版本、工作負載及交付掃描規則，特別區分公開設定與實際 runtime 環境。B/C 不實作。

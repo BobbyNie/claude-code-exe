@@ -22,11 +22,11 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 
 | ID | 原矩陣項目 | 現有實作／證據入口 | 尚欠證據或實作（全部保留為門檻） |
 |---|---|---|---|
-| A01 | 離線安裝 | 資源內嵌引擎；Windows 建置／啟動 | 乾淨普通帳戶、離線、服務／驅動前後差異、依賴完整性 |
+| A01 | 離線安裝 | 資源內嵌引擎；Windows 建置／啟動；已實作獨立斷網驗收器，檢查 Windows 11 x64 普通帳戶、default route／adapter、服務／驅動差異及真實 engine／tool 試運行 | 尚須乾淨 Windows 11 x64 普通帳戶真正斷網實跑並保存成功 evidence；loopback fixture 不替代企業 gateway／真實模型 |
 | A02 | 交付名稱 | 中性入口及 help 測試；package_audit.py 已實作解包目錄及 ZIP 唯讀名稱掃描，11 項本機測試通過 | 核准名稱政策、獨立企業交付包的實際 Windows ZIP／解包掃描、更新殘留及必要通知衝突核實；工具測試不等於交付驗收 |
 | A03 | 原始負載 | build 上游 checksum；啟動資源 SHA256、解出內容逐位元組校驗；已實作 schema 1 隨包來源清單、`--package-manifest` 及 extracted hash 證據 fixture | 尚須 Windows 11 x64 普通帳戶兩版本實跑並保存 `package-provenance.json`；來源清單未簽名，不替代 A20 可信簽署 |
 | A04 | 內部範圍 | ADR 明確允許引擎／使用者資料原名 | 隨包公開邊界清單、runtime 環境及 metadata 記錄、必要通知核實 |
-| A05 | 資料分離 | --data-dir、獨立 profile；工具 integration 檢查程式區無 session | 更新、搬移、重新打包排除資料、程式區無 temp 全面快照 |
+| A05 | 資料分離 | --data-dir、獨立 profile；工具 integration 檢查程式區無 session；離線驗收器記錄 program before／after、外置 data 及 workspace manifest，僅允許 hash 相符的版本化 runtime | 尚須 Windows 11 x64 離線實跑；更新、搬移、重新打包排除資料及程式區無 temp 的完整矩陣仍欠 |
 | A06 | 路徑一致 | 原生 mkdir/stat/讀寫/列舉/刪除/子進程；`05750fe` 原生 rename；`7d579ce` / `36184360358` 兩版本一般／case／junction 的真實 Bash mv→Read→Edit→Grep→Glob 及失敗 rename 保全通過 | 本機 API fixture 不替代真實模型／企業 gateway；完整故障矩陣仍欠，不代表長 cwd 通過 |
 | A07 | 執行檔 | `36123600008` 兩版本通過：空格／中文程式與工作區、前端→真正 Grep/Glob；既有自啟動測試亦通過 | 本條所列 CI 場景通過；乾淨端點證據仍依 A01 |
 | A08 | 路徑邊界 | 工具 fixture 含中文／空格；`87f7065` / `36135890793` 兩版本快照／候選超過 260 字元；`92f3e3a` / `36175453668` 大小寫及 junction 下六工具、UUID、列表與續接通過；已實作 `--workspace` 與 258／259、UNC、device namespace 明確邊界 | 新邊界只有本機 C++／workflow fixture 證據，仍須 Windows 11 x64 普通帳戶兩版本實跑；歷史長 cwd `WinError 267` 不算產品通過，亦不把檔案長路徑等同 process cwd 支援 |
@@ -1524,6 +1524,16 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   `36204213325`（2026-09-26T00:16:17Z）。兩個版本、cross-version 及 long-workspace
   共五個 jobs 都是零 steps；check-run annotation 明確指出帳戶近期付款失敗或需要提高
   spending limit。這不是產品測試失敗，也不是 Windows 11 x64 驗收證據。
+
+
+### A01／A05 Windows 11 x64 獨立離線包試運行（待實機執行）
+
+- 2026-09-26 依 TDD 先在 `tests/test_ccode_workflow.py` 加入缺少 verifier 時會失敗的 public contract，確認它必須驗證 Windows 11 x64 普通帳戶、非 loopback route／adapter、服務／驅動 inventory、program／data manifest、真實 tools fixture 及 JSON evidence；再最小實作至 contract test 通過。
+- 新增 `scripts/ccode/accept-offline-windows11-x64.ps1`，刻意不接入 connected GitHub workflow。它重用 `assert-windows11-x64.ps1`，只接受 Windows 11 Client build 22000+、OS／process x64、未提升且不屬 Administrators 的帳戶；任何非 loopback default route 或仍為 `Up` 的非 loopback adapter 都回 `E_OFFLINE_ROUTE`。
+- 驗收在中文／空格 program、workspace、data 路徑複製候選，執行 `--version`、`--ccode-self-test`、`--package-manifest`、`--workspace-id`，再以新增的 `tools-integration.py --acceptance-root` 模式在同一目錄驅動真正引擎及 Write／Edit／Read／Grep／Glob／Bash。API 僅為 loopback deterministic response fixture；證據固定標示「not a live model or enterprise gateway」。
+- 執行前後保存 program manifest、data root／workspace manifest、service 與 `Win32_SystemDriver` inventory SHA256 及 added／removed／changed 集合。新增 service／driver 失敗；program 只允許原 `ccode.exe` 及隨包 manifest hash 對應的 `runtime/<sha256>/engine.exe`、`prepare.lock`，其餘動態資料或內容變更失敗。
+- route／adapter 自訂名稱只寫 SHA256；command evidence 會把 acceptance root、repository root、來源執行檔及 user profile 替換為固定 placeholder。證據不寫真實 token 或完整提示。PowerShell 7／Python 3 明列為驗收 harness 依賴，不列作交付 runtime 依賴。
+- 本機已記錄 contract RED→GREEN；六組 C++ 回歸通過，Python 54 項通過、1 項 Windows API 專用跳過，另有 Python syntax、workflow guard 及 `git diff --check` 通過。macOS 沒有 `pwsh`，故本輪無 PowerShell AST 或 Windows cmdlet／實際執行證據。尚須在真正斷開全部非 loopback 網路的 Windows 11 x64 普通帳戶上執行並帶回 JSON；腳本存在不代表 A01／A05 通過，更新／搬移／重新打包矩陣也仍未完成。
 
 
 ### A08 Windows 11 x64 工作區 current-directory 邊界（待實機執行）

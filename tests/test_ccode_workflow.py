@@ -90,6 +90,45 @@ class AcceptanceWorkflowTests(unittest.TestCase):
         ):
             self.assertIn(requirement, platform)
 
+    def test_offline_windows11_acceptance_is_standalone_and_records_host_deltas(self):
+        root = Path(__file__).resolve().parents[1]
+        verifier_path = root / 'scripts/ccode/accept-offline-windows11-x64.ps1'
+        self.assertTrue(verifier_path.is_file())
+        verifier = verifier_path.read_text()
+        for requirement in (
+            'assert-windows11-x64.ps1',
+            'Get-NetRoute',
+            "0.0.0.0/0",
+            '::/0',
+            'E_OFFLINE_ROUTE',
+            'Get-Service',
+            'Win32_SystemDriver',
+            'E_OFFLINE_SERVICE',
+            'E_OFFLINE_DRIVER',
+            'programBefore',
+            'programAfter',
+            'dataRootManifest',
+            'tools-integration.py',
+            'loopbackFixture',
+            'not a live model or enterprise gateway',
+            'ConvertTo-SafeCommandEvidence',
+            'interfaceAliasSha256',
+            'nameSha256',
+            'ConvertTo-Json',
+        ):
+            self.assertIn(requirement, verifier)
+
+        # A connected GitHub runner cannot prove that a machine was physically
+        # disconnected from all external networks. This verifier is intentionally
+        # copied to, and run on, the standalone acceptance endpoint instead.
+        tools_fixture = (root / 'tests/ccode/tools-integration.py').read_text()
+        self.assertIn('--acceptance-root', tools_fixture)
+        self.assertIn('root_override', tools_fixture)
+
+        for workflow_name in ('test-ccode.yml', 'test-ccode-windows11-x64.yml'):
+            workflow = (root / '.github/workflows' / workflow_name).read_text()
+            self.assertNotIn('accept-offline-windows11-x64.ps1', workflow)
+
     def test_failed_gateway_does_not_hide_independent_acceptance(self):
         workflow = (Path(__file__).resolve().parents[1] /
                     '.github/workflows/test-ccode.yml').read_text()

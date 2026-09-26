@@ -3,6 +3,7 @@
 The API response is a fixture; tool execution, files, child processes and frontend
 are real. This does NOT establish live-model quality or third-party compatibility.
 """
+from contextlib import nullcontext
 import json
 import os
 from pathlib import Path
@@ -159,8 +160,10 @@ def check_workspace_boundaries(executable):
                 shutil.rmtree(long_workspace_io)
 
 
-def check(executable, short_path=False, lifecycle=None, permission=None, workspace_alias=None):
-    with tempfile.TemporaryDirectory(prefix="ccode-tools-") as temporary:
+def check(executable, short_path=False, lifecycle=None, permission=None, workspace_alias=None, root_override=None):
+    root_context = (tempfile.TemporaryDirectory(prefix="ccode-tools-")
+                    if root_override is None else nullcontext(str(Path(root_override).resolve())))
+    with root_context as temporary:
         root = Path(temporary).resolve()
         if short_path:
             import ctypes
@@ -175,8 +178,8 @@ def check(executable, short_path=False, lifecycle=None, permission=None, workspa
         app_dir = root / "portable app 中文"
         workspace = root / "workspace 中文 with spaces"
         data = root / "persistent data"
-        app_dir.mkdir()
-        workspace.mkdir(parents=True)
+        app_dir.mkdir(exist_ok=True)
+        workspace.mkdir(parents=True, exist_ok=True)
         physical_workspace = workspace
         if workspace_alias == "case":
             workspace = workspace.with_name(workspace.name.swapcase())
@@ -190,7 +193,8 @@ def check(executable, short_path=False, lifecycle=None, permission=None, workspa
         if workspace_alias:
             assert workspace.samefile(physical_workspace), "Alias is not the same directory"
         app = app_dir / "ccode.exe"
-        shutil.copy2(executable, app)
+        if app.resolve() != executable.resolve():
+            shutil.copy2(executable, app)
         target = workspace / "claude-anthropic-original.txt"
         plan = [
             ("Write", {"file_path": str(target), "content": "marker-before\n"}),
@@ -448,6 +452,9 @@ def check(executable, short_path=False, lifecycle=None, permission=None, workspa
 
 if __name__ == "__main__":
     executable = Path(sys.argv[1]).resolve()
+    if len(sys.argv) == 4 and sys.argv[2] == "--acceptance-root":
+        check(executable, root_override=Path(sys.argv[3]))
+        sys.exit(0)
     if len(sys.argv) == 3 and sys.argv[2] == "--workspace-boundary-only":
         check_workspace_boundaries(executable)
         sys.exit(0)
