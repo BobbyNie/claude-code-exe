@@ -1534,6 +1534,7 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - 執行前後保存 program manifest、data root／workspace manifest、service 與 `Win32_SystemDriver` inventory SHA256 及 added／removed／changed 集合。新增 service／driver 失敗；program 只允許原 `ccode.exe` 及隨包 manifest hash 對應的 `runtime/<sha256>/engine.exe`、`prepare.lock`，其餘動態資料或內容變更失敗。
 - route／adapter 自訂名稱只寫 SHA256；command evidence 會把 acceptance root、repository root、來源執行檔及 user profile 替換為固定 placeholder。證據不寫真實 token 或完整提示。PowerShell 7／Python 3 明列為驗收 harness 依賴，不列作交付 runtime 依賴。
 - 本機已記錄 contract RED→GREEN；六組 C++ 回歸通過，Python 54 項通過、1 項 Windows API 專用跳過，另有 Python syntax、workflow guard 及 `git diff --check` 通過。macOS 沒有 `pwsh`，故本輪無 PowerShell AST 或 Windows cmdlet／實際執行證據。尚須在真正斷開全部非 loopback 網路的 Windows 11 x64 普通帳戶上執行並帶回 JSON；腳本存在不代表 A01／A05 通過，更新／搬移／重新打包矩陣也仍未完成。
+- 實作提交 `08e94b17ec0b9ae5621c14252e62bd8256595332` 已於 2026-09-26 推送；補充 Windows Server workflow run `36207073887` 的兩個 test、兩個 workspace-boundary 及 cross-version 共五個 jobs 全部為零 steps。check-run annotation 明確指出帳戶近期付款失敗或 spending limit 需提高。這不是產品測試失敗，也沒有產生 Windows 11 x64、離線或 PowerShell verifier 執行證據。
 
 
 ### A08 Windows 11 x64 工作區 current-directory 邊界（待實機執行）
