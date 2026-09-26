@@ -18,6 +18,7 @@
 #include "workspaces.hpp"
 #include "session-index.hpp"
 #include "concurrency.hpp"
+#include "workspace-boundary.hpp"
 #include "permission.hpp"
 
 namespace fs = std::filesystem;
@@ -238,7 +239,7 @@ int PermissionServer() {
 }
 struct Options {
     bool print = false, sessions = false, resumePicker = false, latest = false, workspaceId = false, snapshotProfile = false, allSessions = false, archivePending = false, archiveWorkspacePending = false;
-    fs::path data;
+    fs::path data, workspace;
     std::string prompt, session, stageSnapshot, validateCandidate, activateCandidate, rollbackSnapshot, validateRollback, activateRollback;
     std::vector<std::wstring> engine;
 };
@@ -254,6 +255,11 @@ Options Parse(int argc, wchar_t** argv, const fs::path& module) {
         };
         if (!literal && arg == L"--") { literal = true; continue; }
         if (!literal && arg == L"--data-dir") options.data = next();
+        else if (!literal && arg == L"--workspace") {
+            if (!options.workspace.empty()) throw std::runtime_error("E_ARGUMENT");
+            options.workspace = next();
+            if (options.workspace.empty()) throw std::runtime_error("E_WORKSPACE_PATH");
+        }
         else if (!literal && (arg == L"--print" || arg == L"-p")) options.print = true;
         else if (!literal && arg == L"--sessions") options.sessions = true;
         else if (!literal && arg == L"--workspace-id") options.workspaceId = true;
@@ -354,7 +360,9 @@ Options Parse(int argc, wchar_t** argv, const fs::path& module) {
         !options.activateCandidate.empty() || !options.rollbackSnapshot.empty() || !options.validateRollback.empty() ||
         !options.activateRollback.empty() || !options.prompt.empty() || !options.engine.empty()))
         throw std::runtime_error("E_ARGUMENT");
+    const auto invocationDirectory = fs::current_path();
     options.data = fs::absolute(options.data).lexically_normal();
+    options.workspace = ccode::ResolveWorkspaceSelection(invocationDirectory, options.workspace);
     return options;
 }
 bool RequiresExclusiveProfile(const Options& options) {
@@ -381,6 +389,8 @@ int RunTurn(const fs::path& module, const fs::path& payload, const fs::path& dat
             const fs::path& profile, const Options& options, bool interactive,
             const std::string& prompt, std::string& session, std::string* captured = nullptr,
             const fs::path* workspace = nullptr) {
+    if (!workspace) throw std::runtime_error("E_WORKSPACE_PATH");
+    ccode::ValidateWorkspaceBoundary(*workspace);
     const auto turn = ccode::PlanSessionTurn(session);
     const auto sessionLockPath = ccode::PrepareSessionLockPath(data, profile, turn.id);
     auto sessionLock = AcquireFileLock(sessionLockPath, false, 0, "E_SESSION_BUSY", "E_SESSION_LOCK_PATH");
@@ -484,10 +494,10 @@ void PrintSessions(const std::vector<ccode::Session>& sessions) {
         std::cout << i + 1 << ". " << sessions[i].id << "  " << sessions[i].title
                   << (sessions[i].availability == "discovered" ? "" : " [unavailable: E_SESSION_DATA]") << '\n';
 }
-void PickSession(const fs::path& profile, std::string& session) {
+void PickSession(const fs::path& profile, const fs::path& workspace, std::string& session) {
     auto metadataLock = AcquireFileLock(profile / L"metadata.lock", false, 30000,
         "E_PROFILE_BUSY", "E_PROFILE_BUSY");
-    auto sessions = ccode::ListWorkspaceSessions(profile, fs::current_path());
+    auto sessions = ccode::ListWorkspaceSessions(profile, workspace);
     PrintSessions(sessions);
     if (sessions.empty()) return;
     std::cout << "Session number (Enter cancels): " << std::flush;
@@ -516,6 +526,7 @@ int Main(int argc, wchar_t** argv) {
             "  --continue             Use the latest session in this workspace\n"
             "  --sessions             List saved sessions for this workspace\n"
             "  --data-dir PATH        Persistent data (or CCODE_DATA_DIR)\n"
+            "  --workspace PATH       Select a local workspace (MAX_PATH current-dir limit)\n"
             "  --model NAME           Select a model\n"
             "  --workspace-id         Show persistent workspace identity\n"
             "  --snapshot-profile     Create verified backup; print snapshot ID\n"
@@ -645,7 +656,7 @@ int Main(int argc, wchar_t** argv) {
             std::cout << "Verified rollback sessions: " << receipt.at("validation").at("sessions").size() << '\n';
             return 0;
         }
-        const auto cwd = fs::current_path();
+        const auto cwd = options.workspace;
         const ccode::CandidateProbe singleProbe = [&](const fs::path& isolated, const std::string& id, const std::string& expected) {
             return runProbe(isolated, cwd, id, expected);
         };
@@ -662,10 +673,10 @@ int Main(int argc, wchar_t** argv) {
         auto metadataLock = AcquireFileLock(profile / L"metadata.lock", false, 30000,
             "E_PROFILE_BUSY", "E_PROFILE_BUSY");
         for (auto name : {L"home", L"roaming", L"local", L"temp"}) fs::create_directories(profile / name);
-        const auto workspaceId = ccode::ResolveWorkspace(profile / L"workspaces.json", fs::current_path());
+        const auto workspaceId = ccode::ResolveWorkspace(profile / L"workspaces.json", options.workspace);
         if (options.workspaceId) { std::cout << workspaceId << '\n'; return 0; }
         ccode::RestoreLegacyProfile(profile / L"home");
-        sessions = ccode::ListWorkspaceSessions(profile, fs::current_path());
+        sessions = ccode::ListWorkspaceSessions(profile, options.workspace);
     }
     if (options.sessions) { PrintSessions(sessions); return 0; }
     if (options.latest) {
@@ -686,19 +697,19 @@ int Main(int argc, wchar_t** argv) {
             if (!piped.empty()) options.prompt = piped + (options.prompt.empty() ? "" : "\n" + options.prompt);
         }
         if (options.prompt.empty()) throw std::runtime_error("E_PROMPT");
-        return RunTurn(module, payload, options.data, profile, options, false, options.prompt, options.session);
+        return RunTurn(module, payload, options.data, profile, options, false, options.prompt, options.session, nullptr, &options.workspace);
     }
     std::cout << "ccode - portable coding assistant\n/resume  /new  /exit\n";
-    if (options.resumePicker) PickSession(profile, options.session);
+    if (options.resumePicker) PickSession(profile, options.workspace, options.session);
     int code = 0;
-    if (!options.prompt.empty()) code = RunTurn(module, payload, options.data, profile, options, console, options.prompt, options.session);
+    if (!options.prompt.empty()) code = RunTurn(module, payload, options.data, profile, options, console, options.prompt, options.session, nullptr, &options.workspace);
     std::string prompt;
     while (std::cout << "ccode> " << std::flush, std::getline(std::cin, prompt)) {
         if (prompt == "/exit" || prompt == "/quit") break;
         if (prompt == "/new") { options.session.clear(); continue; }
-        if (prompt == "/resume") { PickSession(profile, options.session); continue; }
+        if (prompt == "/resume") { PickSession(profile, options.workspace, options.session); continue; }
         if (prompt.empty()) continue;
-        code = RunTurn(module, payload, options.data, profile, options, console, prompt, options.session);
+        code = RunTurn(module, payload, options.data, profile, options, console, prompt, options.session, nullptr, &options.workspace);
     }
     return code;
 }

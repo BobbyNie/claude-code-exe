@@ -102,6 +102,10 @@ adapter 只負責建立／恢復會話、提交輸入、接收事件、批准／
 
 同機簡化方案可以在使用者選定工作目錄直接編輯，但這不是安全隔離。遠端／模擬方案使用明確檔案同步：開始時記錄基線雜湊、執行後預覽差異、發布前再比對宿主版本；衝突停止，不覆蓋使用者新改動。禁止把整個主目錄作為共享磁碟。
 
+Windows 11 x64 的本機 A 方案以啟動目錄作預設工作區，並提供 `--workspace PATH` 從可啟動的短目錄顯式選擇工作區；相對 `--data-dir` 仍以啟動目錄為基準，不因工作區選擇改變。選定路徑必須是存在的本機目錄，前端在建立 profile、啟動引擎或送出 API 請求前完成 preflight。
+
+本次不宣稱支援超過 Win32 子進程 current-directory 邊界的工作區。`CreateProcessW` 的 `lpCurrentDirectory` 仍受 `MAX_PATH` 限制，`longPathAware` 不能把該參數變成任意長；前端因此把本機工作區字串上限固定為 258 個字元，259 以上回報 `E_WORKSPACE_PATH_TOO_LONG`。UNC（含 `\\?\UNC\`）明確不支援並回報 `E_WORKSPACE_UNSUPPORTED`；`\\?\`、`\\.\` device／extended namespace 回報 `E_WORKSPACE_PATH`。拒絕必須 exit 64、stdout 空、不得建立資料區或接觸模型 API。這是相容性邊界，不是 OS 安全沙箱。
+
 同步處理二進位檔、刪除、重命名、大小寫、換行、符號連結與 junction。路徑以規範化後的相對路徑加工作區 ID 傳遞，拒絕跳出根目錄。Git、建置和搜尋必須針對同一份工作區；不讓本機 Git 和遠端工具同時操作同一個索引。
 
 ## 5. 候選部署設計

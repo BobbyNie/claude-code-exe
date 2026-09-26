@@ -1,6 +1,7 @@
 #include "../../scripts/ccode/common.hpp"
 #include "../../scripts/ccode/runtime-paths.hpp"
 #include "../../scripts/ccode/concurrency.hpp"
+#include "../../scripts/ccode/workspace-boundary.hpp"
 #include <fstream>
 #include <chrono>
 
@@ -35,7 +36,43 @@ int main() {
     assert(IsAllowedNetworkHost(L"gateway.example.test", L"https://gateway.example.test/v1"));
     assert(!IsAllowedNetworkHost(L"example.org", L"https://gateway.example.test/v1"));
 
+    const std::filesystem::path maximumWorkspace(std::wstring(258, L'a'));
+    ValidateWorkspaceBoundary(maximumWorkspace);
+    bool longWorkspaceRejected = false;
+    try { ValidateWorkspaceBoundary(std::filesystem::path(std::wstring(259, L'a'))); }
+    catch (const std::runtime_error& error) {
+        longWorkspaceRejected = std::string(error.what()) == "E_WORKSPACE_PATH_TOO_LONG";
+    }
+    assert(longWorkspaceRejected);
+    for (const auto& unc : {std::filesystem::path(L"\\\\server\\share\\workspace"),
+                            std::filesystem::path(L"\\\\?\\UNC\\server\\share\\workspace"),
+                            std::filesystem::path(L"\\\\?\\unc\\server\\share\\workspace")}) {
+        bool uncRejected = false;
+        try { ValidateWorkspaceBoundary(unc); }
+        catch (const std::runtime_error& error) {
+            uncRejected = std::string(error.what()) == "E_WORKSPACE_UNSUPPORTED";
+        }
+        assert(uncRejected);
+    }
+    for (const auto& device : {std::filesystem::path(L"\\\\?\\C:\\workspace"),
+                               std::filesystem::path(L"\\\\.\\C:\\workspace")}) {
+        bool deviceRejected = false;
+        try { ValidateWorkspaceBoundary(device); }
+        catch (const std::runtime_error& error) {
+            deviceRejected = std::string(error.what()) == "E_WORKSPACE_PATH";
+        }
+        assert(deviceRejected);
+    }
+
     namespace fs = std::filesystem;
+    const auto workspaceSelectionRoot = fs::temp_directory_path() / ("ccode-workspace-selection-" +
+        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(workspaceSelectionRoot / "selected");
+    assert(ResolveWorkspaceSelection(workspaceSelectionRoot, {}) == workspaceSelectionRoot.lexically_normal());
+    assert(ResolveWorkspaceSelection(workspaceSelectionRoot, "selected") ==
+           (workspaceSelectionRoot / "selected").lexically_normal());
+    fs::remove_all(workspaceSelectionRoot);
+
     const auto root = fs::temp_directory_path() / ("ccode-runtime-paths-" +
         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     const std::string hash(64, 'a');

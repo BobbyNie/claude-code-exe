@@ -77,7 +77,89 @@ def check_lifecycle(app, workspace, data, env, mode):
             kernel.FreeConsole()
 
 
-def check(executable, short_path=False, lifecycle=None, permission=None, long_workspace=False, workspace_alias=None):
+def check_workspace_boundaries(executable):
+    """Verify explicit workspace selection and deterministic unsupported-path errors."""
+    with tempfile.TemporaryDirectory(prefix="ccode-workspace-boundary-") as temporary:
+        root = Path(temporary).resolve()
+        app_dir = root / "portable app 中文"
+        workspace = root / "workspace 中文 with spaces"
+        data = root / "persistent data"
+        app_dir.mkdir()
+        workspace.mkdir()
+        app = app_dir / "ccode.exe"
+        shutil.copy2(executable, app)
+
+        requests = []
+        long_workspace_io = None
+
+        class BoundaryHandler(BaseHTTPRequestHandler):
+            def log_message(self, *_):
+                pass
+
+            def do_POST(self):
+                requests.append(self.path)
+                self.send_error(500)
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), BoundaryHandler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        env = {key: value for key, value in os.environ.items()
+               if not key.startswith(("A_", "C_", "ANTHROPIC_", "CLAUDE_", "CCODE_"))}
+        env.update(A_AUTH_TOKEN="acceptance-test-only",
+                   A_BASE_URL=f"http://127.0.0.1:{server.server_port}")
+
+        try:
+            implicit = subprocess.run([str(app), "--data-dir", str(data), "--workspace-id"],
+                                      cwd=workspace, env=env, input="", capture_output=True,
+                                      text=True, encoding="utf-8", timeout=15)
+            explicit = subprocess.run([str(app), "--data-dir", str(data), "--workspace",
+                                       str(workspace), "--workspace-id"],
+                                      cwd=root, env=env, input="", capture_output=True,
+                                      text=True, encoding="utf-8", timeout=15)
+            assert implicit.returncode == 0, (implicit.returncode, implicit.stdout, implicit.stderr)
+            assert explicit.returncode == 0, (explicit.returncode, explicit.stdout, explicit.stderr)
+            assert implicit.stdout.strip() == explicit.stdout.strip(), \
+                "Explicit workspace selection changed the persistent workspace UUID"
+            assert implicit.stdout.strip(), "Workspace UUID was empty"
+            assert not requests, "Workspace identity lookup unexpectedly contacted the API"
+
+            long_workspace = root / "long workspace"
+            index = 0
+            while len(str(long_workspace)) <= 270:
+                long_workspace /= f"segment-{index}-" + ("x" * 40)
+                index += 1
+            assert len(str(long_workspace)) > 258
+            long_workspace_io = "\\\\?\\" + str(long_workspace)
+            os.makedirs(long_workspace_io)
+
+            cases = (
+                (long_workspace, "E_WORKSPACE_PATH_TOO_LONG"),
+                (r"\\server\share\workspace", "E_WORKSPACE_UNSUPPORTED"),
+                (r"\\?\C:\workspace", "E_WORKSPACE_PATH"),
+            )
+            for sequence, (selected, expected) in enumerate(cases):
+                rejected_data = root / f"rejected-data-{sequence}"
+                before_requests = list(requests)
+                result = subprocess.run([str(app), "--data-dir", str(rejected_data),
+                                         "--workspace", str(selected), "--print",
+                                         "Boundary validation must stop before the engine."],
+                                        cwd=root, env=env, input="", capture_output=True,
+                                        text=True, encoding="utf-8", errors="replace", timeout=30)
+                assert result.returncode == 64, (selected, result.returncode, result.stdout, result.stderr)
+                assert result.stdout == "", (selected, result.stdout)
+                assert result.stderr == expected + "\n", (selected, result.stderr)
+                assert not rejected_data.exists(), f"Rejected workspace created data: {selected}"
+                assert requests == before_requests, f"Rejected workspace contacted the API: {selected}"
+
+            assert not (app_dir / "data").exists(), "Explicit data directory was ignored"
+            print("PASS: explicit workspace identity and Windows cwd boundary errors are deterministic")
+        finally:
+            server.shutdown()
+            server.server_close()
+            if long_workspace_io and os.path.isdir(long_workspace_io):
+                shutil.rmtree(long_workspace_io)
+
+
+def check(executable, short_path=False, lifecycle=None, permission=None, workspace_alias=None):
     with tempfile.TemporaryDirectory(prefix="ccode-tools-") as temporary:
         root = Path(temporary).resolve()
         if short_path:
@@ -92,9 +174,6 @@ def check(executable, short_path=False, lifecycle=None, permission=None, long_wo
             assert "~" in str(root), "Runner must support 8.3 names for this acceptance case"
         app_dir = root / "portable app 中文"
         workspace = root / "workspace 中文 with spaces"
-        if long_workspace:
-            workspace = workspace / ("long-segment-" * 10) / ("nested-segment-" * 8)
-            assert len(str(workspace)) > 260
         data = root / "persistent data"
         app_dir.mkdir()
         workspace.mkdir(parents=True)
@@ -286,9 +365,7 @@ def check(executable, short_path=False, lifecycle=None, permission=None, long_wo
             result = subprocess.run([str(app), "--data-dir", str(data), "--print",
                                      "--allowedTools", "Write,Edit,Read,Grep,Glob,Bash",
                                      "Exercise the six tools in this workspace."],
-                                    # Pass the same long workspace using native extended-path syntax;
-                                    # an unprefixed lpCurrentDirectory fails before the product starts.
-                                    cwd=("\\\\?\\" + str(workspace)) if long_workspace else workspace,
+                                    cwd=workspace,
                                     env=env, input="", capture_output=True,
                                     text=True, encoding="utf-8", errors="replace", timeout=120)
             assert not handler_errors, handler_errors
@@ -364,8 +441,6 @@ def check(executable, short_path=False, lifecycle=None, permission=None, long_wo
                 assert not handler_errors, "Alias resume fixture failed"
                 assert registry.read_bytes() == registry_before
                 print(f"PASS: {workspace_alias} alias preserves six real tools, workspace UUID, history listing and actual resumed context")
-            if long_workspace:
-                print("PASS: all six actual tools execute with workspace cwd beyond 260 characters")
         finally:
             server.shutdown()
             server.server_close()
@@ -373,8 +448,8 @@ def check(executable, short_path=False, lifecycle=None, permission=None, long_wo
 
 if __name__ == "__main__":
     executable = Path(sys.argv[1]).resolve()
-    if len(sys.argv) == 3 and sys.argv[2] == "--long-workspace-only":
-        check(executable, long_workspace=True)
+    if len(sys.argv) == 3 and sys.argv[2] == "--workspace-boundary-only":
+        check_workspace_boundaries(executable)
         sys.exit(0)
     if len(sys.argv) == 3 and sys.argv[2] == "--workspace-aliases-only":
         check(executable, workspace_alias="case")

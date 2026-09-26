@@ -55,10 +55,10 @@ jobs:
         if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.platform.outcome == 'success' }}
         shell: pwsh
         run: python tests/ccode/tools-integration.py ./ccode.exe --workspace-aliases-only
-      - name: Require actual tools in workspace cwd beyond MAX_PATH
+      - name: Verify explicit workspace cwd boundaries
         if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.platform.outcome == 'success' }}
         shell: pwsh
-        run: python tests/ccode/tools-integration.py ./ccode.exe --long-workspace-only
+        run: python tests/ccode/tools-integration.py ./ccode.exe --workspace-boundary-only
       - name: Reject tampered embedded payload
         if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.platform.outcome == 'success' }}
         shell: pwsh

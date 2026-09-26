@@ -15,7 +15,7 @@
 | 資料分離 | 啟動、會話、工具及更新後比較程式目錄 | 動態資料進資料區；重新交付不攜帶個人資料 |
 | 路徑一致 | mkdir、stat、讀寫、列舉、重命名、刪除及子進程讀取同檔 | 同一名稱空間；無 EEXIST／不存在矛盾 |
 | 執行檔 | 有空格和非 ASCII 路徑下啟動、引擎自啟動、內建搜尋 | `.exe` 可執行；Grep／Glob 真正返回預期內容 |
-| 路徑邊界 | 長路徑、中文、UNC（若列為支援）、大小寫、junction | 支援項目行為一致；不支援項目明確報錯 |
+| 路徑邊界 | Windows 11 x64 普通帳戶：中文／空格、大小寫、junction；由短 cwd 以 `--workspace` 選取 259+ 本機路徑、UNC、device namespace | 支援的本機路徑保持 UUID／歷史一致；259+、UNC、device 分別只回 `E_WORKSPACE_PATH_TOO_LONG`、`E_WORKSPACE_UNSUPPORTED`、`E_WORKSPACE_PATH`，exit 64、stdout 空、零資料／API 副作用 |
 | 基本工具 | 實際 Bash、Read、Write、Edit、Grep、Glob | 結果、退出碼、取消均正確，不只 mock 啟動成功 |
 | 串流 JSON | 在每種分片點注入 JSON／UTF-8；最終無效 JSON | 完整後才驗證；無效時清楚報錯、零猜測性工具執行 |
 | 工具名稱 | 空名稱、未知名稱、重複 ID、缺終止事件 | 分類錯誤；不回退成任意 shell 或重放副作用 |
@@ -31,4 +31,4 @@
 
 每個案例記錄 Windows 版本、包版本、引擎版本、adapter 版本、帳戶權限、測試輸入、期望與實際結果及證據位置。測試資料不得用真實憑證。
 
-既有兩版本 Windows 回歸證據只能沿用到未改變的舊功能，不替代新前端、新啟動環境及名稱掃描。任何代碼修改遵守先失敗測試、再最小實作、再回歸的 TDD 流程。
+既有兩版本 Windows 回歸證據只能沿用到未改變的舊功能，不替代新前端、新啟動環境及名稱掃描。`windows-latest` 可驗證補充回歸，但路徑邊界仍須在真實 Windows 11 x64 普通帳戶 runner 以 `--workspace-boundary-only` 取得成功結果；歷史 `WinError 267` 不是通過證據。任何代碼修改遵守先失敗測試、再最小實作、再回歸的 TDD 流程。

@@ -66,7 +66,7 @@ jobs:
           path: ccode.exe
           if-no-files-found: error
 
-  long-workspace:
+  workspace-boundary:
     # Keep this acceptance gate required/failing, but do not let an OS cwd limit
     # hide the independent lifecycle and cross-version regression results.
     needs: test
@@ -82,10 +82,10 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: ccode-windows-built-${{ matrix.version }}
-          path: long-workspace-bin
-      - name: Require actual tools in workspace cwd beyond MAX_PATH
+          path: workspace-boundary-bin
+      - name: Verify explicit workspace cwd boundaries
         shell: pwsh
-        run: python tests/ccode/tools-integration.py ./long-workspace-bin/ccode.exe --long-workspace-only
+        run: python tests/ccode/tools-integration.py ./workspace-boundary-bin/ccode.exe --workspace-boundary-only
 
   cross-version:
     needs: test

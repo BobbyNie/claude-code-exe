@@ -20,6 +20,14 @@ class AcceptanceWorkflowTests(unittest.TestCase):
         self.assertIn('python tests/ccode/tools-integration.py ./ccode.exe --workspace-aliases-only', step)
         self.assertNotIn('continue-on-error:', step)
 
+    def test_workspace_boundary_acceptance_is_independent_and_required(self):
+        workflow = (Path(__file__).resolve().parents[1] /
+                    '.github/workflows/test-ccode.yml').read_text()
+        job = workflow.split('\n  workspace-boundary:\n', 1)[1].split('\n  cross-version:', 1)[0]
+        step = job.split('      - name: Verify explicit workspace cwd boundaries', 1)[1].split('      - ', 1)[0]
+        self.assertIn('python tests/ccode/tools-integration.py ./workspace-boundary-bin/ccode.exe --workspace-boundary-only', step)
+        self.assertNotIn('continue-on-error:', step)
+
     def test_payload_integrity_acceptance_is_independent_and_required(self):
         workflow = (Path(__file__).resolve().parents[1] /
                     '.github/workflows/test-ccode.yml').read_text()
@@ -31,7 +39,7 @@ class AcceptanceWorkflowTests(unittest.TestCase):
     def test_session_writer_concurrency_is_independent_and_required(self):
         workflow = (Path(__file__).resolve().parents[1] /
                     '.github/workflows/test-ccode.yml').read_text()
-        test_job = workflow.split('jobs:\n  test:\n', 1)[1].split('\n  long-workspace:', 1)[0]
+        test_job = workflow.split('jobs:\n  test:\n', 1)[1].split('\n  workspace-boundary:', 1)[0]
         self.assertIn("version: ['2.1.221', '2.1.282']", test_job)
         step = test_job.split('      - name: Verify session writer concurrency', 1)[1].split('      - ', 1)[0]
         self.assertIn("if: ${{ !cancelled() && steps.build.outcome == 'success' }}", step)
@@ -55,7 +63,7 @@ class AcceptanceWorkflowTests(unittest.TestCase):
             'python tests/ccode/portable-integration.py ./ccode.exe',
             'python tests/ccode/tools-integration.py ./ccode.exe',
             'python tests/ccode/tools-integration.py ./ccode.exe --workspace-aliases-only',
-            'python tests/ccode/tools-integration.py ./ccode.exe --long-workspace-only',
+            'python tests/ccode/tools-integration.py ./ccode.exe --workspace-boundary-only',
             'python tests/ccode/payload-integrity.py ./ccode.exe',
             'python tests/ccode/gateway-integration.py ./ccode.exe',
             'python tests/ccode/concurrency-integration.py ./ccode.exe',
@@ -85,11 +93,11 @@ class AcceptanceWorkflowTests(unittest.TestCase):
     def test_failed_gateway_does_not_hide_independent_acceptance(self):
         workflow = (Path(__file__).resolve().parents[1] /
                     '.github/workflows/test-ccode.yml').read_text()
-        upload = workflow.split('      - uses: actions/upload-artifact@v4', 1)[1].split('\n  long-workspace:', 1)[0]
+        upload = workflow.split('      - uses: actions/upload-artifact@v4', 1)[1].split('\n  workspace-boundary:', 1)[0]
         self.assertIn("if: ${{ !cancelled() && steps.build.outcome == 'success' }}", upload)
         self.assertIn('name: ccode-windows-built-${{ matrix.version }}', upload)
         self.assertIn('if-no-files-found: error', upload)
-        for name in ('long-workspace', 'cross-version'):
+        for name in ('workspace-boundary', 'cross-version'):
             job = workflow.split(f'\n  {name}:\n', 1)[1]
             header = job.split('    steps:', 1)[0]
             self.assertIn('needs: test', header)

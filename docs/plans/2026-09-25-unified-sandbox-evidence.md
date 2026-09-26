@@ -29,7 +29,7 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 | A05 | 資料分離 | --data-dir、獨立 profile；工具 integration 檢查程式區無 session | 更新、搬移、重新打包排除資料、程式區無 temp 全面快照 |
 | A06 | 路徑一致 | 原生 mkdir/stat/讀寫/列舉/刪除/子進程；`05750fe` 原生 rename；`7d579ce` / `36184360358` 兩版本一般／case／junction 的真實 Bash mv→Read→Edit→Grep→Glob 及失敗 rename 保全通過 | 本機 API fixture 不替代真實模型／企業 gateway；完整故障矩陣仍欠，不代表長 cwd 通過 |
 | A07 | 執行檔 | `36123600008` 兩版本通過：空格／中文程式與工作區、前端→真正 Grep/Glob；既有自啟動測試亦通過 | 本條所列 CI 場景通過；乾淨端點證據仍依 A01 |
-| A08 | 路徑邊界 | 工具 fixture 含中文／空格；`87f7065` / `36135890793` 兩版本快照／候選超過 260 字元測試通過 | `92f3e3a` / `36175453668` 兩版本大小寫及 junction 下六工具、UUID、列表與實際續接通過；全工作區長 cwd 仍 WinError 267，UNC 支援界線與明確拒絕／驗證仍欠 |
+| A08 | 路徑邊界 | 工具 fixture 含中文／空格；`87f7065` / `36135890793` 兩版本快照／候選超過 260 字元；`92f3e3a` / `36175453668` 大小寫及 junction 下六工具、UUID、列表與續接通過；已實作 `--workspace` 與 258／259、UNC、device namespace 明確邊界 | 新邊界只有本機 C++／workflow fixture 證據，仍須 Windows 11 x64 普通帳戶兩版本實跑；歷史長 cwd `WinError 267` 不算產品通過，亦不把檔案長路徑等同 process cwd 支援 |
 | A09 | 基本工具 | tools-integration.py 驅動真實 Write/Edit/Read/Grep/Glob/Bash；一般完整路徑成功、8.3 短路徑無批准拒絕；特定 console 批准／拒絕／取消見 A12 | 全工具政策／取消矩陣、實際 gateway 試運行仍欠；A12 間歇停滯尚未解決 |
 | A10 | 串流 JSON | UTF-8／工具 JSON 每個 byte 分片點、失敗不可復活；`3be31ae` / `36163996525` 每行 16 MiB 邊界及合併／分片等價通過；`36173166133`、`36174265807` 真實引擎截斷及正常 EOF 缺終止案例通過 | 特定 fixture 不代表所有串流／擴展狀態或企業 gateway；完整故障矩陣仍欠 |
 | A11 | 工具名稱 | 空／未知工具名、空／重複 ID、錯誤參數分類；`be9f26a` / `36186966481` 重複宣告拒絕；`7599787` / `36188226673` 重複及 result 後 init 拒絕；缺 block 終止案例見 A10 | 所有狀態轉移、新版本／擴展的真實事件相容仍欠；前端拒絕不等於能撤銷引擎已執行副作用 |
@@ -1514,7 +1514,7 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   本機 Administrators 群組的帳戶。證據 JSON 不記錄使用者名稱或憑證，只包含平台、
   權限布林值、執行檔 SHA-256、引擎版本、版本輸出與 adapter revision。
 - 兩個固定引擎版本 `2.1.221`、`2.1.282` 均須通過 Python 回歸、Windows 原生測試、
-  portable／真實工具／workspace alias／長 workspace／payload integrity／gateway／
+  portable／真實工具／workspace alias／workspace boundary／payload integrity／gateway／
   session concurrency，之後才執行舊→新→舊 cross-version 恢復。所有 gate 都是 required，
   無 `continue-on-error`。
 - workflow 與驗證腳本存在只代表驗收入口已建立，不代表 Windows 11 x64 已通過。
@@ -1524,3 +1524,29 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   `36204213325`（2026-09-26T00:16:17Z）。兩個版本、cross-version 及 long-workspace
   共五個 jobs 都是零 steps；check-run annotation 明確指出帳戶近期付款失敗或需要提高
   spending limit。這不是產品測試失敗，也不是 Windows 11 x64 驗收證據。
+
+
+### A08 Windows 11 x64 工作區 current-directory 邊界（待實機執行）
+
+- 2026-09-26 依 Microsoft `SetCurrentDirectoryW`／`CreateProcessW` 的 current-directory
+  限制，停止把 extended-path cwd 的 `WinError 267` 當成可由 `longPathAware` 修復的
+  工具問題。本機 A 方案明確不支援 process cwd 超過該 Win32 邊界；長檔案、profile
+  或 snapshot 可用不代表引擎 cwd 可超長。
+- TDD 逐案例 RED→GREEN 新增 `workspace-boundary.hpp`：258 字元接受，259 以上回
+  `E_WORKSPACE_PATH_TOO_LONG`；一般 UNC 及 `\\?\UNC\` 回
+  `E_WORKSPACE_UNSUPPORTED`；`\\?\`／`\\.\` device namespace 回
+  `E_WORKSPACE_PATH`。比較 namespace prefix 時大小寫不敏感。
+- 前端新增 `--workspace PATH`。預設仍使用啟動 cwd；顯式相對路徑以啟動 cwd
+  解析，必須是存在的本機目錄。工作區 UUID、session list／resume、候選單一
+  probe 及真正 engine `lpCurrentDirectory` 都使用同一選定路徑；相對 `--data-dir`
+  的基準不變。
+- `tools-integration.py --workspace-boundary-only` 在 Windows 建立中文／空格短工作區，
+  比對隱式 cwd 與顯式 `--workspace` UUID；再由短 cwd 傳入實際已建立的 259+
+  本機路徑、UNC 與 device namespace，要求 exit 64、stdout 空、固定中性 stderr、
+  不建立被拒 data root 且零 API request。舊 `--long-workspace-only` 與會在產品啟動前
+  失敗的 extended cwd 已移除。
+- 本機六組 C++ 回歸通過；Python 50 項通過、1 項 Windows API 專用跳過，另有
+  `py_compile`、workflow guard 及 diff 檢查通過。這些只驗證 helper／門檻接線，
+  不能替代 MSVC 建置或 Windows 11 x64 執行。`.github/workflows/test-ccode-windows11-x64.yml`
+  已改用新 gate；在符合標籤的普通帳戶 runner 取得兩版本成功證據前，A08 仍是
+  待驗、整體仍未放行。
