@@ -5,6 +5,7 @@
 #include <atomic>
 #include <climits>
 #include <cwchar>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -137,6 +138,38 @@ std::string Digest(Resource resource) {
     for (auto byte : digest) { result += hex[byte >> 4]; result += hex[byte & 15]; }
     return result;
 }
+bool IsLowerHex(const std::string& value, size_t size) {
+    if (value.size() != size) return false;
+    for (const auto ch : value) {
+        if (!((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f'))) return false;
+    }
+    return true;
+}
+Json VerifiedPackageManifest(const Json& metadata) {
+    Resource payload{};
+    std::string engineHash;
+    try {
+        const auto version = metadata.at("engineVersion").get<std::string>();
+        const auto adapter = metadata.at("adapterRevision").get<std::string>();
+        engineHash = metadata.at("engineSha256").get<std::string>();
+        const auto manifestHash = metadata.at("officialManifestSha256").get<std::string>();
+        const auto base = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/" + version;
+        payload = Load(101);
+        if (metadata.at("schemaVersion") != 1 || metadata.at("packageName") != "ccode" ||
+            metadata.at("packageVersion") != "1.0" || metadata.at("platform") != "windows" ||
+            metadata.at("architecture") != "x64" || version.empty() ||
+            !(IsLowerHex(adapter, 40) || IsLowerHex(adapter, 64)) || !IsLowerHex(engineHash, 64) ||
+            !IsLowerHex(manifestHash, 64) || !metadata.at("engineSize").is_number_unsigned() ||
+            metadata.at("engineSize").get<std::uint64_t>() != payload.size ||
+            metadata.at("officialManifestUrl") != base + "/manifest.json" ||
+            metadata.at("officialPayloadUrl") != base + "/win32-x64/claude.exe")
+            throw std::runtime_error("invalid");
+    } catch (...) {
+        throw std::runtime_error("E_PACKAGE_METADATA");
+    }
+    if (Digest(payload) != engineHash) throw std::runtime_error("E_CHECKSUM");
+    return metadata;
+}
 std::string FileDigest(const fs::path& path) {
     struct HashHandle {
         BCRYPT_HASH_HANDLE value = nullptr;
@@ -163,7 +196,7 @@ std::string FileDigest(const fs::path& path) {
 fs::path PrepareRuntime(const fs::path& directory, const Json& metadata) {
     auto resource = Load(101);
     auto hash = Digest(resource);
-    if (hash != metadata.at("sha256").get<std::string>()) throw std::runtime_error("E_CHECKSUM");
+    if (hash != metadata.at("engineSha256").get<std::string>()) throw std::runtime_error("E_CHECKSUM");
     ccode::ValidateRuntimePaths(directory, hash);
     auto runtime = directory / L"runtime" / Wide(hash);
     fs::create_directories(runtime);
@@ -543,16 +576,20 @@ int Main(int argc, wchar_t** argv) {
             "  --settings PATH        Engine settings file\n"
             "  --mcp-config PATH      Additional tool servers\n"
             "  --version              Package and engine version\n"
+            "  --package-manifest     Verified package provenance as JSON\n"
             "Interactive: /resume, /new, /exit; Ctrl+C cancels the running turn.\n"
             "Set A_AUTH_TOKEN or A_API_KEY, and A_BASE_URL. No OS sandbox is provided.\n";
         return 0;
     }
     auto metadata = Metadata();
     if (argc == 2 && std::wstring(argv[1]) == L"--version") {
-        std::cout << "ccode 1.0 (engine " << metadata.at("version").get<std::string>() << ")\n"; return 0;
+        std::cout << "ccode 1.0 (engine " << metadata.at("engineVersion").get<std::string>() << ")\n"; return 0;
+    }
+    if (argc == 2 && std::wstring(argv[1]) == L"--package-manifest") {
+        std::cout << VerifiedPackageManifest(metadata).dump() << '\n'; return 0;
     }
     if (argc == 2 && std::wstring(argv[1]) == L"--ccode-self-test") {
-        if (Digest(Load(101)) != metadata.at("sha256").get<std::string>()) throw std::runtime_error("E_CHECKSUM");
+        VerifiedPackageManifest(metadata);
         std::cout << "ccode self-test ok\n"; return 0;
     }
     auto options = Parse(argc, argv, module);
@@ -566,7 +603,7 @@ int Main(int argc, wchar_t** argv) {
         std::cout << recoveryId << '\n';
         return 0;
     }
-    const Json selectedEngine = {{"version", metadata.at("version")}, {"sha256", metadata.at("sha256")}};
+    const Json selectedEngine = {{"version", metadata.at("engineVersion")}, {"sha256", metadata.at("engineSha256")}};
     auto profile = (options.snapshotProfile || !options.rollbackSnapshot.empty() || !options.validateRollback.empty() || !options.activateRollback.empty()) ? ccode::ResolveProfileForBackup(options.data) :
         ccode::ResolveActiveProfile(options.data, selectedEngine);
     fs::create_directories(profile);
@@ -637,7 +674,7 @@ int Main(int argc, wchar_t** argv) {
         if (!ccode::IsValidGatewayUrl(Env(L"A_BASE_URL"))) throw std::runtime_error("E_GATEWAY: set A_BASE_URL");
         auto payload = PrepareRuntime(module.parent_path(), metadata);
         SetConsoleCtrlHandler(OnControl, TRUE);
-        const Json engine = {{"version", metadata.at("version")}, {"sha256", metadata.at("sha256")}};
+        const Json engine = {{"version", metadata.at("engineVersion")}, {"sha256", metadata.at("engineSha256")}};
         const ccode::CandidateWorkspaceProbe runProbe =
             [&](const fs::path& isolated, const fs::path& workspace, const std::string& id, const std::string& expected) {
                 auto probeOptions = options;

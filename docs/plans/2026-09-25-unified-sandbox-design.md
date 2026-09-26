@@ -158,6 +158,8 @@ guest 可寫 profile 跨次啟動保存，temp 可清理但不可每次丟掉整
 
 另建企業交付包，不能沿用包含其他品牌工具及原始 README 的完整公共包。交付根目錄建議包含 `ccode.exe`、`assets/`、`data/`、`docs/usage.md`、`manifest.json`；依方案放入真正所需檔案，清單不是最終已驗證包。
 
+建置時必須記錄固定 schema 的隨包來源清單：package／platform／architecture、完整 adapter commit、engine version／size／SHA256、官方 manifest URL／SHA256 及官方 payload URL。`ccode --package-manifest` 只在內嵌負載 SHA256、size、來源 URL 格式及 metadata schema 均通過後輸出 JSON，且不得建立 profile 或 runtime。Windows 11 x64 驗收另以資料載入方式解出 resource 101、重新計算 SHA256／size 並保存 `package-provenance.json`。這提供可核對 provenance，**不是數位簽章或可信發行者證明**；簽名 manifest 仍屬 A20 放行門檻。
+
 使用簽名 manifest、負載 SHA256、固定依賴、來源與授權清單。每日追蹤上游只產生候選，通過功能、名稱及遷移測試後才進內網正式版。端點不自行外網下載更新。保留至少上一個可啟動版本及其相容資料備份。
 
 官方允許 SDK 整合使用自己的產品品牌，但品牌選項不等同免除各組件授權及必要通知。發行前核實再分發和通知要求；不得刪除必須保留的聲明。如果名稱禁令涵蓋必要通知且沒有允許例外，交付門檻不成立。[官方品牌及條款說明](https://code.claude.com/docs/en/agent-sdk/overview)

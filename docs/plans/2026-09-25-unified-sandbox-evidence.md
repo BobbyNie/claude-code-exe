@@ -24,7 +24,7 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 |---|---|---|---|
 | A01 | 離線安裝 | 資源內嵌引擎；Windows 建置／啟動 | 乾淨普通帳戶、離線、服務／驅動前後差異、依賴完整性 |
 | A02 | 交付名稱 | 中性入口及 help 測試；package_audit.py 已實作解包目錄及 ZIP 唯讀名稱掃描，11 項本機測試通過 | 核准名稱政策、獨立企業交付包的實際 Windows ZIP／解包掃描、更新殘留及必要通知衝突核實；工具測試不等於交付驗收 |
-| A03 | 原始負載 | build 上游 checksum；啟動資源 SHA256、解出內容逐位元組校驗 | 隨包來源清單、實際 extracted hash 證據及篡改案例 |
+| A03 | 原始負載 | build 上游 checksum；啟動資源 SHA256、解出內容逐位元組校驗；已實作 schema 1 隨包來源清單、`--package-manifest` 及 extracted hash 證據 fixture | 尚須 Windows 11 x64 普通帳戶兩版本實跑並保存 `package-provenance.json`；來源清單未簽名，不替代 A20 可信簽署 |
 | A04 | 內部範圍 | ADR 明確允許引擎／使用者資料原名 | 隨包公開邊界清單、runtime 環境及 metadata 記錄、必要通知核實 |
 | A05 | 資料分離 | --data-dir、獨立 profile；工具 integration 檢查程式區無 session | 更新、搬移、重新打包排除資料、程式區無 temp 全面快照 |
 | A06 | 路徑一致 | 原生 mkdir/stat/讀寫/列舉/刪除/子進程；`05750fe` 原生 rename；`7d579ce` / `36184360358` 兩版本一般／case／junction 的真實 Bash mv→Read→Edit→Grep→Glob 及失敗 rename 保全通過 | 本機 API fixture 不替代真實模型／企業 gateway；完整故障矩陣仍欠，不代表長 cwd 通過 |
@@ -54,7 +54,7 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 | D05 / R06 | 核准 API 通道 | A18；普通本機封裝本身無法封鎖工具任意外連，部署政策另驗 |
 | D06 / R07 | 受控完整進程樹 | A12；Job Object 結束／取消／崩潰無孤兒進程 |
 | D07 / R08 | 更新、診斷、恢復 | A14/A15/A19/A20 |
-| D08 | 固定 adapter／引擎／工具鏈及 mapping manifest | 目前 CI 固定兩引擎，尚無完整隨包 manifest |
+| D08 | 固定 adapter／引擎／工具鏈及 mapping manifest | CI 固定兩引擎；已實作 adapter commit、engine hash／size、官方 manifest／payload 來源的隨包 manifest，尚待 Windows 11 x64 實跑及完整工具鏈／mapping 清單 |
 | D09 | 工具 schema、錯誤分类、不猜測／不重放 | A10/A11/A18；前端驗證輸出不等於能阻止引擎內部已执行的工具 |
 | D10 | 隔離候選 profile、備份 hash、原子 active 切換 | 已實作全會話驗證、來源變動拒絕、原子切換及保全新版資料的明確回退；`36159427257` 有實際兩引擎證據。磁碟滿／強制中斷、真實企業資料及完整故障範圍仍未完成 |
 | D11 | 來源、授權、必要通知、可信簽名 | 需核實再分發權限及核准簽署者；不得刪除必要通知以通過名稱掃描 |
@@ -1550,3 +1550,29 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   不能替代 MSVC 建置或 Windows 11 x64 執行。`.github/workflows/test-ccode-windows11-x64.yml`
   已改用新 gate；在符合標籤的普通帳戶 runner 取得兩版本成功證據前，A08 仍是
   待驗、整體仍未放行。
+
+
+### A03 隨包來源清單與解出負載證據（待 Windows 11 x64 實跑）
+
+- 2026-09-26 依 TDD 先加入會失敗的 build provenance、公開 manifest 命令及 Windows 11
+  evidence workflow contract，再最小實作到本機 contract tests 通過。
+- `scripts/ccode/build.ps1` 現要求顯式完整 `AdapterRevision`，拒絕虛構預設值；下載官方
+  `manifest.json` 與 `win32-x64/claude.exe` 後，先以官方 checksum 驗 payload，再內嵌
+  schema 1 metadata：package／platform／architecture、adapter commit、engine version、
+  SHA256、size、官方 manifest URL／SHA256 與官方 payload URL。三個 build workflow 均
+  傳入當次 `${{ github.sha }}`。
+- `ccode --package-manifest` 在 profile parsing／目錄建立前執行；只在 metadata schema、
+  Windows x64 目標、完整小寫 commit／SHA256、官方 URL、resource size 與 resource 101
+  digest 全部一致時輸出單行 JSON。失敗只回中性 `E_PACKAGE_METADATA` 或 `E_CHECKSUM`。
+  `--ccode-self-test` 共用同一完整驗證，不再只核對單一 digest 欄位。
+- `tests/ccode/package-manifest-integration.py` 以 `LoadLibraryExW(...AS_DATAFILE)` 讀取
+  resource 101／102，不執行候選 entry point；把負載實際寫到暫存檔後重新計算 SHA256
+  及 size，比對公開命令與 embedded JSON，確認 manifest／self-test 不建立 profile 或
+  runtime，並輸出 `windows11-evidence/<version>/package-provenance.json`。證據包含 ccode
+  executable、embedded metadata 與 extracted engine hashes，不包含使用者名稱或憑證。
+- 現有 `payload-integrity.py` 已改用 schema 1 的 `engineSha256`，仍要求篡改 embedded
+  payload 時 self-test 與正常 startup fail closed，且真正 runtime extraction／cache repair
+  與原始 resource 逐位元組相同。
+- 目前只完成程式、TDD contract、Python syntax 與本機回歸入口；尚未在符合標籤的
+  Windows 11 x64 普通帳戶 runner 執行兩個固定版本。因此 A03 仍未通過，整體仍未放行。
+  來源清單本身也未簽名，不能當作 A20 的可信簽署者或供應鏈真實性證明。

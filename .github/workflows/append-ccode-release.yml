@@ -49,7 +49,7 @@ jobs:
         if: steps.release.outputs.exists == 'true'
         shell: pwsh
         run: |
-          .\scripts\ccode\build.ps1 -Version "${{ steps.release.outputs.version }}" -OutputDir .
+          .\scripts\ccode\build.ps1 -Version "${{ steps.release.outputs.version }}" -AdapterRevision '${{ github.sha }}' -OutputDir .
 
       - name: Install filesystem regression test runtime
         if: steps.release.outputs.exists == 'true'

@@ -25,7 +25,7 @@ jobs:
       - name: Build reported runtime version
         id: build
         shell: pwsh
-        run: ./scripts/ccode/build.ps1 -Version '${{ matrix.version }}' -OutputDir .
+        run: ./scripts/ccode/build.ps1 -Version '${{ matrix.version }}' -AdapterRevision '${{ github.sha }}' -OutputDir .
       - name: Verify Windows 11 x64 ordinary-account environment
         id: platform
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
@@ -36,6 +36,14 @@ jobs:
             -ExpectedEngineVersion '${{ matrix.version }}' `
             -AdapterRevision '${{ github.sha }}' `
             -EvidencePath './windows11-evidence/${{ matrix.version }}/environment.json'
+      - name: Verify and record package provenance
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.platform.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          python tests/ccode/package-manifest-integration.py ./ccode.exe `
+            --expected-version '${{ matrix.version }}' `
+            --adapter-revision '${{ github.sha }}' `
+            --evidence './windows11-evidence/${{ matrix.version }}/package-provenance.json'
       - name: Test native runtime and resume
         if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.platform.outcome == 'success' }}
         shell: pwsh
@@ -78,6 +86,7 @@ jobs:
           path: |
             ccode.exe
             windows11-evidence/${{ matrix.version }}/environment.json
+            windows11-evidence/${{ matrix.version }}/package-provenance.json
           if-no-files-found: error
 
   cross-version:

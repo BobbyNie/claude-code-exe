@@ -97,7 +97,7 @@ def check(executable):
     payload, metadata_bytes = resources(executable)
     metadata = json.loads(metadata_bytes.decode('utf-8-sig'))
     source = executable.read_bytes()
-    changed = tamper_payload(source, payload, metadata['sha256'])
+    changed = tamper_payload(source, payload, metadata['engineSha256'])
     with tempfile.TemporaryDirectory(prefix='ccode-integrity-') as temporary:
         root = Path(temporary)
         candidate = root / 'ccode.exe'
@@ -145,7 +145,7 @@ def check(executable):
             assert sentinel.read_bytes() == b'outside-runtime-preservation'
         finally:
             os.rmdir(junction)  # Remove the junction itself, never its target contents.
-        runtime_directory = root / 'runtime' / metadata['sha256']
+        runtime_directory = root / 'runtime' / metadata['engineSha256']
         runtime_directory.mkdir(parents=True)
         linked_candidate = runtime_directory / 'engine.new'
         os.link(sentinel, linked_candidate)
@@ -162,7 +162,7 @@ def check(executable):
             linked_candidate.unlink()
         with rejecting_gateway() as gateway:
             environment['A_BASE_URL'] = gateway.url
-            extracted = root / 'runtime' / metadata['sha256'] / 'engine.exe'
+            extracted = root / 'runtime' / metadata['engineSha256'] / 'engine.exe'
             for attempt in range(2):
                 if attempt:
                     with extracted.open('r+b') as cached:
@@ -170,7 +170,7 @@ def check(executable):
                         value = cached.read(1)
                         cached.seek(-1, 2)
                         cached.write(bytes([value[0] ^ 1]))
-                    assert hashlib.sha256(extracted.read_bytes()).hexdigest() != metadata['sha256']
+                    assert hashlib.sha256(extracted.read_bytes()).hexdigest() != metadata['engineSha256']
                 before = len(gateway.requests)
                 turn = subprocess.run([str(candidate), '--data-dir', str(data), '--print',
                                        '--tools', '', 'integrity-test-only'], cwd=root,
@@ -182,7 +182,7 @@ def check(executable):
                 assert b'integrity-test-only' not in terminal, 'Fixture prompt disclosed'
                 assert gateway.requests[before:] == ['/v1/messages'], 'Expected one actual engine request'
                 restored = extracted.read_bytes()
-                assert hashlib.sha256(restored).hexdigest() == metadata['sha256'], 'Extracted hash differs'
+                assert hashlib.sha256(restored).hexdigest() == metadata['engineSha256'], 'Extracted hash differs'
                 assert restored == payload, 'Extracted bytes differ from original embedded payload'
                 assert not (extracted.parent / 'engine.new').exists(), 'Extraction candidate left behind'
         assert executable.read_bytes() == source, 'Original build was modified'

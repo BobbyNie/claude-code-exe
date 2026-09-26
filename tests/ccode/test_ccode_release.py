@@ -34,6 +34,39 @@ class CcodeReleaseTests(unittest.TestCase):
 
         self.assertIn('assert(!IsValidGatewayUrl(L""))', native_test)
 
+    def test_build_embeds_verified_package_provenance(self):
+        build = (ROOT / "scripts/ccode/build.ps1").read_text(encoding="utf-8")
+
+        for contract in (
+            "[string]$AdapterRevision",
+            "officialManifestUrl",
+            "officialManifestSha256",
+            "officialPayloadUrl",
+            "adapterRevision",
+            "engineSize",
+            "schemaVersion",
+        ):
+            self.assertIn(contract, build)
+
+        self.assertIn("Get-FileHash -Path $manifestPath -Algorithm SHA256", build)
+        self.assertNotIn("[string]$AdapterRevision =", build)
+
+    def test_launcher_exposes_verified_package_manifest(self):
+        launcher = (ROOT / "scripts/ccode/launcher.cpp").read_text(encoding="utf-8")
+
+        self.assertIn('L"--package-manifest"', launcher)
+        self.assertIn('"officialManifestSha256"', launcher)
+        self.assertIn('Digest(payload)', launcher)
+
+    def test_windows11_acceptance_records_package_provenance(self):
+        workflow = (ROOT / ".github/workflows/test-ccode-windows11-x64.yml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("-AdapterRevision '${{ github.sha }}'", workflow)
+        self.assertIn("package-manifest-integration.py", workflow)
+        self.assertIn("package-provenance.json", workflow)
+
     def test_build_produces_one_resource_packed_executable(self):
         build = (ROOT / "scripts/ccode/build.ps1").read_text(encoding="utf-8")
 

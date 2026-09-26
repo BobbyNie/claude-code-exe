@@ -2,6 +2,9 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Version,
 
+    [Parameter(Mandatory = $true)]
+    [string]$AdapterRevision,
+
     [Parameter(Mandatory = $false)]
     [string]$OutputDir = "."
 )
@@ -10,6 +13,12 @@ $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
 $baseUrl = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/$Version"
+$officialManifestUrl = "$baseUrl/manifest.json"
+$officialPayloadUrl = "$baseUrl/win32-x64/claude.exe"
+if ($AdapterRevision -notmatch '^[0-9a-fA-F]{40}([0-9a-fA-F]{24})?$') {
+    throw "AdapterRevision must be a full 40- or 64-character hexadecimal commit ID"
+}
+$normalizedAdapterRevision = $AdapterRevision.ToLowerInvariant()
 $work = Join-Path ([System.IO.Path]::GetTempPath()) "ccode-build-$([Guid]::NewGuid().ToString('N'))"
 $payload = Join-Path $work "aa-runtime.exe"
 $metadataPath = Join-Path $work "package.json"
@@ -39,18 +48,32 @@ try {
     $locationPushed = $true
 
     Write-Output "Downloading and verifying official payload $Version..."
-    Invoke-WebRequest -Uri "$baseUrl/manifest.json" -OutFile $manifestPath -UseBasicParsing
-    Invoke-WebRequest -Uri "$baseUrl/win32-x64/claude.exe" -OutFile $payload -UseBasicParsing
+    Invoke-WebRequest -Uri $officialManifestUrl -OutFile $manifestPath -UseBasicParsing
+    Invoke-WebRequest -Uri $officialPayloadUrl -OutFile $payload -UseBasicParsing
     $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
     $expected = [string]$manifest.platforms.'win32-x64'.checksum
     $actual = (Get-FileHash -Path $payload -Algorithm SHA256).Hash.ToLowerInvariant()
+    $officialManifestSha256 = (Get-FileHash -Path $manifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $engineSize = (Get-Item $payload).Length
     if (-not $expected -or $actual -ne $expected.ToLowerInvariant()) {
         throw "Official payload SHA256 mismatch. Expected $expected, got $actual"
     }
 
-    Write-Output "Embedding verified engine and version metadata..."
-    @{ version = $Version; sha256 = $actual } | ConvertTo-Json -Compress |
-        Set-Content -Path $metadataPath -Encoding utf8NoBOM
+    Write-Output "Embedding verified engine provenance..."
+    @{
+        schemaVersion = 1
+        packageName = "ccode"
+        packageVersion = "1.0"
+        platform = "windows"
+        architecture = "x64"
+        adapterRevision = $normalizedAdapterRevision
+        engineVersion = $Version
+        engineSha256 = $actual
+        engineSize = $engineSize
+        officialManifestUrl = $officialManifestUrl
+        officialManifestSha256 = $officialManifestSha256
+        officialPayloadUrl = $officialPayloadUrl
+    } | ConvertTo-Json -Compress | Set-Content -Path $metadataPath -Encoding utf8NoBOM
     $payloadRc = $payload.Replace('\', '\\')
     $metadataRc = $metadataPath.Replace('\', '\\')
     @"

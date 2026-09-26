@@ -10,7 +10,7 @@
 |---|---|---|
 | 離線安裝 | 乾淨目標 Windows 11 x64 普通帳戶解包，斷開外網 | 不要求提權、不新增服務／驅動；只依賴包內或核准系統組件 |
 | 交付名稱 | 遞迴掃描壓縮包目錄、檔名、解包後程式、公開設定及手冊，大小寫不敏感 | 不含受限名稱；SDK 套件、升級殘留也納入 |
-| 原始負載 | 比對負載雜湊與來源清單 | 原始內容未被字串／二進位替換破壞 |
+| 原始負載 | 執行 `--package-manifest`，比對 embedded resource、實際解出檔案、官方 manifest／payload URL、SHA256、size、engine 與 adapter revision；再執行篡改拒絕案例 | 公開 JSON 與內嵌清單一致，原始內容未被字串／二進位替換破壞；證據檔記錄 extracted hash，且命令不建立 profile/runtime 副作用 |
 | 內部範圍 | 分別記錄公開環境、子進程環境、二進位 metadata、必要通知 | 不把公開名稱通過當成內部全部通過；衝突明示為未滿足 |
 | 資料分離 | 啟動、會話、工具及更新後比較程式目錄 | 動態資料進資料區；重新交付不攜帶個人資料 |
 | 路徑一致 | mkdir、stat、讀寫、列舉、重命名、刪除及子進程讀取同檔 | 同一名稱空間；無 EEXIST／不存在矛盾 |
@@ -31,4 +31,4 @@
 
 每個案例記錄 Windows 版本、包版本、引擎版本、adapter 版本、帳戶權限、測試輸入、期望與實際結果及證據位置。測試資料不得用真實憑證。
 
-既有兩版本 Windows 回歸證據只能沿用到未改變的舊功能，不替代新前端、新啟動環境及名稱掃描。`windows-latest` 可驗證補充回歸，但路徑邊界仍須在真實 Windows 11 x64 普通帳戶 runner 以 `--workspace-boundary-only` 取得成功結果；歷史 `WinError 267` 不是通過證據。任何代碼修改遵守先失敗測試、再最小實作、再回歸的 TDD 流程。
+既有兩版本 Windows 回歸證據只能沿用到未改變的舊功能，不替代新前端、新啟動環境及名稱掃描。`windows-latest` 可驗證補充回歸，但路徑邊界仍須在真實 Windows 11 x64 普通帳戶 runner 以 `--workspace-boundary-only` 取得成功結果；歷史 `WinError 267` 不是通過證據。A03 來源清單須由 Windows 11 x64 workflow 產出 `package-provenance.json`；只有程式碼或 Windows Server 結果不能標記通過。任何代碼修改遵守先失敗測試、再最小實作、再回歸的 TDD 流程。

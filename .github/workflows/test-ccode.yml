@@ -29,7 +29,7 @@ jobs:
       - name: Build reported runtime version
         id: build
         shell: pwsh
-        run: ./scripts/ccode/build.ps1 -Version '${{ matrix.version }}' -OutputDir .
+        run: ./scripts/ccode/build.ps1 -Version '${{ matrix.version }}' -AdapterRevision '${{ github.sha }}' -OutputDir .
       - name: Test native runtime and resume
         shell: pwsh
         run: |
