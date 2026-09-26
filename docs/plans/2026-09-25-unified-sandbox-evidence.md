@@ -1503,3 +1503,24 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   仍不得標為完成。
 - 遠端 SHA `3605dc1` 的 GitHub run `36202849568` 於 2026-09-25 因帳戶付款／spending
   limit 未啟動任何 step；這不是產品測試失敗，也不是 Windows 11 驗收證據。
+
+### Windows 11 x64 普通帳戶專用驗收入口（待實機執行）
+
+- 2026-09-26 新增手動觸發的 `.github/workflows/test-ccode-windows11-x64.yml`，只選取
+  帶 `self-hosted`、`Windows`、`X64`、`windows-11` 標籤的 runner，避免把 GitHub
+  託管的 Windows Server 結果誤記為 Windows 11 x64 放行證據。
+- runner 先由 `scripts/ccode/assert-windows11-x64.ps1` 驗證 Windows 11 Client、build
+  不低於 22000、OS 與進程均為 x64，並同時拒絕已提升的 Administrator token 及屬於
+  本機 Administrators 群組的帳戶。證據 JSON 不記錄使用者名稱或憑證，只包含平台、
+  權限布林值、執行檔 SHA-256、引擎版本、版本輸出與 adapter revision。
+- 兩個固定引擎版本 `2.1.221`、`2.1.282` 均須通過 Python 回歸、Windows 原生測試、
+  portable／真實工具／workspace alias／長 workspace／payload integrity／gateway／
+  session concurrency，之後才執行舊→新→舊 cross-version 恢復。所有 gate 都是 required，
+  無 `continue-on-error`。
+- workflow 與驗證腳本存在只代表驗收入口已建立，不代表 Windows 11 x64 已通過。
+  尚需在符合標籤且以普通非管理員帳戶執行的真實 Windows 11 x64 runner 上取得成功 run；
+  在此之前 A01、A08、A12、A14、A16 等相關平台門檻仍保持待驗。
+- A16 推送後的 SHA `ba23032bd2e6932630ae6c62b05ffd4715a850b1` 對應 GitHub run
+  `36204213325`（2026-09-26T00:16:17Z）。兩個版本、cross-version 及 long-workspace
+  共五個 jobs 都是零 steps；check-run annotation 明確指出帳戶近期付款失敗或需要提高
+  spending limit。這不是產品測試失敗，也不是 Windows 11 x64 驗收證據。

@@ -1,0 +1,112 @@
+name: Test ccode Windows 11 x64 acceptance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: [self-hosted, Windows, X64, windows-11]
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ['2.1.221', '2.1.282']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.0'
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Build reported runtime version
+        id: build
+        shell: pwsh
+        run: ./scripts/ccode/build.ps1 -Version '${{ matrix.version }}' -OutputDir .
+      - name: Verify Windows 11 x64 ordinary-account environment
+        id: platform
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          ./scripts/ccode/assert-windows11-x64.ps1 `
+            -Executable ./ccode.exe `
+            -ExpectedEngineVersion '${{ matrix.version }}' `
+            -AdapterRevision '${{ github.sha }}' `
+            -EvidencePath './windows11-evidence/${{ matrix.version }}/environment.json'
+      - name: Test native runtime and resume
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.platform.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          python -m unittest discover -s tests -v
+          if ($LASTEXITCODE -ne 0) { throw 'Python tests failed' }
+          ./scripts/ccode/test-windows.ps1 -Executable ./ccode.exe
+      - name: Test portable frontend contract
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.platform.outcome == 'success' }}
+        shell: pwsh
+        run: python tests/ccode/portable-integration.py ./ccode.exe
+      - name: Exercise actual engine tools through the frontend
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.platform.outcome == 'success' }}
+        shell: pwsh
+        run: python tests/ccode/tools-integration.py ./ccode.exe
+      - name: Verify workspace aliases
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.platform.outcome == 'success' }}
+        shell: pwsh
+        run: python tests/ccode/tools-integration.py ./ccode.exe --workspace-aliases-only
+      - name: Require actual tools in workspace cwd beyond MAX_PATH
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.platform.outcome == 'success' }}
+        shell: pwsh
+        run: python tests/ccode/tools-integration.py ./ccode.exe --long-workspace-only
+      - name: Reject tampered embedded payload
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.platform.outcome == 'success' }}
+        shell: pwsh
+        run: python tests/ccode/payload-integrity.py ./ccode.exe
+      - name: Verify actual engine gateway rejection
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.platform.outcome == 'success' }}
+        shell: pwsh
+        run: python tests/ccode/gateway-integration.py ./ccode.exe
+      - name: Verify session writer concurrency
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.platform.outcome == 'success' }}
+        shell: pwsh
+        run: python tests/ccode/concurrency-integration.py ./ccode.exe
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.platform.outcome == 'success' }}
+        with:
+          name: ccode-windows11-x64-${{ matrix.version }}
+          path: |
+            ccode.exe
+            windows11-evidence/${{ matrix.version }}/environment.json
+          if-no-files-found: error
+
+  cross-version:
+    needs: test
+    if: ${{ !cancelled() && needs.test.result == 'success' }}
+    runs-on: [self-hosted, Windows, X64, windows-11]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ccode-windows11-x64-2.1.221
+          path: cross/old
+      - uses: actions/download-artifact@v4
+        with:
+          name: ccode-windows11-x64-2.1.282
+          path: cross/new
+      - name: Verify Windows 11 x64 ordinary-account environment
+        shell: pwsh
+        run: |
+          ./scripts/ccode/assert-windows11-x64.ps1 `
+            -Executable ./cross/new/ccode.exe `
+            -ExpectedEngineVersion '2.1.282' `
+            -AdapterRevision '${{ github.sha }}' `
+            -EvidencePath './cross/environment.json'
+      - name: Exercise actual upgrade and rollback between both engines
+        shell: pwsh
+        run: |
+          python tests/ccode/resume-integration.py prepare ./cross/new/ccode.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Cross-version fixture preparation failed' }
+          python tests/ccode/resume-integration.py verify ./cross/new/ccode.exe ./cross/old/ccode.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Actual cross-version rollback failed' }
