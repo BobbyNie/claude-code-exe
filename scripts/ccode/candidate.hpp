@@ -70,7 +70,7 @@ inline Json CandidateFiles(const std::filesystem::path& directory, const Snapsho
     for (const auto& entry : fs::recursive_directory_iterator(profile)) {
         const auto name = entry.path().lexically_relative(profile).generic_u8string();
         if (entry.is_symlink()) throw std::runtime_error("E_CANDIDATE_DATA");
-        if (name == "frontend.lock") continue;
+        if (IsOperationalProfileLock(fs::u8path(name))) continue;
         if (entry.is_directory()) continue;
         if (!entry.is_regular_file()) throw std::runtime_error("E_CANDIDATE_DATA");
         files[name] = {{"sha256", digest(entry.path())}, {"size", entry.file_size()}};

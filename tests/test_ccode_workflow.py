@@ -28,6 +28,17 @@ class AcceptanceWorkflowTests(unittest.TestCase):
         self.assertIn('python tests/ccode/payload-integrity.py ./ccode.exe', step)
         self.assertNotIn('continue-on-error:', step)
 
+    def test_session_writer_concurrency_is_independent_and_required(self):
+        workflow = (Path(__file__).resolve().parents[1] /
+                    '.github/workflows/test-ccode.yml').read_text()
+        test_job = workflow.split('jobs:\n  test:\n', 1)[1].split('\n  long-workspace:', 1)[0]
+        self.assertIn("version: ['2.1.221', '2.1.282']", test_job)
+        step = test_job.split('      - name: Verify session writer concurrency', 1)[1].split('      - ', 1)[0]
+        self.assertIn("if: ${{ !cancelled() && steps.build.outcome == 'success' }}", step)
+        self.assertIn('python tests/ccode/concurrency-integration.py ./ccode.exe', step)
+        self.assertTrue((Path(__file__).parent / 'ccode/concurrency-integration.py').is_file())
+        self.assertNotIn('continue-on-error:', step)
+
     def test_failed_gateway_does_not_hide_independent_acceptance(self):
         workflow = (Path(__file__).resolve().parents[1] /
                     '.github/workflows/test-ccode.yml').read_text()

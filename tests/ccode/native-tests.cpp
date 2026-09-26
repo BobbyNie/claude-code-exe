@@ -1,5 +1,6 @@
 #include "../../scripts/ccode/common.hpp"
 #include "../../scripts/ccode/runtime-paths.hpp"
+#include "../../scripts/ccode/concurrency.hpp"
 #include <fstream>
 #include <chrono>
 
@@ -79,6 +80,88 @@ int main() {
         assert(rejected);
     }
     fs::remove_all(root);
+
+    const auto concurrencyRoot = fs::temp_directory_path() / ("ccode-concurrency-" +
+        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto data = concurrencyRoot / "data";
+    const auto profile = data / "profile";
+    fs::create_directories(profile);
+    const std::string session = "a2345678-1234-4234-8234-123456789abc";
+    const auto resumedTurn = PlanSessionTurn(session);
+    assert(resumedTurn.id == session && resumedTurn.resume);
+    const auto newTurn = PlanSessionTurn("");
+    assert(ValidSessionId(newTurn.id) && !newTurn.resume && newTurn.id != session);
+
+    const auto sessionLock = PrepareSessionLockPath(data, profile, session);
+    assert(sessionLock == data / "session-locks" / "profile" / (session + ".lock"));
+    assert(fs::is_directory(sessionLock.parent_path()));
+
+    const auto candidateRoot = data / "candidates" / "b2345678-1234-4234-8234-123456789abc";
+    const auto candidateProfile = candidateRoot / "profile";
+    fs::create_directories(candidateProfile);
+    const auto selectedCandidateLock = PrepareSessionLockPath(data, candidateProfile, session);
+    const auto directCandidateLock = PrepareSessionLockPath(candidateRoot, candidateProfile, session);
+    assert(selectedCandidateLock == directCandidateLock);
+    assert(selectedCandidateLock == candidateRoot / "session-locks" / "profile" / (session + ".lock"));
+
+    fs::remove_all(data / "session-locks");
+    const auto outsideLocks = concurrencyRoot / "outside-locks";
+    fs::create_directories(outsideLocks);
+    std::error_code lockLinkError;
+    fs::create_directory_symlink(outsideLocks, data / "session-locks", lockLinkError);
+    if (!lockLinkError) {
+        bool rejected = false;
+        try { PrepareSessionLockPath(data, profile, session); }
+        catch (const std::runtime_error& error) {
+            rejected = std::string(error.what()) == "E_SESSION_LOCK_PATH";
+        }
+        assert(rejected);
+        assert(fs::is_empty(outsideLocks));
+        fs::remove(data / "session-locks");
+        fs::create_directory(data / "session-locks");
+        fs::create_directory_symlink(outsideLocks, data / "session-locks" / "profile");
+        rejected = false;
+        try { PrepareSessionLockPath(data, profile, session); }
+        catch (const std::runtime_error& error) {
+            rejected = std::string(error.what()) == "E_SESSION_LOCK_PATH";
+        }
+        assert(rejected);
+        assert(fs::is_empty(outsideLocks));
+    } else {
+        std::cout << "SKIP: session lock symlink test requires link creation privilege\n";
+    }
+
+    fs::remove_all(data / "session-locks");
+    const auto hardLinkedLock = PrepareSessionLockPath(data, profile, session);
+    const auto lockSentinel = concurrencyRoot / "lock-sentinel.txt";
+    { std::ofstream output(lockSentinel); output << "preserve-lock-sentinel"; }
+    fs::create_hard_link(lockSentinel, hardLinkedLock);
+    bool linkedLockRejected = false;
+    try { PrepareSessionLockPath(data, profile, session); }
+    catch (const std::runtime_error& error) {
+        linkedLockRejected = std::string(error.what()) == "E_SESSION_LOCK_PATH";
+    }
+    assert(linkedLockRejected);
+    { std::ifstream input(lockSentinel); std::string contents; std::getline(input, contents);
+      assert(contents == "preserve-lock-sentinel"); }
+
+    fs::remove_all(data / "session-locks");
+    fs::remove_all(profile);
+    const auto outsideProfile = concurrencyRoot / "outside-profile";
+    fs::create_directories(outsideProfile);
+    std::error_code profileLinkError;
+    fs::create_directory_symlink(outsideProfile, profile, profileLinkError);
+    if (!profileLinkError) {
+        bool profileLinkRejected = false;
+        try { PrepareSessionLockPath(data, profile, session); }
+        catch (const std::runtime_error& error) {
+            profileLinkRejected = std::string(error.what()) == "E_SESSION_LOCK_PATH";
+        }
+        assert(profileLinkRejected);
+    } else {
+        std::cout << "SKIP: profile symlink test requires link creation privilege\n";
+    }
+    fs::remove_all(concurrencyRoot);
 
     std::cout << "ccode native isolation tests passed\n";
     return 0;

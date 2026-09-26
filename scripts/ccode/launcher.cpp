@@ -17,6 +17,7 @@
 #include "sessions.hpp"
 #include "workspaces.hpp"
 #include "session-index.hpp"
+#include "concurrency.hpp"
 #include "permission.hpp"
 
 namespace fs = std::filesystem;
@@ -28,6 +29,11 @@ struct Handle {
     ~Handle() { reset(); }
     Handle(const Handle&) = delete;
     Handle& operator=(const Handle&) = delete;
+    Handle(Handle&& other) noexcept : value(other.value) { other.value = INVALID_HANDLE_VALUE; }
+    Handle& operator=(Handle&& other) noexcept {
+        if (this != &other) { reset(); value = other.value; other.value = INVALID_HANDLE_VALUE; }
+        return *this;
+    }
     void reset(HANDLE h = INVALID_HANDLE_VALUE) {
         if (value && value != INVALID_HANDLE_VALUE) CloseHandle(value);
         value = h;
@@ -35,6 +41,29 @@ struct Handle {
     operator HANDLE() const { return value; }
     bool valid() const { return value && value != INVALID_HANDLE_VALUE; }
 };
+Handle AcquireFileLock(const fs::path& path, bool shared, DWORD waitMilliseconds,
+                       const char* busyError, const char* pathError) {
+    const auto ioPath = ccode::NativeIoPath(path);
+    const auto deadline = GetTickCount64() + waitMilliseconds;
+    while (true) {
+        Handle handle(CreateFileW(ioPath.c_str(), GENERIC_READ | GENERIC_WRITE,
+            shared ? FILE_SHARE_READ | FILE_SHARE_WRITE : 0, nullptr, OPEN_ALWAYS,
+            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+        if (handle.valid()) {
+            BY_HANDLE_FILE_INFORMATION information{};
+            if (!GetFileInformationByHandle(handle, &information) ||
+                (information.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) ||
+                information.nNumberOfLinks != 1)
+                throw std::runtime_error(pathError);
+            return handle;
+        }
+        const auto error = GetLastError();
+        const bool busy = error == ERROR_SHARING_VIOLATION || error == ERROR_LOCK_VIOLATION;
+        if (!busy || !waitMilliseconds || GetTickCount64() >= deadline)
+            throw std::runtime_error(busy ? busyError : pathError);
+        Sleep(10);
+    }
+}
 std::atomic<HANDLE> activeJob{nullptr};
 BOOL WINAPI OnControl(DWORD event) {
     if (event == CTRL_C_EVENT || event == CTRL_BREAK_EVENT) {
@@ -328,6 +357,12 @@ Options Parse(int argc, wchar_t** argv, const fs::path& module) {
     options.data = fs::absolute(options.data).lexically_normal();
     return options;
 }
+bool RequiresExclusiveProfile(const Options& options) {
+    return options.archivePending || options.archiveWorkspacePending || options.snapshotProfile ||
+        !options.stageSnapshot.empty() || !options.validateCandidate.empty() ||
+        !options.activateCandidate.empty() || !options.rollbackSnapshot.empty() ||
+        !options.validateRollback.empty() || !options.activateRollback.empty();
+}
 std::vector<wchar_t> ChildEnvironment(const fs::path& profile, bool interactive) {
     std::vector<std::wstring> source;
     auto block = GetEnvironmentStringsW();
@@ -342,8 +377,13 @@ std::vector<wchar_t> ChildEnvironment(const fs::path& profile, bool interactive)
     result.push_back(0);
     return result;
 }
-int RunTurn(const fs::path& module, const fs::path& payload, const fs::path& profile,
-            const Options& options, bool interactive, const std::string& prompt, std::string& session, std::string* captured = nullptr, const fs::path* workspace = nullptr) {
+int RunTurn(const fs::path& module, const fs::path& payload, const fs::path& data,
+            const fs::path& profile, const Options& options, bool interactive,
+            const std::string& prompt, std::string& session, std::string* captured = nullptr,
+            const fs::path* workspace = nullptr) {
+    const auto turn = ccode::PlanSessionTurn(session);
+    const auto sessionLockPath = ccode::PrepareSessionLockPath(data, profile, turn.id);
+    auto sessionLock = AcquireFileLock(sessionLockPath, false, 0, "E_SESSION_BUSY", "E_SESSION_LOCK_PATH");
     auto environment = ChildEnvironment(profile, interactive);
     Json mcp = {{"mcpServers", {{"ccode_permissions", {{"type", "stdio"},
         {"command", module.u8string()}, {"args", {"--ccode-permission-server"}}}}}}};
@@ -351,7 +391,8 @@ int RunTurn(const fs::path& module, const fs::path& payload, const fs::path& pro
         L" --print --output-format stream-json --verbose --mcp-config " + Quote(Wide(mcp.dump())) +
         L" --permission-prompt-tool mcp__ccode_permissions__approve";
     for (const auto& arg : options.engine) command += L" " + Quote(arg);
-    if (!session.empty()) command += L" --resume " + Quote(Wide(session));
+    command += turn.resume ? L" --resume " + Quote(Wide(turn.id))
+                           : L" --session-id " + Quote(Wide(turn.id));
     std::vector<wchar_t> cmd(command.begin(), command.end()); cmd.push_back(0);
     SECURITY_ATTRIBUTES security{sizeof(security), nullptr, TRUE};
     Handle outRead, outWrite, inRead, inWrite, err;
@@ -402,7 +443,7 @@ int RunTurn(const fs::path& module, const fs::path& payload, const fs::path& pro
         }
         inWrite.reset();
     });
-    ccode::EventReader reader(session);
+    ccode::EventReader reader(turn.id);
     std::string protocolError;
     char buffer[16384]; DWORD read;
     while (ReadFile(outRead, buffer, sizeof(buffer), &read, nullptr) && read) {
@@ -444,6 +485,8 @@ void PrintSessions(const std::vector<ccode::Session>& sessions) {
                   << (sessions[i].availability == "discovered" ? "" : " [unavailable: E_SESSION_DATA]") << '\n';
 }
 void PickSession(const fs::path& profile, std::string& session) {
+    auto metadataLock = AcquireFileLock(profile / L"metadata.lock", false, 30000,
+        "E_PROFILE_BUSY", "E_PROFILE_BUSY");
     auto sessions = ccode::ListWorkspaceSessions(profile, fs::current_path());
     PrintSessions(sessions);
     if (sessions.empty()) return;
@@ -503,9 +546,9 @@ int Main(int argc, wchar_t** argv) {
     }
     auto options = Parse(argc, argv, module);
     fs::create_directories(options.data);
-    Handle coordinationLock(CreateFileW(ccode::SnapshotIoPath(options.data / L"active-profile.lock").c_str(),
-        GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
-    if (!coordinationLock.valid()) throw std::runtime_error("E_PROFILE_BUSY");
+    const bool exclusiveProfile = RequiresExclusiveProfile(options);
+    auto coordinationLock = AcquireFileLock(options.data / L"active-profile.lock", !exclusiveProfile, 0,
+        "E_PROFILE_BUSY", "E_PROFILE_BUSY");
     if (options.archivePending) {
         const auto recoveryId = ccode::NewWorkspaceId();
         ccode::ArchiveActivationPending(options.data, recoveryId);
@@ -516,8 +559,8 @@ int Main(int argc, wchar_t** argv) {
     auto profile = (options.snapshotProfile || !options.rollbackSnapshot.empty() || !options.validateRollback.empty() || !options.activateRollback.empty()) ? ccode::ResolveProfileForBackup(options.data) :
         ccode::ResolveActiveProfile(options.data, selectedEngine);
     fs::create_directories(profile);
-    Handle lock(CreateFileW((profile / L"frontend.lock").c_str(), GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
-    if (!lock.valid()) throw std::runtime_error("E_PROFILE_BUSY");
+    auto lock = AcquireFileLock(profile / L"frontend.lock", !exclusiveProfile, 0,
+        "E_PROFILE_BUSY", "E_PROFILE_BUSY");
     if (options.archiveWorkspacePending) {
         const auto recoveryId = ccode::NewWorkspaceId();
         ccode::ArchiveWorkspacePending(profile, recoveryId);
@@ -545,9 +588,8 @@ int Main(int argc, wchar_t** argv) {
             const auto status = fs::symlink_status(ccode::SnapshotIoPath(directory));
             if (fs::is_symlink(status) || !fs::is_directory(status)) throw std::runtime_error("E_CANDIDATE_DATA");
         }
-        Handle candidateLock(CreateFileW(ccode::SnapshotIoPath(candidateProfile / L"frontend.lock").c_str(),
-            GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
-        if (!candidateLock.valid()) throw std::runtime_error("E_PROFILE_BUSY");
+        auto candidateLock = AcquireFileLock(candidateProfile / L"frontend.lock", false, 0,
+            "E_PROFILE_BUSY", "E_PROFILE_BUSY");
         if (rollback) ccode::ActivateProfileRollback(options.data, id, selectedEngine, FileDigest);
         else ccode::ActivateProfileCandidate(options.data, id, selectedEngine, FileDigest);
         std::cout << "Activated profile: " << id << '\n';
@@ -575,9 +617,8 @@ int Main(int argc, wchar_t** argv) {
         const auto candidateProfile = candidate / L"profile";
         if (!fs::is_directory(candidateProfile) || fs::is_symlink(fs::symlink_status(candidate)) ||
             fs::is_symlink(fs::symlink_status(candidateProfile))) throw std::runtime_error("E_CANDIDATE_DATA");
-        Handle candidateLock(CreateFileW(ccode::SnapshotIoPath(candidateProfile / L"frontend.lock").c_str(),
-            GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
-        if (!candidateLock.valid()) throw std::runtime_error("E_PROFILE_BUSY");
+        auto candidateLock = AcquireFileLock(candidateProfile / L"frontend.lock", false, 0,
+            "E_PROFILE_BUSY", "E_PROFILE_BUSY");
         const auto document = ccode::ReadCandidateDocument(candidate / L"candidate.json");
         if (!document.contains("sourceSnapshotId") || !document["sourceSnapshotId"].is_string() ||
             !ccode::ValidSessionId(document["sourceSnapshotId"].get<std::string>())) throw std::runtime_error("E_CANDIDATE_DATA");
@@ -593,7 +634,7 @@ int Main(int argc, wchar_t** argv) {
                 auto resumed = id;
                 std::string answer;
                 // Never put the expected answer into the prompt or terminal output.
-                const auto code = RunTurn(module, payload, isolated, probeOptions, false,
+                const auto code = RunTurn(module, payload, options.data, isolated, probeOptions, false,
                     "For profile recovery verification, repeat verbatim the complete text of the first user message "
                     "in this conversation. Return only that text. Do not call tools.", resumed, &answer, &workspace);
                 return code == 0 && resumed == id && answer == expected + "\n";
@@ -616,11 +657,16 @@ int Main(int argc, wchar_t** argv) {
         else std::cout << "Verified candidate session: " << receipt.at("sessionId").get<std::string>() << '\n';
         return 0;
     }
-    for (auto name : {L"home", L"roaming", L"local", L"temp"}) fs::create_directories(profile / name);
-    const auto workspaceId = ccode::ResolveWorkspace(profile / L"workspaces.json", fs::current_path());
-    if (options.workspaceId) { std::cout << workspaceId << '\n'; return 0; }
-    ccode::RestoreLegacyProfile(profile / L"home");
-    auto sessions = ccode::ListWorkspaceSessions(profile, fs::current_path());
+    std::vector<ccode::Session> sessions;
+    {
+        auto metadataLock = AcquireFileLock(profile / L"metadata.lock", false, 30000,
+            "E_PROFILE_BUSY", "E_PROFILE_BUSY");
+        for (auto name : {L"home", L"roaming", L"local", L"temp"}) fs::create_directories(profile / name);
+        const auto workspaceId = ccode::ResolveWorkspace(profile / L"workspaces.json", fs::current_path());
+        if (options.workspaceId) { std::cout << workspaceId << '\n'; return 0; }
+        ccode::RestoreLegacyProfile(profile / L"home");
+        sessions = ccode::ListWorkspaceSessions(profile, fs::current_path());
+    }
     if (options.sessions) { PrintSessions(sessions); return 0; }
     if (options.latest) {
         if (sessions.empty()) throw std::runtime_error("E_NO_SESSION");
@@ -640,19 +686,19 @@ int Main(int argc, wchar_t** argv) {
             if (!piped.empty()) options.prompt = piped + (options.prompt.empty() ? "" : "\n" + options.prompt);
         }
         if (options.prompt.empty()) throw std::runtime_error("E_PROMPT");
-        return RunTurn(module, payload, profile, options, false, options.prompt, options.session);
+        return RunTurn(module, payload, options.data, profile, options, false, options.prompt, options.session);
     }
     std::cout << "ccode - portable coding assistant\n/resume  /new  /exit\n";
     if (options.resumePicker) PickSession(profile, options.session);
     int code = 0;
-    if (!options.prompt.empty()) code = RunTurn(module, payload, profile, options, console, options.prompt, options.session);
+    if (!options.prompt.empty()) code = RunTurn(module, payload, options.data, profile, options, console, options.prompt, options.session);
     std::string prompt;
     while (std::cout << "ccode> " << std::flush, std::getline(std::cin, prompt)) {
         if (prompt == "/exit" || prompt == "/quit") break;
         if (prompt == "/new") { options.session.clear(); continue; }
         if (prompt == "/resume") { PickSession(profile, options.session); continue; }
         if (prompt.empty()) continue;
-        code = RunTurn(module, payload, profile, options, console, prompt, options.session);
+        code = RunTurn(module, payload, options.data, profile, options, console, prompt, options.session);
     }
     return code;
 }
@@ -664,6 +710,6 @@ int wmain(int argc, wchar_t** argv) {
         // Library exceptions may contain user content or internal absolute paths.
         if (message.rfind("E_", 0) != 0) message = "E_LOCAL: operation failed; check data access and configuration";
         std::cerr << message << '\n';
-        return message.rfind("E_PROFILE_BUSY", 0) == 0 ? 75 : 64;
+        return message.rfind("E_PROFILE_BUSY", 0) == 0 || message.rfind("E_SESSION_BUSY", 0) == 0 ? 75 : 64;
     }
 }

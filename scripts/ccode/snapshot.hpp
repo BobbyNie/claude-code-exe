@@ -9,6 +9,9 @@ inline std::filesystem::path SnapshotIoPath(const std::filesystem::path& path) {
     return NativeIoPath(path);
 }
 using SnapshotDigest = std::function<std::string(const std::filesystem::path&)>;
+inline bool IsOperationalProfileLock(const std::filesystem::path& relative) {
+    return relative == "frontend.lock" || relative == "metadata.lock";
+}
 // Caller holds the exclusive profile lock for the entire operation. A snapshot
 // is a verified backup, NOT an engine-validated candidate or active profile.
 inline std::filesystem::path CreateProfileSnapshot(const std::filesystem::path& sourceProfile,
@@ -36,7 +39,7 @@ inline std::filesystem::path CreateProfileSnapshot(const std::filesystem::path& 
             std::map<std::string, fs::path> files;
             for (const auto& entry : fs::recursive_directory_iterator(profile)) {
                 auto name = entry.path().lexically_relative(profile);
-                if (name == "frontend.lock") continue;
+                if (IsOperationalProfileLock(name)) continue;
                 if (entry.is_symlink()) throw std::runtime_error("E_SNAPSHOT_LINK");
                 if (entry.is_directory()) continue;
                 if (!entry.is_regular_file()) throw std::runtime_error("E_SNAPSHOT_TYPE");

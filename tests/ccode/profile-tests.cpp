@@ -96,6 +96,7 @@ int main() try {
     const auto active = root / "active";
     Write(active / "home/history.jsonl", "source transcript\n");
     Write(active / "frontend.lock", "operational lock");
+    Write(active / "metadata.lock", "operational metadata lock");
     fs::create_directories(active / "empty");
     const auto snapshots = root / "snapshots";
     const std::string snapshotId = "12345678-1234-1234-1234-123456789abc";
@@ -107,6 +108,7 @@ int main() try {
     assert(Read(snapshot / "profile/home/history.jsonl") == "source transcript\n");
     assert(fs::is_directory(snapshot / "profile/empty"));
     assert(!fs::exists(snapshot / "profile/frontend.lock"));
+    assert(!fs::exists(snapshot / "profile/metadata.lock"));
     std::ifstream manifestInput(snapshot / "manifest.json");
     auto manifest = ccode::Json::parse(manifestInput);
     manifestInput.close();

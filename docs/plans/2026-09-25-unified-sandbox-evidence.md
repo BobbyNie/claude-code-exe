@@ -1,6 +1,7 @@
 # A 方案實施與驗收證據台帳
 
 日期：2026-09-25。**狀態：實施中，未放行。**
+2026-09-26 範圍更新：最終放行平台限 **Windows 11 x64**；其他平台不是門檻。現有 GitHub `windows-latest`／Windows Server 證據不得標作 Windows 11 實機通過。
 
 本台帳追蹤 `2026-09-25-unified-sandbox-design.md` 的 A 方案及完整
 `2026-09-25-unified-sandbox-acceptance.md`。不得以單一綠色 CI 代替以下所有門檻。
@@ -36,7 +37,7 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 | A13 | 歷史 | --sessions／--resume／--continue／picker、工作區 UUID；`bcd18a5` 已知歸屬損壞會話 unavailable 及拒絕；`ad17981` / `36188662312` 固定 resume 身份、健康兩輪歷史及跨版本續接回歸通過 | 未知歸屬損壞仍整次拒絕；完整支援版本、損壞恢復及企業端點證據仍欠 |
 | A14 | 升級／搬移 | `ee9e8b5` / `36159427257` 真正 2.1.221 → 2.1.282 → 2.1.221 回退、程式目錄及外置資料根搬移後續接通過；不相容引擎拒絕 | 工作區本身搬移、完整支援版本／隨包相容 manifest、企業端點實測 |
 | A15 | 遷移 | SHA-256 快照、隔離候選、全會話 preflight／恢復、來源變動拒絕、原子切換及回退；`c17b873` / `36190191804` 兩版本公開 --archive-workspace-pending 保全原 bytes／已提交身份及重試通過 | 重名衝突完整分類、磁碟滿／強制中斷邊界與重試、企業真實資料／gateway 驗收；預置 pending 或檔案替換失敗不等於斷電 |
-| A16 | 並發 | profile-wide 排他鎖 | 故障釋鎖已由 `199b57b` 實測；仍欠同 session 單寫入、多 session 同工作區 |
+| A16 | 並發 | 已實作 profile shared／維護 exclusive、metadata 短鎖及每 session 單 writer；`concurrency-integration.py` 使用真實引擎與 barrier fixture 驗證新 session 固定 UUID、同 session 拒絕及不同 session 並行 | 本機 helper／回歸已通過；仍欠 Windows 11 x64 上 2.1.221、2.1.282 的實際執行證據，不得以 Windows Server 或程式存在代替 |
 | A17 | 擴展 | CLI 參數可接設定／MCP／agents | 技能、子代理、核准 MCP 真實流程及明確版本相容矩陣 |
 | A18 | 網路 | gateway 設定入口；實際引擎本機 fixture 已覆蓋不可達、401、429、傳輸截斷、正常 EOF 未完成／完整參數但缺終止；指定案例要求非零退出、無寫入／洩漏，HTTP 案例一次模型請求 | TLS／DNS／過期憑證及完整分類、企業核准端點／部署政策仍欠；不得推廣為所有故障無重放，亦不宣稱 OS 網路隔離 |
 | A19 | 診斷 | 中性錯誤碼；parser 內容不直接外洩 | 操作／追蹤 ID、分類診斷包、憑證遮罩、預設不記提示／內容的實測 |
@@ -1474,3 +1475,31 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   46 通過、1 Windows 專用跳過；diff 檢查通過。
 - Windows 原生測試及真實引擎回歸尚未執行。此檢查只拒絕前端收到的歧義
   事件，不代表能撤銷引擎已執行的工具副作用，也不等於企業 gateway 全面驗收。
+
+
+### A16 細粒度會話並發（Windows 11 x64 待驗）
+
+- 2026-09-26 將一般前端的 `active-profile.lock`／`frontend.lock` 改為 shared，
+  snapshot、stage、validate、activate、rollback 及 pending archive 保持 exclusive；
+  profile registry、legacy restore 與 session index/list 由短期 `metadata.lock` 序列化。
+- 每次真實 engine turn 在啟動子進程前取得獨立 session exclusive lock。既有 session
+  使用 `--resume <uuid>`；新 session 先由前端固定 UUID，再使用 `--session-id <uuid>`，
+  EventReader 只接受相同身份。同 session 第二 writer 回報 `E_SESSION_BUSY`／exit 75，
+  不啟動引擎；不同 session 不共用 writer lock。
+- session lock namespace 以實際 profile 父目錄為錨，令由主 data root 選取 candidate
+  與直接以 candidate root 啟動時得到同一鎖。profile、鎖目錄及既有鎖檔拒絕
+  symlink／Windows reparse point；既有鎖檔還要求 regular file 且 hard-link count 為 1。
+  這是程序協調，不宣稱成為同身份惡意攻擊或 TOCTOU 的 OS 安全邊界。
+- TDD RED→GREEN 已覆蓋：缺少 concurrency API、新 session 固定身份、candidate 兩種
+  data root 的相同鎖路徑、lock root／中間目錄／profile symlink、hard-linked lock、
+  metadata lock 不進 snapshot/candidate manifest，以及 workflow 缺少獨立 required gate。
+- 新增 `tests/ccode/concurrency-integration.py`：不用 sleep 猜測，以 `threading.Event`
+  阻塞 fixture 回覆；要求同 session 第二程序 exit 75、stderr 僅 `E_SESSION_BUSY`、
+  零第二模型請求及零 transcript 寫入；另要求兩個不同 session 在任一回覆釋放前
+  都已到達 `/v1/messages`，完成後各自 transcript 身份及 marker 不互相污染。
+- 本機六組 C++ 通過；Python 48 項通過、1 項 Windows API 專用跳過；workflow guard、
+  Python syntax 與 `git diff --check` 通過。MinGW 非權威交叉編譯仍停在既有 bcrypt
+  header 差異，不能代替 MSVC build。Windows 11 x64 真實引擎案例尚未執行，A16
+  仍不得標為完成。
+- 遠端 SHA `3605dc1` 的 GitHub run `36202849568` 於 2026-09-25 因帳戶付款／spending
+  limit 未啟動任何 step；這不是產品測試失敗，也不是 Windows 11 驗收證據。
