@@ -9,7 +9,7 @@
 | 項目 | 測試方法 | 必須結果 |
 |---|---|---|
 | 離線安裝 | 乾淨目標 Windows 11 x64 普通帳戶解包；停用或物理斷開全部非 loopback 網卡；以獨立 `accept-offline-windows11-x64.ps1` 比對 route／adapter、服務／驅動及 program／data manifests | 不要求提權；零非 loopback default route／Up adapter；不新增服務／驅動；program 只新增已核准且 hash 相符的版本化 runtime；動態資料只進外置 data root；只依賴包內或核准系統組件 |
-| 交付名稱 | 遞迴掃描壓縮包目錄、檔名、解包後程式、公開設定及手冊，大小寫不敏感 | 不含受限名稱；SDK 套件、升級殘留也納入 |
+| 交付名稱 | 從全新路徑以 `build_enterprise_package.py` 組裝 Windows 11 x64 獨立候選；提供 `ccode.exe`、已驗證來源 JSON、中性 usage、逐份必要通知及核准 hash、核准受限名稱；再配對掃描 ZIP／解包鏡像 | 只含白名單檔案；不含混合 bundle、data/profile/runtime/session/temp 或更新殘留；通知原 bytes/hash 不變；名稱或通知衝突 fail closed；audit 為 matched/passed，但不冒稱再分發或簽署已批准 |
 | 原始負載 | 執行 `--package-manifest`，比對 embedded resource、實際解出檔案、官方 manifest／payload URL、SHA256、size、engine 與 adapter revision；再執行篡改拒絕案例 | 公開 JSON 與內嵌清單一致，原始內容未被字串／二進位替換破壞；證據檔記錄 extracted hash，且命令不建立 profile/runtime 副作用 |
 | 內部範圍 | 分別記錄公開環境、子進程環境、二進位 metadata、必要通知 | 不把公開名稱通過當成內部全部通過；衝突明示為未滿足 |
 | 資料分離 | 啟動、會話、工具及更新後比較程式目錄 | 動態資料進資料區；重新交付不攜帶個人資料 |
@@ -30,6 +30,24 @@
 | 更新 | 負載篡改、簽名失敗、更新中斷、回退 | 拒绝啟動未通過驗證的候選，保留相容資料快照 |
 
 每個案例記錄 Windows 版本、包版本、引擎版本、adapter 版本、帳戶權限、測試輸入、期望與實際結果及證據位置。測試資料不得用真實憑證。
+
+企業包必須先在連線建置階段取得 `ccode.exe --package-manifest` 的成功 JSON，並使用法律／合規方提供的實際必要通知及核准 SHA-256；下列 `<核准值>` 不可用測試佔位值代替正式證據。每個禁用名稱需重複提供 `--restricted-name`：
+
+```powershell
+./ccode.exe --package-manifest > ./package-provenance.json
+if ($LASTEXITCODE -ne 0) { throw 'package provenance failed' }
+python ./scripts/ccode/build_enterprise_package.py `
+  --executable ./ccode.exe `
+  --provenance ./package-provenance.json `
+  --usage ./docs/ccode-enterprise-usage.md `
+  --notice <必要通知檔> `
+  --notice-sha256 <核准通知SHA256> `
+  --restricted-name <核准禁用名稱> `
+  --output ./enterprise-candidate
+if ($LASTEXITCODE -ne 0) { throw 'enterprise package assembly failed' }
+```
+
+輸出路徑必須事前不存在。正式 Windows 11 x64 驗收需保存 archive SHA-256、`package-audit.json`、解包鏡像、實際核准政策／通知來源及端點 metadata；本機 deterministic 測試或未核准通知不能把 A02 標記通過。
 
 離線案例不得放進仍需 GitHub 網路連線的 workflow 後宣稱自動通過。先在連線狀態準備 repo、Python 3、PowerShell 7 及候選 `ccode.exe`，之後斷開所有非 loopback 網路，再於普通帳戶執行：
 

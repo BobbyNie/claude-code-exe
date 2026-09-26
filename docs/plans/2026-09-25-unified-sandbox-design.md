@@ -158,6 +158,8 @@ guest 可寫 profile 跨次啟動保存，temp 可清理但不可每次丟掉整
 
 另建企業交付包，不能沿用包含其他品牌工具及原始 README 的完整公共包。交付根目錄建議包含 `ccode.exe`、`assets/`、`data/`、`docs/usage.md`、`manifest.json`；依方案放入真正所需檔案，清單不是最終已驗證包。
 
+Windows 11 x64 企業候選必須由 `scripts/ccode/build_enterprise_package.py` 從不存在的全新輸出路徑組裝，不可從既有混合 bundle 複製。組裝器只納入 `ccode.exe`、中性 `docs/usage.md`、`manifest.json` 及逐一明確提供的必要通知；`data/`、profile、runtime、session、temp 及更新殘留不屬交付白名單。每份通知必須同時提供外部核准的 SHA-256，位元組不符、通知缺少、輸入為 link、來源清單不是 Windows/x64 固定 schema、輸出已存在或公開名稱掃描衝突都 fail closed，不產生交付目錄。組裝後以固定 ZIP metadata 產生在固定 Python／zlib 工具鏈下可重現的候選，並用 `package_audit.py` 配對掃描 ZIP 與解包鏡像；`manifest.json` 明列檔案 hash、公開／opaque 邊界及 `external-gate-not-asserted`，避免把組裝成功冒稱為再分發批准、可信簽署或 Windows 11 實機驗收。
+
 建置時必須記錄固定 schema 的隨包來源清單：package／platform／architecture、完整 adapter commit、engine version／size／SHA256、官方 manifest URL／SHA256 及官方 payload URL。`ccode --package-manifest` 只在內嵌負載 SHA256、size、來源 URL 格式及 metadata schema 均通過後輸出 JSON，且不得建立 profile 或 runtime。Windows 11 x64 驗收另以資料載入方式解出 resource 101、重新計算 SHA256／size 並保存 `package-provenance.json`。這提供可核對 provenance，**不是數位簽章或可信發行者證明**；簽名 manifest 仍屬 A20 放行門檻。
 
 使用簽名 manifest、負載 SHA256、固定依賴、來源與授權清單。每日追蹤上游只產生候選，通過功能、名稱及遷移測試後才進內網正式版。端點不自行外網下載更新。保留至少上一個可啟動版本及其相容資料備份。
