@@ -118,6 +118,8 @@ Windows 11 x64 的本機 A 方案以啟動目錄作預設工作區，並提供 `
 
 公開環境只記錄中性名稱，不修改使用者全域環境。引擎子進程必要的原變量只在啟動時建立，保留正常繼承語義；這不是「整棵進程樹環境完全沒有原名」的承諾。若後者仍是硬性條件，A 方案的環境部分不符合，需上游支援設定替代，不能退回 getenv 偽裝。
 
+Windows 11 x64 前端必須提供無資料副作用的 `ccode.exe --boundary-manifest`，以固定 schema 如實列出公開 exact 名稱／前綴、繼承環境的移除規則、`A_`／`C_` 到子進程原始 runtime 名稱的展開、profile-relative HOME／TEMP 位置、固定 retry／traffic 值、PE resource 101／102 的用途、opaque binary 未作名稱內容掃描、publisher signature 未宣稱，以及必要通知由企業包 manifest 提供。命令不得記錄任何環境值、建立 data/profile 或解出 runtime。它明示 `originalRuntimeNamesPresent=true` 及 `processTreeNameFree=false`；不能為通過名稱掃描而刪除這項事實。
+
 任何 SDK 依賴目錄也屬程式包掃描範圍。優先 POC 原生前端驅動官方已文件化的 CLI 結構介面，以減少宿主 SDK 套件命名；若批准／取消等能力需要 SDK，驗證合法 bundle 及功能後才選用。不得為通過檔名掃描任意改 Python／Node 套件名或破壞必要聲明。
 
 限制：既有普通帳戶可讀的其他宿主資料，不能靠 launcher 當作已隔離。若需要防止任意工具外連／讀主目錄，必須增加獲准 OS 策略或改用 B/C。
@@ -158,7 +160,7 @@ guest 可寫 profile 跨次啟動保存，temp 可清理但不可每次丟掉整
 
 另建企業交付包，不能沿用包含其他品牌工具及原始 README 的完整公共包。交付根目錄建議包含 `ccode.exe`、`assets/`、`data/`、`docs/usage.md`、`manifest.json`；依方案放入真正所需檔案，清單不是最終已驗證包。
 
-Windows 11 x64 企業候選必須由 `scripts/ccode/build_enterprise_package.py` 從不存在的全新輸出路徑組裝，不可從既有混合 bundle 複製。組裝器只納入 `ccode.exe`、中性 `docs/usage.md`、`manifest.json` 及逐一明確提供的必要通知；`data/`、profile、runtime、session、temp 及更新殘留不屬交付白名單。每份通知必須同時提供外部核准的 SHA-256，位元組不符、通知缺少、輸入為 link、來源清單不是 Windows/x64 固定 schema、輸出已存在或公開名稱掃描衝突都 fail closed，不產生交付目錄。組裝後以固定 ZIP metadata 產生在固定 Python／zlib 工具鏈下可重現的候選，並用 `package_audit.py` 配對掃描 ZIP 與解包鏡像；`manifest.json` 明列檔案 hash、公開／opaque 邊界及 `external-gate-not-asserted`，避免把組裝成功冒稱為再分發批准、可信簽署或 Windows 11 實機驗收。
+Windows 11 x64 企業候選必須由 `scripts/ccode/build_enterprise_package.py` 從不存在的全新輸出路徑組裝，不可從既有混合 bundle 複製。組裝器只納入 `ccode.exe`、中性 `docs/usage.md`、`manifest.json` 及逐一明確提供的必要通知；`data/`、profile、runtime、session、temp 及更新殘留不屬交付白名單。每份通知必須同時提供外部核准的 SHA-256，位元組不符、通知缺少、輸入為 link、來源清單不是 Windows/x64 固定 schema、輸出已存在或公開名稱掃描衝突都 fail closed，不產生交付目錄。組裝器還必須接收 `--boundary-manifest` 的實際輸出，逐欄核對 schema、Windows/x64、minimum build 22000、公開／runtime／binary／notice／side-effect 邊界，並原樣保存為 `manifest.json.runtimeBoundary`；缺少、刪減原始 runtime 名稱或冒稱簽署均回報 `E_BOUNDARY`。組裝後以固定 ZIP metadata 產生在固定 Python／zlib 工具鏈下可重現的候選，並用 `package_audit.py` 配對掃描 ZIP 與解包鏡像；`manifest.json` 明列檔案 hash、公開／opaque 邊界及 `external-gate-not-asserted`，避免把組裝成功冒稱為再分發批准、可信簽署或 Windows 11 實機驗收。若核准受限名稱與真實 boundary／必要通知內容衝突，audit 必須 fail closed；這代表 A02／A04 政策衝突尚未解決，不得改寫清單掩蓋。
 
 舊 `append-ccode-release.yml` 混合公共發布入口必須移除；在核准名稱政策、必要通知、再分發權及簽署流程未到位前，不建立自動企業 release 作替代。工程建置／測試 artifact 不能命名或宣稱為已放行企業交付。
 

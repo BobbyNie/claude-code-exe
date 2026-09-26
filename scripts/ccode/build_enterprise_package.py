@@ -21,6 +21,58 @@ WINDOWS_RESERVED = {
     *(f"com{number}" for number in range(1, 10)),
     *(f"lpt{number}" for number in range(1, 10)),
 }
+BOUNDARY_DOCUMENT = {
+    "schemaVersion": 1,
+    "platform": "windows",
+    "architecture": "x64",
+    "minimumWindowsBuild": 22000,
+    "publicEnvironment": {
+        "acceptedExact": ["A_API_KEY", "A_AUTH_TOKEN", "A_BASE_URL", "CCODE_DATA_DIR"],
+        "acceptedPrefixes": ["A_", "C_"],
+        "valuesRecorded": False,
+    },
+    "childRuntimeEnvironment": {
+        "inheritedFiltering": {
+            "removedPrefixes": ["ANTHROPIC_", "CLAUDE_"],
+            "removedExact": ["CLAUDECODE"],
+        },
+        "aliasExpansion": [
+            {"publicPrefix": "A_", "runtimePrefix": "ANTHROPIC_"},
+            {"publicPrefix": "C_", "runtimePrefix": "CLAUDE_CODE_"},
+        ],
+        "profileRelative": {
+            "APPDATA": "roaming", "HOME": "home", "LOCALAPPDATA": "local",
+            "TEMP": "temp", "TMP": "temp", "USERPROFILE": "home",
+        },
+        "fixedValues": {
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+            "CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK": "1",
+            "CLAUDE_CODE_MAX_RETRIES": "0",
+            "CLAUDE_CODE_RETRY_WATCHDOG": "0",
+            "DISABLE_AUTOUPDATER": "1",
+        },
+        "originalRuntimeNamesPresent": True,
+        "processTreeNameFree": False,
+        "valuesRecorded": False,
+    },
+    "binaryMetadata": {
+        "peResources": [
+            {"id": 101, "purpose": "opaque-embedded-engine", "contentsScannedForNames": False},
+            {"id": 102, "purpose": "validated-package-provenance-json", "contentsScannedForNames": False},
+        ],
+        "publisherSignature": "not-asserted",
+        "opaqueBinaryNameScan": "not-performed",
+    },
+    "notices": {
+        "source": "enterprise-package-manifest",
+        "launcherRewrites": False,
+    },
+    "sideEffects": {
+        "createsData": False,
+        "createsProfile": False,
+        "extractsRuntime": False,
+    },
+}
 
 
 class PackageBuildError(Exception):
@@ -97,6 +149,17 @@ def _validated_provenance(path):
     }
 
 
+def _validated_boundary(path):
+    try:
+        raw = _regular_bytes(path)
+        document = json.loads(raw.decode("utf-8-sig"))
+    except (UnicodeError, json.JSONDecodeError):
+        raise PackageBuildError("E_BOUNDARY") from None
+    if document != BOUNDARY_DOCUMENT:
+        raise PackageBuildError("E_BOUNDARY")
+    return document
+
+
 def _notice_name(path):
     name = Path(path).name
     stem = name.split(".", 1)[0].casefold()
@@ -146,7 +209,7 @@ def _audit(archive, unpacked, restricted_names):
     }
 
 
-def build(executable, provenance_path, usage_path, notices, notice_hashes,
+def build(executable, provenance_path, boundary_path, usage_path, notices, notice_hashes,
           restricted_names, output):
     output = Path(output)
     if output.exists() or output.is_symlink():
@@ -168,6 +231,7 @@ def build(executable, provenance_path, usage_path, notices, notice_hashes,
     except UnicodeError:
         raise PackageBuildError("E_USAGE") from None
     provenance = _validated_provenance(provenance_path)
+    boundary = _validated_boundary(boundary_path)
 
     notice_entries = []
     notice_payloads = []
@@ -202,6 +266,7 @@ def build(executable, provenance_path, usage_path, notices, notice_hashes,
         "minimumWindowsBuild": 22000,
         "executable": _entry("ccode.exe", executable_bytes),
         "provenance": provenance,
+        "runtimeBoundary": boundary,
         "files": sorted(file_entries, key=lambda item: item["path"]),
         "notices": sorted(notice_entries, key=lambda item: item["path"]),
         "publicBoundary": {
@@ -257,6 +322,8 @@ def main():
     parser.add_argument("--executable", required=True)
     parser.add_argument("--provenance", required=True,
                         help="Verified JSON emitted by ccode.exe --package-manifest")
+    parser.add_argument("--boundary", required=True,
+                        help="Verified JSON emitted by ccode.exe --boundary-manifest")
     parser.add_argument("--usage", required=True)
     parser.add_argument("--notice", action="append", required=True,
                         help="Required notice to preserve byte-for-byte; repeat as needed")
@@ -271,6 +338,7 @@ def main():
         report = build(
             options.executable,
             options.provenance,
+            options.boundary,
             options.usage,
             options.notice,
             options.notice_sha256,

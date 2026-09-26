@@ -23,9 +23,9 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 | ID | 原矩陣項目 | 現有實作／證據入口 | 尚欠證據或實作（全部保留為門檻） |
 |---|---|---|---|
 | A01 | 離線安裝 | 資源內嵌引擎；Windows 建置／啟動；已實作獨立斷網驗收器，檢查 Windows 11 x64 普通帳戶、default route／adapter、服務／驅動差異及真實 engine／tool 試運行 | 尚須乾淨 Windows 11 x64 普通帳戶真正斷網實跑並保存成功 evidence；loopback fixture 不替代企業 gateway／真實模型 |
-| A02 | 交付名稱 | 中性入口及 help；`package_audit.py` 已實作 ZIP／解包唯讀配對掃描；`build_enterprise_package.py` 已實作 Windows 11 x64 白名單組裝、必要通知 hash 綁定及固定 metadata ZIP；舊混合公共發布 workflow 已移除；本機 13 項 audit＋5 項組裝測試通過 | 核准名稱政策、核准必要通知／再分發權、正式獨立發布流程、實際 Windows 11 x64 ZIP／解包掃描及更新殘留核實；工具測試不等於放行 |
+| A02 | 交付名稱 | 中性入口及 help；`package_audit.py` 已實作 ZIP／解包唯讀配對掃描；`build_enterprise_package.py` 已實作 Windows 11 x64 白名單組裝、必要通知 hash 綁定、runtime boundary 驗證及固定 metadata ZIP；舊混合公共發布 workflow 已移除；本機 13 項 audit＋6 項組裝測試通過 | 核准名稱政策、核准必要通知／再分發權、正式獨立發布流程、實際 Windows 11 x64 ZIP／解包掃描及更新殘留核實；工具測試不等於放行 |
 | A03 | 原始負載 | build 上游 checksum；啟動資源 SHA256、解出內容逐位元組校驗；已實作 schema 1 隨包來源清單、`--package-manifest` 及 extracted hash 證據 fixture | 尚須 Windows 11 x64 普通帳戶兩版本實跑並保存 `package-provenance.json`；來源清單未簽名，不替代 A20 可信簽署 |
-| A04 | 內部範圍 | ADR 明確允許引擎／使用者資料原名 | 隨包公開邊界清單、runtime 環境及 metadata 記錄、必要通知核實 |
+| A04 | 內部範圍 | ADR 明確允許引擎／使用者資料原名；已實作 side-effect-free `--boundary-manifest`，固定記錄公開 exact/prefix、子進程 alias／fixed values、PE resource 101/102、opaque scan／簽署狀態及通知來源；企業組裝器必須驗證並保存同一 boundary | 尚須 Windows 11 x64 實機證明命令零 data/profile/runtime 副作用，並以核准受限名稱／必要通知完成衝突核實；原始 runtime 名稱存在及未掃描 opaque binary 明示為限制，A04 尚未通過 |
 | A05 | 資料分離 | --data-dir、獨立 profile；工具 integration 檢查程式區無 session；離線驗收器記錄 program before／after、外置 data 及 workspace manifest，僅允許 hash 相符的版本化 runtime | 尚須 Windows 11 x64 離線實跑；更新、搬移、重新打包排除資料及程式區無 temp 的完整矩陣仍欠 |
 | A06 | 路徑一致 | 原生 mkdir/stat/讀寫/列舉/刪除/子進程；`05750fe` 原生 rename；`7d579ce` / `36184360358` 兩版本一般／case／junction 的真實 Bash mv→Read→Edit→Grep→Glob 及失敗 rename 保全通過 | 本機 API fixture 不替代真實模型／企業 gateway；完整故障矩陣仍欠，不代表長 cwd 通過 |
 | A07 | 執行檔 | `36123600008` 兩版本通過：空格／中文程式與工作區、前端→真正 Grep/Glob；既有自啟動測試亦通過 | 本條所列 CI 場景通過；乾淨端點證據仍依 A01 |
@@ -1606,3 +1606,13 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - 查詢 repository Actions runners 結果仍為 `total_count: 0`。Windows 11 x64 專用 workflow
   需要 `[self-hosted, Windows, X64, windows-11]` runner，故本次未手動排入一個必然等待的
   run；須先提供符合要求且以普通非管理員帳戶執行的 runner。
+
+### A04 公開／runtime／binary metadata 邊界清單
+
+- 2026-09-26 依 TDD 先擴充 `environment-tests.cpp`、release contract 與企業包測試：因 `boundary.hpp`、`--boundary-manifest` 及 builder `--boundary` 尚不存在而 RED；再作最小實作至 GREEN。
+- `ccode.exe --boundary-manifest` 是固定 schema、零秘密值的查詢入口，位於 options parse、data 目錄及 runtime 解出之前。它列出公開 exact／prefix、inherited filtering、`A_`／`C_` alias expansion、profile-relative HOME／TEMP、強制 retry／traffic 值，並明示 `originalRuntimeNamesPresent=true`、`processTreeNameFree=false`。
+- binary metadata 明列 PE resource 101 為 opaque embedded engine、102 為 validated package provenance JSON；兩者均未宣稱名稱內容掃描，publisher signature 為 `not-asserted`。必要通知來源是 enterprise package manifest，launcher 不改寫通知。
+- `build_enterprise_package.py` 現要求實際 `--boundary-manifest` JSON；只有完整符合 Windows/x64、minimum build 22000 與上述固定欄位才接受，否則 `E_BOUNDARY` 且不建立輸出。通過後把同一 validated document 保存為 `manifest.json.runtimeBoundary`。
+- `package_audit.py` 仍掃描 manifest 公開文字。因此若核准受限名稱禁止 boundary 中必須如實記錄的原始 runtime 名稱，候選會 fail closed；不能刪除／改寫清單規避。此時是 A02／A04 政策衝突，須由需求／合規決策解決。
+- 本地測試只能證明 static contract 與組裝器拒絕行為；尚未在 Windows 11 x64 普通帳戶以真實封裝確認零副作用，也沒有核准名稱／通知政策，因此 A04 仍為「部分」，不是放行。
+- 本輪完整本地回歸為 Python 61 項（60 通過、1 項 Windows process/thread API 專用跳過）、六組 C++ 全通過；另有 `py_compile` 與 `git diff --check` 通過。loopback 測試需在允許本機 bind 的執行環境完成。這些仍不是 Windows 11 x64 實機證據。

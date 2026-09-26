@@ -10,6 +10,7 @@
 #include <fstream>
 #include <iostream>
 #include <thread>
+#include "boundary.hpp"
 #include "environment.hpp"
 #include "runtime-paths.hpp"
 #include "profile.hpp"
@@ -577,6 +578,7 @@ int Main(int argc, wchar_t** argv) {
             "  --mcp-config PATH      Additional tool servers\n"
             "  --version              Package and engine version\n"
             "  --package-manifest     Verified package provenance as JSON\n"
+            "  --boundary-manifest   Public/runtime/binary boundary as JSON\n"
             "Interactive: /resume, /new, /exit; Ctrl+C cancels the running turn.\n"
             "Set A_AUTH_TOKEN or A_API_KEY, and A_BASE_URL. No OS sandbox is provided.\n";
         return 0;
@@ -587,6 +589,9 @@ int Main(int argc, wchar_t** argv) {
     }
     if (argc == 2 && std::wstring(argv[1]) == L"--package-manifest") {
         std::cout << VerifiedPackageManifest(metadata).dump() << '\n'; return 0;
+    }
+    if (argc == 2 && std::wstring(argv[1]) == L"--boundary-manifest") {
+        std::cout << ccode::BoundaryManifest().dump() << '\n'; return 0;
     }
     if (argc == 2 && std::wstring(argv[1]) == L"--ccode-self-test") {
         VerifiedPackageManifest(metadata);

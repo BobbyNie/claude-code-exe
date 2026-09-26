@@ -58,6 +58,17 @@ class CcodeReleaseTests(unittest.TestCase):
         self.assertIn('"officialManifestSha256"', launcher)
         self.assertIn('Digest(payload)', launcher)
 
+    def test_launcher_exposes_side_effect_free_runtime_boundary_manifest(self):
+        launcher = (ROOT / "scripts/ccode/launcher.cpp").read_text(encoding="utf-8")
+
+        self.assertIn('#include "boundary.hpp"', launcher)
+        self.assertIn('L"--boundary-manifest"', launcher)
+        self.assertIn('ccode::BoundaryManifest().dump()', launcher)
+        self.assertIn('--boundary-manifest   Public/runtime/binary boundary as JSON', launcher)
+        handler = launcher.index('if (argc == 2 && std::wstring(argv[1]) == L"--boundary-manifest")')
+        self.assertLess(handler, launcher.index("auto options = Parse(argc, argv, module);"))
+        self.assertLess(handler, launcher.index("fs::create_directories(options.data);"))
+
     def test_windows11_acceptance_records_package_provenance(self):
         workflow = (ROOT / ".github/workflows/test-ccode-windows11-x64.yml").read_text(
             encoding="utf-8"

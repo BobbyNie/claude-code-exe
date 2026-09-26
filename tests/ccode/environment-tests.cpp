@@ -1,4 +1,5 @@
 #include "../../scripts/ccode/environment.hpp"
+#include "../../scripts/ccode/boundary.hpp"
 #include <cassert>
 #include <iostream>
 
@@ -25,5 +26,34 @@ int main() {
     assert(has(L"CLAUDE_CODE_MAX_RETRIES=0"));
     assert(has(L"CLAUDE_CODE_RETRY_WATCHDOG=0"));
     assert(has(L"CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK=1"));
+
+    const auto boundary = ccode::BoundaryManifest();
+    assert(boundary.at("schemaVersion") == 1);
+    assert(boundary.at("platform") == "windows");
+    assert(boundary.at("architecture") == "x64");
+    assert(boundary.at("minimumWindowsBuild") == 22000);
+    assert(boundary.at("publicEnvironment").at("acceptedExact") ==
+        ccode::Json::array({"A_API_KEY", "A_AUTH_TOKEN", "A_BASE_URL", "CCODE_DATA_DIR"}));
+    assert(boundary.at("publicEnvironment").at("acceptedPrefixes") ==
+        ccode::Json::array({"A_", "C_"}));
+    assert(boundary.at("publicEnvironment").at("valuesRecorded") == false);
+    assert(boundary.at("childRuntimeEnvironment").at("aliasExpansion") == ccode::Json::array({
+        {{"publicPrefix", "A_"}, {"runtimePrefix", "ANTHROPIC_"}},
+        {{"publicPrefix", "C_"}, {"runtimePrefix", "CLAUDE_CODE_"}},
+    }));
+    assert(boundary.at("childRuntimeEnvironment").at("fixedValues").at(
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC") == "1");
+    assert(boundary.at("childRuntimeEnvironment").at("fixedValues").at(
+        "CLAUDE_CODE_MAX_RETRIES") == "0");
+    assert(boundary.at("childRuntimeEnvironment").at("originalRuntimeNamesPresent") == true);
+    assert(boundary.at("childRuntimeEnvironment").at("processTreeNameFree") == false);
+    assert(boundary.at("binaryMetadata").at("peResources").at(0).at("id") == 101);
+    assert(boundary.at("binaryMetadata").at("peResources").at(1).at("id") == 102);
+    assert(boundary.at("binaryMetadata").at("publisherSignature") == "not-asserted");
+    assert(boundary.at("notices").at("source") == "enterprise-package-manifest");
+    assert(boundary.at("sideEffects").at("createsData") == false);
+    const auto serialized = boundary.dump();
+    assert(serialized.find("secret") == std::string::npos);
+    assert(serialized.find("gateway.test") == std::string::npos);
     std::cout << "native child environment passed\n";
 }
