@@ -1576,3 +1576,11 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - 目前只完成程式、TDD contract、Python syntax 與本機回歸入口；尚未在符合標籤的
   Windows 11 x64 普通帳戶 runner 執行兩個固定版本。因此 A03 仍未通過，整體仍未放行。
   來源清單本身也未簽名，不能當作 A20 的可信簽署者或供應鏈真實性證明。
+- A03 實作提交 `3140cc0fd5f864dd93494fd5b5cf51c42e142d59` 已推送；對應補充
+  Windows Server workflow run `36206290494`（2026-09-26T00:50:08Z）的兩個 test、
+  兩個 workspace-boundary 及 cross-version 共五個 jobs 均為零 steps。check-run annotation
+  明確指出帳戶近期付款失敗或 spending limit 需提高，因此不是產品測試失敗，也沒有產生
+  package provenance 或 Windows 11 x64 驗收證據。
+- 查詢 repository Actions runners 結果仍為 `total_count: 0`。Windows 11 x64 專用 workflow
+  需要 `[self-hosted, Windows, X64, windows-11]` runner，故本次未手動排入一個必然等待的
+  run；須先提供符合要求且以普通非管理員帳戶執行的 runner。
