@@ -2452,3 +2452,16 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   GREEN。fixture 13、probe 8 通過；完整 Python 127（123 pass／4
   Windows skip），diff-check 通過。原生 engine 計數仍待遠端實測，
   不把本機 Python client 結果替代 Windows engine／Win11 驗收。
+
+- 握手完成計數的原生實測：run 36931032510／e9c5502 的完整日誌
+  顯示新版 job 110600028838 gateway 與 native probe 均為
+  tls_handshakes_completed=0；gateway 兩次 transport errno=10054。
+  舊版 job 110600028466 gateway 與 native probe 均為
+  tls_handshakes_completed=2；gateway handshake_errors=[]。
+  兩版均 connections=2、HTTP=0、exit=1、structured_tls_code=false、
+  canonical_certificate_message_hint_not_tls_evidence=unmatched，正式
+  neutral diagnostics tls=false／retry=false／engine=true，TLS gate 失敗。
+  這證明本次服務端握手觀察存在版本差異，不證明舊版發出 HTTP、
+  繞過 trust 或新版 reset 的精確根因；服務端握手完成不是 client
+  憑證驗證成功的替代證據。後續必須保留版本分開調查，不能將兩版
+  合併成同一個「握手失敗」結論。本次沒有修改分類或降低 gate。
