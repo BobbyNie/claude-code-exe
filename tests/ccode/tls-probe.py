@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 
 
 def summarize_events(events):
@@ -62,6 +63,142 @@ def load_fixture(name, filename):
     return module
 
 
+def run_contained(args, *, cwd, env, input, timeout):
+    """Start suspended, contain before execution, and reap the entire Windows tree."""
+    if sys.platform != 'win32':
+        raise RuntimeError('Windows process containment required')
+    import ctypes as c
+    from ctypes import wintypes as w
+
+    class BasicLimits(c.Structure):
+        _fields_ = [('process_time', c.c_longlong), ('job_time', c.c_longlong),
+                    ('flags', w.DWORD), ('minimum', c.c_size_t), ('maximum', c.c_size_t),
+                    ('active_limit', w.DWORD), ('affinity', c.c_size_t),
+                    ('priority', w.DWORD), ('scheduling', w.DWORD)]
+
+    class ExtendedLimits(c.Structure):
+        _fields_ = [('basic', BasicLimits), ('io', c.c_ulonglong * 6),
+                    ('process_memory', c.c_size_t), ('job_memory', c.c_size_t),
+                    ('peak_process_memory', c.c_size_t), ('peak_job_memory', c.c_size_t)]
+
+    class Accounting(c.Structure):
+        _fields_ = [('times', c.c_longlong * 4), ('faults', w.DWORD),
+                    ('total', w.DWORD), ('active', w.DWORD), ('terminated', w.DWORD)]
+
+    class ThreadEntry(c.Structure):
+        _fields_ = [('size', w.DWORD), ('usage', w.DWORD), ('id', w.DWORD),
+                    ('owner', w.DWORD), ('priority', w.LONG), ('delta', w.LONG),
+                    ('flags', w.DWORD)]
+
+    kernel = c.WinDLL('kernel32', use_last_error=True)
+    signatures = {
+        'CreateJobObjectW': ([c.c_void_p, w.LPCWSTR], w.HANDLE),
+        'SetInformationJobObject': ([w.HANDLE, c.c_int, c.c_void_p, w.DWORD], w.BOOL),
+        'AssignProcessToJobObject': ([w.HANDLE, w.HANDLE], w.BOOL),
+        'TerminateJobObject': ([w.HANDLE, w.UINT], w.BOOL),
+        'QueryInformationJobObject': ([w.HANDLE, c.c_int, c.c_void_p, w.DWORD, c.c_void_p], w.BOOL),
+        'CreateToolhelp32Snapshot': ([w.DWORD, w.DWORD], w.HANDLE),
+        'Thread32First': ([w.HANDLE, c.POINTER(ThreadEntry)], w.BOOL),
+        'Thread32Next': ([w.HANDLE, c.POINTER(ThreadEntry)], w.BOOL),
+        'OpenThread': ([w.DWORD, w.BOOL, w.DWORD], w.HANDLE),
+        'ResumeThread': ([w.HANDLE], w.DWORD),
+        'CloseHandle': ([w.HANDLE], w.BOOL),
+    }
+    for name, (arguments, result) in signatures.items():
+        function = getattr(kernel, name)
+        function.argtypes, function.restype = arguments, result
+
+    job = kernel.CreateJobObjectW(None, None)
+    if not job:
+        raise RuntimeError('Probe containment creation failed')
+    cleaned = False
+
+    def reap_tree():
+        nonlocal cleaned
+        if not kernel.TerminateJobObject(job, 1):
+            raise RuntimeError('Probe process-tree termination failed')
+        deadline = time.monotonic() + 5
+        accounting = Accounting()
+        while True:
+            if not kernel.QueryInformationJobObject(job, 1, c.byref(accounting),
+                                                   c.sizeof(accounting), None):
+                raise RuntimeError('Probe process-tree verification failed')
+            if accounting.active == 0:
+                break
+            if time.monotonic() >= deadline:
+                raise RuntimeError('Probe process-tree cleanup timed out')
+            time.sleep(0.01)
+        process.wait(timeout=5)
+        cleaned = True
+
+    process = None
+    assigned = False
+    try:
+        limits = ExtendedLimits()
+        limits.basic.flags = 0x2000  # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        if not kernel.SetInformationJobObject(job, 9, c.byref(limits), c.sizeof(limits)):
+            raise RuntimeError('Probe containment configuration failed')
+        # Files rather than inherited pipe readers keep orphan descendants from
+        # blocking communicate() after the parent has already exited.
+        with tempfile.TemporaryFile() as source, tempfile.TemporaryFile() as output, \
+                tempfile.TemporaryFile() as errors:
+            source.write(input.encode('utf-8'))
+            source.seek(0)
+            process = subprocess.Popen(args, cwd=cwd, env=env, stdin=source,
+                stdout=output, stderr=errors, creationflags=0x4)  # CREATE_SUSPENDED
+            if not kernel.AssignProcessToJobObject(job, w.HANDLE(int(process._handle))):
+                raise RuntimeError('Probe containment assignment failed')
+            assigned = True
+            snapshot = kernel.CreateToolhelp32Snapshot(0x4, 0)  # TH32CS_SNAPTHREAD
+            if snapshot == c.c_void_p(-1).value:
+                raise RuntimeError('Probe suspended thread lookup failed')
+            try:
+                entry = ThreadEntry()
+                entry.size = c.sizeof(entry)
+                found = kernel.Thread32First(snapshot, c.byref(entry))
+                resumed = False
+                while found:
+                    if entry.owner == process.pid:
+                        thread = kernel.OpenThread(0x2, False, entry.id)
+                        if not thread:
+                            raise RuntimeError('Probe suspended thread open failed')
+                        try:
+                            if kernel.ResumeThread(thread) != 1:
+                                raise RuntimeError('Probe suspended thread resume failed')
+                            resumed = True
+                        finally:
+                            kernel.CloseHandle(thread)
+                        break
+                    found = kernel.Thread32Next(snapshot, c.byref(entry))
+                if not resumed:
+                    raise RuntimeError('Probe suspended thread missing')
+            finally:
+                kernel.CloseHandle(snapshot)
+            try:
+                process.wait(timeout=timeout)
+            finally:
+                # Reap on normal parent exit as well as timeout; native engines
+                # may leave workers holding cwd and temporary storage open.
+                reap_tree()
+            output.seek(0)
+            errors.seek(0)
+            return subprocess.CompletedProcess(args, process.returncode,
+                output.read().decode('utf-8'), errors.read().decode('utf-8'))
+    finally:
+        # If containment setup failed, the child has never been resumed. If a
+        # subsequent operation failed, kill-on-close still covers descendants.
+        try:
+            if process is not None:
+                if assigned:
+                    if not cleaned:
+                        reap_tree()
+                else:
+                    process.kill()
+                    process.wait(timeout=5)
+        finally:
+            kernel.CloseHandle(job)
+
+
 def probe(executable):
     if sys.platform != 'win32':
         raise RuntimeError('Windows native diagnostic probe required')
@@ -84,10 +221,9 @@ def probe(executable):
         with gateway.untrusted_tls_endpoint() as endpoint:
             env['ANTHROPIC_BASE_URL'] = f'https://127.0.0.1:{endpoint.server_port}'
             try:
-                result = subprocess.run([str(engine), '--print', '--output-format', 'stream-json',
+                result = run_contained([str(engine), '--print', '--output-format', 'stream-json',
                     '--verbose', '--tools', '', '--max-turns', '1', '--no-session-persistence'],
-                    input='fixture-native-tls-probe', cwd=workspace, env=env, capture_output=True,
-                    text=True, encoding='utf-8', timeout=30)
+                    input='fixture-native-tls-probe', cwd=workspace, env=env, timeout=30)
             except subprocess.TimeoutExpired:
                 print(json.dumps({'native_tls_probe': 'timeout'}))
                 return

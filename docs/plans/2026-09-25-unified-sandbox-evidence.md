@@ -1769,3 +1769,19 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - 同一最新 job 的 native probe 仍遇到 WinError 32/5 workspace 清理失敗；
   native process tree containment 尚未修復，不能忽略清理錯誤。
   native runtime 診斷測試另因 collector timeout 失敗，仍待定位。
+
+### Native TLS probe process-tree containment（Windows GREEN 待取得）
+
+- 對應實際 RED：`36888569723` / `110458089880` 探針父程序 exit=1
+  後，workspace 刪除仍遇到 WinError 32/5。不可 ignore cleanup errors。
+- 新增 `run_contained`：CREATE_SUSPENDED 啟動、加入 kill-on-close Job
+  Object 後才 ResumeThread；使用臨時檔接收 stdout/stderr，避免子程序持有
+  pipe 導致父程序退出後 communicate 卡住。正常退出／逾時都終止 Job，
+  查詢 active processes=0 才返回；containment 失敗不允許無隔離執行。
+- 新增真正 Windows 行為測試：父程序正常退出後仍持有 cwd 的子程序必須
+  被清除；父程序逾時後也必須清除已寫入 ready marker 的子程序，並實際
+  rmdir workspace。這兩項在 macOS 跳過，尚無 Windows GREEN，不能宣稱
+  native cleanup 已驗收通過。
+- 非 Windows 拒絕執行測試先 RED（缺 run_contained），再本機 GREEN。
+  完整 Python 85 項：82 通過、3 Windows 專屬測試跳過；diff-check 通過。
+  以上只是本機回歸證據，不替代 Windows Job Object 整合結果。
