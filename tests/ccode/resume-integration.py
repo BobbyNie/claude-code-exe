@@ -19,6 +19,14 @@ def profile_bytes(folder):
             path.relative_to(folder).as_posix() not in ("frontend.lock", "metadata.lock")}
 
 
+def candidate_bytes(folder):
+    """Compare the whole candidate, excluding only its profile's operational locks."""
+    return {path.relative_to(folder).as_posix(): path.read_bytes()
+            for path in folder.rglob("*") if path.is_file() and
+            path.relative_to(folder).as_posix() not in
+            ("profile/frontend.lock", "profile/metadata.lock")}
+
+
 @contextmanager
 def deny_pointer_replacement(pointer):
     """Real Windows sharing violation: allow reads/writes, forbid delete/rename."""
@@ -296,7 +304,7 @@ def verify(executable, previous_executable=None):
 
         conflict_id = stage_again()
         conflict_root = profile.parent / "candidates" / conflict_id
-        candidate_before_conflict = profile_bytes(conflict_root)
+        candidate_before_conflict = candidate_bytes(conflict_root)
         changed_source = profile / "new-source-data.txt"
         changed_source.write_bytes(b"preserve source changes")
         requests.clear()
@@ -306,7 +314,7 @@ def verify(executable, previous_executable=None):
         assert conflict.returncode == 64 and conflict.stderr.strip() == "E_SOURCE_CHANGED", conflict
         assert not requests, "Source conflict must be rejected before any API request"
         assert changed_source.read_bytes() == b"preserve source changes"
-        assert profile_bytes(conflict_root) == candidate_before_conflict
+        assert candidate_bytes(conflict_root) == candidate_before_conflict
         assert profile_bytes(snapshot) == snapshot_before
         assert not (profile.parent / "active-profile.json").exists()
         changed_source.unlink()
@@ -353,13 +361,13 @@ def verify(executable, previous_executable=None):
         # All-session validation must reject that profile rather than skip those files.
         mixed_id = stage_again()
         mixed_root = profile.parent / "candidates" / mixed_id
-        mixed_before = profile_bytes(mixed_root)
+        mixed_before = candidate_bytes(mixed_root)
         requests.clear()
         mixed_result = subprocess.run([str(executable), "--validate-profile", mixed_id, "--all-sessions"],
                                       cwd=executable.parent, env=env, capture_output=True,
                                       text=True, encoding="utf-8", timeout=60)
         assert mixed_result.returncode == 64 and mixed_result.stderr.strip() == "E_CANDIDATE_HISTORY", mixed_result
-        assert not requests and profile_bytes(mixed_root) == mixed_before
+        assert not requests and candidate_bytes(mixed_root) == mixed_before
         assert profile_bytes(profile) == active_before and profile_bytes(snapshot) == snapshot_before
         print("PASS: all-session preflight rejects mixed invalid legacy transcripts without API requests or data changes")
 

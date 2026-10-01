@@ -24,6 +24,19 @@ class PreparationFixtureTests(unittest.TestCase):
                 'history/session.jsonl': b'preserve-exact-bytes',
             })
 
+    def test_candidate_comparison_preserves_manifest_and_nested_lock_data(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'profile/history').mkdir(parents=True)
+            for name in ('candidate.json', 'frontend.lock', 'profile/frontend.lock',
+                         'profile/metadata.lock', 'profile/history/frontend.lock'):
+                (root / name).write_bytes(b'exact')
+            self.assertEqual(resume.candidate_bytes(root), {
+                'candidate.json': b'exact', 'frontend.lock': b'exact',
+                'profile/history/frontend.lock': b'exact',
+            })
+
     def test_standalone_preparation_includes_invalid_history_for_preflight(self):
         import tempfile
         with tempfile.TemporaryDirectory() as directory:
