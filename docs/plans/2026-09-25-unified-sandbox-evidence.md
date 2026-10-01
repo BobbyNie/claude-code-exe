@@ -2374,3 +2374,11 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   測試先 RED（缺 summarizer），實作後 probe 七項 GREEN；完整
   Python 124（120 pass／4 Windows skip），diff-check 通過。
   真實 engine 旗標結果需等待此版本 hosted CI；此處不預測旗標值。
+
+- A20 candidate schema 嚴格型別：manifest 與 provenance 的
+  schemaVersion 必須是 JSON 整數 1，不接受 Python 等值比較會誤認
+  為 1 的 true／1.0。公開 inspect 測試建立四個實際候選並重算匹配
+  ZIP/unpacked audit；原實作四例均 RED（錯誤接受），修正後 GREEN。
+  lifecycle 10（9 pass／1 Windows skip），完整 Python 125
+  （121 pass／4 Windows skip），diff-check 通過。
+  此為格式拒絕契約，不構成 signer 核准、內建 gate 或 Win11 放行。

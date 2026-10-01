@@ -79,6 +79,7 @@ def _manifest_files(unpacked, manifest):
         "notices", "publicBoundary", "excludedDynamicData", "redistributionApproval",
     }
     if (not isinstance(manifest, dict) or not required.issubset(manifest) or
+            type(manifest["schemaVersion"]) is not int or
             manifest["schemaVersion"] != 1 or manifest["packageName"] != "ccode-enterprise" or
             manifest["platform"] != "windows" or manifest["architecture"] != "x64" or
             manifest["minimumWindowsBuild"] != 22000 or
@@ -94,6 +95,7 @@ def _manifest_files(unpacked, manifest):
         "officialPayloadUrl",
     }
     if (not isinstance(provenance, dict) or set(provenance) != required_provenance or
+            type(provenance["schemaVersion"]) is not int or
             provenance["schemaVersion"] != 1 or provenance["packageName"] != "ccode" or
             not isinstance(provenance["packageVersion"], str) or not provenance["packageVersion"] or
             provenance["engineVersion"] != manifest["packageVersion"] or

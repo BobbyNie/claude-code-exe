@@ -206,6 +206,22 @@ class EnterpriseLifecycleTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 2)
         self.assertEqual(json.loads(completed.stdout)["code"], "E_LIFECYCLE_AUDIT")
 
+    def test_inspect_requires_integer_manifest_schema_with_matching_audit(self):
+        for field in ("manifest", "provenance"):
+            for value in (True, 1.0):
+                with self.subTest(field=field, value=value):
+                    candidate = self.root / (field + "-" + str(value))
+                    self.build(candidate)
+                    manifest_path = candidate / "unpacked/manifest.json"
+                    manifest = json.loads(manifest_path.read_text())
+                    target = manifest if field == "manifest" else manifest["provenance"]
+                    target["schemaVersion"] = value
+                    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+                    self.refresh_candidate_audit(candidate)
+                    completed = self.run_lifecycle("inspect", "--candidate-root", candidate)
+                    self.assertEqual(completed.returncode, 2)
+                    self.assertEqual(json.loads(completed.stdout)["code"], "E_LIFECYCLE_MANIFEST")
+
     def test_inspect_rejects_numeric_boundary_even_with_recomputed_matching_audit(self):
         candidate = self.root / "numeric-boundary"
         self.build(candidate)
