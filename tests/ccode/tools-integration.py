@@ -16,6 +16,18 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
+def verify_skill_execution(requests, received):
+    marker = "skill-body-loaded-only-acceptance"
+    assert len(requests) >= 2, "No post-Skill model request"
+    assert any(tool.get("name") == "Skill" for tool in requests[0].get("tools", [])), \
+        "Skill tool not discovered"
+    assert marker not in json.dumps(requests[0].get("messages", [])), "Skill body preloaded by fixture"
+    assert set(received) == {"acceptance_0"}, "Missing or unexpected Skill result"
+    assert not received["acceptance_0"].get("is_error"), "Actual Skill failed"
+    assert any(marker in json.dumps(request.get("messages", [])) for request in requests[1:]), \
+        "Actual engine did not load skill body"
+
+
 def verify_mcp_execution(requests, received, evidence, denied=False):
     assert requests and any(tool.get("name") == "mcp__fixture__probe"
         for tool in requests[0].get("tools", [])), "MCP tool not discovered by actual engine"
@@ -175,7 +187,7 @@ def check_workspace_boundaries(executable):
                 shutil.rmtree(long_workspace_io)
 
 
-def check(executable, short_path=False, lifecycle=None, permission=None, workspace_alias=None, root_override=None, mcp=False, mcp_deny=False):
+def check(executable, short_path=False, lifecycle=None, permission=None, workspace_alias=None, root_override=None, mcp=False, mcp_deny=False, skill=False):
     root_context = (tempfile.TemporaryDirectory(prefix="ccode-tools-")
                     if root_override is None else nullcontext(str(Path(root_override).resolve())))
     with root_context as temporary:
@@ -254,6 +266,13 @@ def check(executable, short_path=False, lifecycle=None, permission=None, workspa
             mcp_config.write_text(json.dumps({"mcpServers": {"fixture": {
                 "command": sys.executable, "args": [str(Path(__file__).with_name(
                     "mcp-fixture.py").resolve()), str(mcp_evidence)]}}}), encoding="utf-8")
+        if skill:
+            skill_path = workspace / ".claude/skills/acceptance-probe/SKILL.md"
+            skill_path.parent.mkdir(parents=True)
+            skill_bytes = ("---\nname: acceptance-probe\ndescription: Synthetic acceptance probe\n---\n"
+                           "Return the exact marker: skill-body-loaded-only-acceptance\n").encode()
+            skill_path.write_bytes(skill_bytes)
+            plan = [("Skill", {"skill": "acceptance-probe"})]
         received = {}
         requests = []
         handler_errors = []
@@ -390,8 +409,8 @@ def check(executable, short_path=False, lifecycle=None, permission=None, workspa
                 return
             command = [str(app), "--data-dir", str(data), "--print"]
             if not mcp_deny:
-                command.extend(["--allowedTools", "mcp__fixture__probe" if mcp
-                                else "Write,Edit,Read,Grep,Glob,Bash"])
+                command.extend(["--allowedTools", "Skill" if skill else
+                                "mcp__fixture__probe" if mcp else "Write,Edit,Read,Grep,Glob,Bash"])
             if mcp:
                 command.extend(["--mcp-config", str(mcp_config)])
             command.append("Exercise the six tools in this workspace.")
@@ -403,6 +422,13 @@ def check(executable, short_path=False, lifecycle=None, permission=None, workspa
             assert result.returncode == 0, (result.returncode, result.stdout, result.stderr, received)
             assert "tools-acceptance-complete" in result.stdout, result.stdout
             assert len(received) == len(plan), received
+            if skill:
+                verify_skill_execution(requests, received)
+                assert skill_path.read_bytes() == skill_bytes, "Skill source modified"
+                assert not list(app_dir.rglob("*.jsonl")), "Skill history leaked into program"
+                assert list(data.rglob("*.jsonl")), "No authoritative Skill session"
+                print("PASS: actual engine Skill loads workspace body into subsequent model request")
+                return
             if mcp:
                 verify_mcp_execution(requests, received, mcp_evidence, denied=mcp_deny)
                 assert not (app_dir / "data").exists(), "MCP run ignored external data root"
@@ -501,6 +527,7 @@ if __name__ == "__main__":
     check(executable)
     check(executable, mcp=True)
     check(executable, mcp=True, mcp_deny=True)
+    check(executable, skill=True)
     check(executable, short_path=True)
     check(executable, lifecycle="cancel")
     check(executable, lifecycle="crash")

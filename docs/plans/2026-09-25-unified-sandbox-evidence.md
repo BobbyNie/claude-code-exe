@@ -1989,3 +1989,17 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - verifier 新測試先因 denied 參數不存在而 RED，再 GREEN；成功結果偽裝拒絕及
   已執行但回錯誤均 fail。101 Python tests：98 pass／3 Windows skip；diff-check pass。
   Windows engine 實跑尚待驗證，不能推定 MCP 安全隔離或第三方批准。
+
+### A17 workspace Skill 真實載入 gate
+
+- 在獨立 workspace 建立合成 `.claude/skills/acceptance-probe/SKILL.md`，正文
+  marker 不出現在 fixture 初始 prompt。模型 fixture 僅要求真實 `Skill` tool。
+  要求初始請求列出 Skill、成功 tool_result、後續真實模型請求含正文 marker，
+  且技能 source bytes 不變、session 位於外置 data，不以名稱可見替代載入成功。
+- verifier 測試先 missing helper RED，再 GREEN；無後續請求、預先注入正文、
+  缺結果、error result 均拒絕。102 Python tests：99 pass／3 Windows skip；
+  diff-check pass。Windows Skill 實跑待驗證，A17 不標通過。
+- 網頁工具未返回可讀官方文件，未取得可引用的網頁來源；此 fixture 的能力假設
+  必須由指定版本實際執行驗證，不冒稱已經文件核實或第三方批准。
+- run `36902300245` 的兩個 tools step 已呈 failure；完整 job logs 尚待可讀，
+  不推定原因或以 static GREEN 覆蓋實際 failure。
