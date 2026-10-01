@@ -2015,3 +2015,13 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   等於固定 probe／固定 marker，metadata 不記錄、不影響權限或結果。
 - 完整 Python 102 tests：99 pass／3 Windows skip；diff-check pass。
   actual-engine MCP 成功／拒絕及 Skill 仍待實跑，A17 不標通過。
+
+### A17 擴展驗收與既有六工具／取消／權限回歸分離
+
+- 新增 --mcp-only（allow／deny）及 --skill-only 專用入口，從 baseline tools main
+  移出擴展案例，避免 MCP failure 阻止原本 8.3／cancel／crash／互動批准矩陣。
+- hosted Windows 與正式 Windows 11 x64 workflow 都新增獨立必須通過的 MCP／Skill
+  steps；使用 !cancelled() + build success，Win11 再要求 platform success，不依賴
+  前一測試成功，不加 continue-on-error、不修改放行条件，Skill 不再被 MCP failure 隱藏。
+- workflow contract 先四個 missing gate RED，再 GREEN。完整 Python 103 tests：
+  100 pass／3 Windows skip；diff-check pass。新 gate 的實際執行尚待 CI，仍不是 A17 通過。

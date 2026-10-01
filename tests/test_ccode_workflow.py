@@ -5,6 +5,21 @@ import ast
 
 
 class AcceptanceWorkflowTests(unittest.TestCase):
+    def test_extension_gates_run_independently_after_other_test_failures(self):
+        root = Path(__file__).resolve().parents[1]
+        for name in ('test-ccode.yml', 'test-ccode-windows11-x64.yml'):
+            workflow = (root / '.github/workflows' / name).read_text(encoding='utf-8')
+            for title, option in (('Verify actual MCP allow and deny', '--mcp-only'),
+                                  ('Verify actual Skill body loading', '--skill-only')):
+                with self.subTest(workflow=name, gate=title):
+                    self.assertIn('      - name: ' + title, workflow)
+                    step = workflow.split('      - name: ' + title, 1)[1].split('      - ', 1)[0]
+                    self.assertIn("!cancelled() && steps.build.outcome == 'success'", step)
+                    if 'windows11' in name:
+                        self.assertIn("steps.platform.outcome == 'success'", step)
+                    self.assertIn('python tests/ccode/tools-integration.py ./ccode.exe ' + option, step)
+                    self.assertNotIn('continue-on-error', step)
+
     def test_source_reads_explicitly_use_utf8_on_windows(self):
         source = Path(__file__).read_text(encoding='utf-8')
         reads = [node for node in ast.walk(ast.parse(source))

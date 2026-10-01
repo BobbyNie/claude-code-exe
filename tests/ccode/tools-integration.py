@@ -524,10 +524,14 @@ if __name__ == "__main__":
         check(executable, workspace_alias="case")
         check(executable, workspace_alias="junction")
         sys.exit(0)
+    if len(sys.argv) == 3 and sys.argv[2] == "--mcp-only":
+        check(executable, mcp=True)
+        check(executable, mcp=True, mcp_deny=True)
+        sys.exit(0)
+    if len(sys.argv) == 3 and sys.argv[2] == "--skill-only":
+        check(executable, skill=True)
+        sys.exit(0)
     check(executable)
-    check(executable, mcp=True)
-    check(executable, mcp=True, mcp_deny=True)
-    check(executable, skill=True)
     check(executable, short_path=True)
     check(executable, lifecycle="cancel")
     check(executable, lifecycle="crash")

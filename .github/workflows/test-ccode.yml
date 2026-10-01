@@ -47,6 +47,14 @@ jobs:
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         shell: pwsh
         run: python tests/ccode/tools-integration.py ./ccode.exe
+      - name: Verify actual MCP allow and deny
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        shell: pwsh
+        run: python tests/ccode/tools-integration.py ./ccode.exe --mcp-only
+      - name: Verify actual Skill body loading
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        shell: pwsh
+        run: python tests/ccode/tools-integration.py ./ccode.exe --skill-only
       - name: Verify workspace aliases
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         shell: pwsh
