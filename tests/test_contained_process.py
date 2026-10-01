@@ -24,10 +24,10 @@ class ContainedProcessTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             workspace = Path(folder) / 'workspace'
             workspace.mkdir()
-            child = "import time; print('ready', flush=True); time.sleep(120)"
+            child = "import sys,time; sys.stdout.buffer.write(b'ready'); sys.stdout.buffer.flush(); time.sleep(120)"
             parent = ('import subprocess,sys; '
                       f'p=subprocess.Popen([sys.executable,"-c",{child!r}],stdout=subprocess.PIPE); '
-                      'assert p.stdout.readline()==b"ready\\n"; print("parent-done")')
+                      'assert p.stdout.read(5)==b"ready"; print("parent-done")')
             result = probe.run_contained([sys.executable, '-c', parent], cwd=workspace,
                                         env=os.environ, input='', timeout=15)
             self.assertEqual(result.returncode, 0)

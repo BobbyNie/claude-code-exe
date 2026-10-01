@@ -1785,3 +1785,20 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - 非 Windows 拒絕執行測試先 RED（缺 run_contained），再本機 GREEN。
   完整 Python 85 項：82 通過、3 Windows 專屬測試跳過；diff-check 通過。
   以上只是本機回歸證據，不替代 Windows Job Object 整合結果。
+
+### Windows probe containment 實際結果與 readiness fixture 修正
+
+- `0e6c1d7` run `36890483649`，jobs `110464560146`（2.1.282）與
+  `110464560501`（2.1.221）：兩邊的 timeout process-tree 測試均 ok。
+  兩個 native TLS probes 均輸出結構摘要並完成，未再出現 workspace
+  WinError 32/5；這是原生探針清理的整合改善證據，不是 TLS 分類 GREEN。
+- normal-parent-exit 測試兩邊實際 RED：parent returncode=1。
+  fixture 用 print 的文字 newline，卻透過 binary pipe 要求 b'ready\n'；
+  Windows CRLF 使 readiness assertion 失敗。改成固定五個 binary bytes
+  b'ready'，parent 精確 read(5)，不放寬 marker 或 workspace rmdir 斷言。
+  修正後的 Windows normal-exit GREEN 尚待新 CI。
+- 兩邊嚴格 gateway 驗收仍 RED，tls=false/engine=true。2.1.221 即使有界
+  等待後仍可能沒有 server handshake error；不能拿 transport reset 代替
+  引擎 TLS 分類，亦不能宣稱 fault matrix 完成。
+- 本機完整 Python 86 項（83 pass、3 Windows skip）、七個 C++ suites
+  皆 exit 0；diff-check 通過。上述不替代 Windows 11 x64 普通帳戶實機。
