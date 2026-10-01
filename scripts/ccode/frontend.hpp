@@ -1,6 +1,7 @@
 #pragma once
 #include "vendor/json.hpp"
 #include <set>
+#include <map>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -26,6 +27,9 @@ class EventReader {
     std::set<std::string> toolIds;
     std::set<std::string> registeredTools;
     bool toolRegistryReceived = false;
+    std::set<std::string> subagentToolIds;
+    std::map<std::string, std::string> backgroundTasks;
+    bool interimResult = false;
     std::string Event(const Json& event) {
         if (!event.is_object()) throw ProtocolError("E_PROTOCOL");
         const auto type = event.value("type", std::string());
@@ -60,6 +64,26 @@ class EventReader {
             toolRegistryReceived = true;
             return "";
         }
+        if (type == "system" && event.value("subtype", std::string()) == "task_started") {
+            const auto task = event.at("task_id").get<std::string>();
+            const auto tool = event.at("tool_use_id").get<std::string>();
+            if (complete || task.empty() || !subagentToolIds.count(tool) ||
+                !backgroundTasks.emplace(task, tool).second) throw ProtocolError("E_PROTOCOL_ORDER");
+            return "";
+        }
+        if (type == "system" && event.value("subtype", std::string()) == "task_notification") {
+            const auto task = event.at("task_id").get<std::string>();
+            const auto status = event.at("status").get<std::string>();
+            if (complete || !backgroundTasks.count(task) ||
+                (status != "completed" && status != "failed" && status != "stopped"))
+                throw ProtocolError("E_PROTOCOL_ORDER");
+            backgroundTasks.erase(task);
+            if (status != "completed") { failed = true; failureCode = "E_ENGINE"; }
+            // Completion notification authorizes a subsequent parent model turn;
+            // a second result without this boundary is still invalid.
+            interimResult = false;
+            return "";
+        }
         if (type == "assistant") {
             // SDK assistant errors can embed raw gateway bodies in text blocks.
             // Classify only the structured field; never display those blocks.
@@ -88,6 +112,7 @@ class EventReader {
                     if (!toolRegistryReceived) throw ProtocolError("E_PROTOCOL_ORDER");
                     if (!registeredTools.count(name)) throw ProtocolError("E_TOOL_UNKNOWN");
                     if (!toolIds.insert(id).second) throw ProtocolError("E_TOOL_DUPLICATE_ID");
+                    if (name == "Agent" || name == "Task") subagentToolIds.insert(id);
                     // Do not expose internal tool names or paths as product chrome.
                     output += "[Tool request]\n";
                 }
@@ -95,8 +120,9 @@ class EventReader {
             return output;
         }
         if (type == "result") {
-            if (complete) throw ProtocolError("E_PROTOCOL");
-            complete = true;
+            if (complete || interimResult) throw ProtocolError("E_PROTOCOL");
+            complete = backgroundTasks.empty();
+            interimResult = !complete;
             failed = failed || event.value("is_error", false) || event.value("subtype", std::string()) != "success";
             if (failed && failureCode.empty()) failureCode = "E_ENGINE";
             if (event.contains("permission_denials") && !event["permission_denials"].empty())

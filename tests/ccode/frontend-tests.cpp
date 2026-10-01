@@ -168,6 +168,32 @@ int main() {
     ccode::EventReader undeclaredSubagent;
     undeclaredSubagent.Feed(init);
     ExpectError(undeclaredSubagent, tool("Agent", "child1", ccode::Json::object()), "E_TOOL_UNKNOWN");
+    ccode::EventReader backgroundAgent;
+    backgroundAgent.Feed(ccode::Json{{"type", "system"}, {"subtype", "init"},
+        {"tools", {"Task"}}}.dump() + "\n");
+    backgroundAgent.Feed(tool("Agent", "bg1", ccode::Json::object()));
+    backgroundAgent.Feed(ccode::Json{{"type", "system"}, {"subtype", "task_started"},
+        {"task_id", "task1"}, {"tool_use_id", "bg1"}}.dump() + "\n");
+    const auto successResult = ccode::Json{{"type", "result"}, {"subtype", "success"},
+        {"is_error", false}}.dump() + "\n";
+    backgroundAgent.Feed(successResult);
+    assert(!backgroundAgent.complete);
+    backgroundAgent.Feed(ccode::Json{{"type", "system"}, {"subtype", "task_notification"},
+        {"task_id", "task1"}, {"status", "completed"}}.dump() + "\n");
+    backgroundAgent.Feed(ccode::Json{{"type", "assistant"}, {"message", {{"content",
+        ccode::Json::array({{{"type", "text"}, {"text", "parent-after-child"}}})}}}}.dump() + "\n");
+    backgroundAgent.Feed(successResult);
+    backgroundAgent.Finish();
+    assert(backgroundAgent.complete && !backgroundAgent.failed);
+    // A notification without a registered task cannot reopen a completed turn.
+    ccode::EventReader unsolicitedTask;
+    unsolicitedTask.Feed(init);
+    ExpectError(unsolicitedTask, ccode::Json{{"type", "system"}, {"subtype", "task_notification"},
+        {"task_id", "unknown"}, {"status", "completed"}}.dump() + "\n", "E_PROTOCOL_ORDER");
+    ccode::EventReader unboundTask;
+    unboundTask.Feed(init);
+    ExpectError(unboundTask, ccode::Json{{"type", "system"}, {"subtype", "task_started"},
+        {"task_id", "unknown"}, {"tool_use_id", "unknown"}}.dump() + "\n", "E_PROTOCOL_ORDER");
     ccode::EventReader duplicate;
     duplicate.Feed(init);
     const auto read = tool("Read", "t1", {{"file_path", "user/claude-original.txt"}});

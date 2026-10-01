@@ -2117,3 +2117,14 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   completed／failed notification、帶 parent_tool_use_id 的 assistant），不輸出
   task ID、summary 或未知 subtype，不放寬產品事件順序。TDD RED→GREEN，
   Python 111 項 108 通過／3 Windows-only skip；後續 CI 須核實實際事件 schema。
+
+- `604ee05` / `36914155384`，2.1.282 job `110543872014` 原生診斷：
+  task_started=1、task_notification=1、completed_notification=1、
+  failed_notification=0、child_assistant=1；result_count=2、assistant_after_result=true。
+  依已觀察的結構化生命週期實作 frontend 背景 task 狀態機：task_started 必須
+  關聯本 turn 已驗證的 Agent/Task tool ID；存在 pending task 的 result 不是
+  最終完成；匹配 task 的 completed notification 才允許後續 parent result。
+  未知／重複 task、無關聯通知、無通知的重複 result 仍 fail closed；failed／stopped
+  保留失敗。新增前後 result 案例先 RED（過早 complete）再 GREEN；未綁定 task
+  與未知 notification 負例通過。七組 C++、Python 111 項（108 pass／3 skip）通過。
+  尚須 Windows 實際 schema／背景 parent result 證據；不能以狀態機單元測試放行 A17。
