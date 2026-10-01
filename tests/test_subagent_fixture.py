@@ -34,6 +34,15 @@ class SubagentFixtureTests(unittest.TestCase):
             with self.assertRaises(AssertionError):
                 fixture.verify_subagent_execution(requests, results, 'Agent')
 
+    def test_native_registry_summary_exposes_only_fixed_name_flags(self):
+        events = [{'type': 'system', 'subtype': 'init', 'tools': ['Task', 'private-tool']},
+                  {'type': 'assistant', 'message': {'content': [
+                    {'type': 'tool_use', 'name': 'Agent', 'input': {'prompt': 'private-prompt'}}]}}]
+        self.assertEqual(fixture.summarize_subagent_registry(events), {
+            'init_agent': False, 'init_task': True, 'emitted_agent': True,
+            'emitted_task': False, 'emitted_unregistered': True})
+        self.assertNotIn('private', str(fixture.summarize_subagent_registry(events)))
+
     def test_select_subagent_tool_requires_actual_schema_not_name_only(self):
         for name in ('Agent', 'Task'):
             tools = [{'name': name, 'input_schema': {'properties': {

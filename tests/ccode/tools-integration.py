@@ -16,6 +16,34 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
+def summarize_subagent_registry(events):
+    """Fixed schema flags only: never expose prompts or unknown tool names."""
+    registered = set()
+    emitted = set()
+    unregistered = False
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        if event.get('type') == 'system' and event.get('subtype') == 'init':
+            tools = event.get('tools', [])
+            if isinstance(tools, list):
+                registered.update(name for name in tools if isinstance(name, str))
+        if event.get('type') == 'assistant':
+            message = event.get('message', {})
+            content = message.get('content', []) if isinstance(message, dict) else []
+            if not isinstance(content, list):
+                continue
+            for block in content:
+                if isinstance(block, dict) and block.get('type') == 'tool_use':
+                    name = block.get('name')
+                    if isinstance(name, str):
+                        emitted.add(name)
+                        unregistered |= name not in registered
+    return {'init_agent': 'Agent' in registered, 'init_task': 'Task' in registered,
+            'emitted_agent': 'Agent' in emitted, 'emitted_task': 'Task' in emitted,
+            'emitted_unregistered': unregistered}
+
+
 def select_subagent_tool(tools):
     for name in ("Agent", "Task"):
         for tool in tools:
@@ -223,7 +251,7 @@ def check_workspace_boundaries(executable):
                 shutil.rmtree(long_workspace_io)
 
 
-def check(executable, short_path=False, lifecycle=None, permission=None, workspace_alias=None, root_override=None, mcp=False, mcp_deny=False, skill=False, subagent=False):
+def check(executable, short_path=False, lifecycle=None, permission=None, workspace_alias=None, root_override=None, mcp=False, mcp_deny=False, skill=False, subagent=False, subagent_probe=False):
     root_context = (tempfile.TemporaryDirectory(prefix="ccode-tools-")
                     if root_override is None else nullcontext(str(Path(root_override).resolve())))
     with root_context as temporary:
@@ -458,6 +486,37 @@ def check(executable, short_path=False, lifecycle=None, permission=None, workspa
                 assert not (workspace / "after-wait.txt").exists(), "Recovery replayed the interrupted tool"
                 assert not handler_errors, handler_errors
                 return
+            if subagent_probe:
+                import importlib.util
+                spec = importlib.util.spec_from_file_location('subagent_native_probe',
+                    Path(__file__).with_name('tls-probe.py'))
+                probe = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(probe)
+                integrity = probe.load_fixture('subagent_integrity', 'payload-integrity.py')
+                payload, metadata_bytes = integrity.resources(executable)
+                probe.verify_payload(payload, json.loads(metadata_bytes.decode('utf-8-sig')))
+                engine = root / 'engine.exe'
+                engine.write_bytes(payload)
+                native_root = root / 'native-profile'
+                for directory in ('home', 'roaming', 'local', 'temp'):
+                    (native_root / directory).mkdir(parents=True)
+                native_env = probe.probe_environment(os.environ, native_root)
+                native_env['ANTHROPIC_BASE_URL'] = env['A_BASE_URL']
+                result = probe.run_contained([str(engine), '--print', '--output-format',
+                    'stream-json', '--verbose', '--allowedTools', 'Agent,Task'],
+                    cwd=workspace, env=native_env,
+                    input='Exercise the synthetic subagent in this workspace.', timeout=120)
+                events = []
+                invalid_lines = 0
+                for line in result.stdout.splitlines():
+                    try:
+                        events.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        invalid_lines += 1
+                print(json.dumps({'native_subagent_registry': summarize_subagent_registry(events),
+                    'exit_code': result.returncode, 'invalid_lines': invalid_lines}))
+                assert not handler_errors, 'Native subagent fixture handler failed'
+                return  # Diagnostic only; independent frontend acceptance follows.
             command = [str(app), "--data-dir", str(data), "--print"]
             if not mcp_deny:
                 command.extend(["--allowedTools", "Agent,Task" if subagent else "Skill" if skill else
@@ -587,6 +646,7 @@ if __name__ == "__main__":
         check(executable, mcp=True, mcp_deny=True)
         sys.exit(0)
     if len(sys.argv) == 3 and sys.argv[2] == "--subagent-only":
+        check(executable, subagent=True, subagent_probe=True)
         check(executable, subagent=True)
         sys.exit(0)
     if len(sys.argv) == 3 and sys.argv[2] == "--skill-only":
