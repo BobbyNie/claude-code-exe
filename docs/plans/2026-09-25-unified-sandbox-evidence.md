@@ -1733,3 +1733,21 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   已確認 in_progress。尚未取得實際 engine TLS GREEN，不能標記 TLS 通過。
 - 查核時 `36884421476` 的 2.1.221 portable frontend 步驟成功，但 run
   仍 in_progress；跨版本及其餘版本不得由單一步驟成功推論完成。
+
+### 2026-10-01：嚴格 TLS 實際 RED 與跨版本搬移末端 RED
+
+- `210efa6` 的 run `36885251680` / job `110446797062`：native、portable、
+  六工具、aliases、payload 與 concurrency 通過，但 gateway TLS 嚴格閘門仍失敗。
+  server 記錄兩個 transport 10054、零 HTTP、exit 1；不能推論 TLS 分類成功。
+- 原始碼檢查：frontend.hpp 的 assistant structured error 只特判
+  authentication_failed／rate_limit；api_retry 一律 E_GATEWAY_RETRY；launcher
+  未完成事件一律中性 E_ENGINE。當前沒有產生 E_GATEWAY_TLS 的實作路徑。
+  因此新增 fixture 不只是觀測修正，還揭露 A18 分類實作缺口；不得將測試
+  改成接受泛用 E_ENGINE 或憑空把任何 HTTPS 失敗歸類 TLS。
+- `36884421476` cross-version job `110447779356` 已完成，升級／回退、
+  候選所有會話驗證、pointer replacement failure、程式搬移均通過，最後
+  外置 data root 搬移的 preserved profile bytes assertion 失敗。
+  whole-data snapshot 包含各 profile 根鎖，切回 profile 比對卻排除根鎖。
+  `6aec27a` 以同一精確根鎖政策擷取 baseline；巢狀同名檔仍比較全部 bytes。
+  新測試實際缺 helper RED，再 GREEN；完整 Python 76 項（75 通過、1 跳過）。
+  尚待修正後的 Windows cross-version GREEN，不能標記 A14/A15 完成。
