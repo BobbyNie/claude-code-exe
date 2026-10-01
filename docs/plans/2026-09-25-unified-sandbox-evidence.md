@@ -2283,3 +2283,14 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   此命令需要工程端 Node（本機 v22.22.0），尚須固定/核准 Windows
   驗證依賴；--node 可指定工程 runtime 路徑。未接入 launcher/update
   gate，未保護任意並行 package 替換，沒有 Win11／核准信任根證據。
+
+- 簽章驗證 CI 工具鏈固定：官方 nodejs/node releases API 核實
+  v22.23.3（2026-09-23 發布），官方 actions/setup-node v7 ref 核實
+  commit 820762786026740c76f36085b0efc47a31fe5020，並讀其 action.yml
+  確认 node-version／package-manager-cache inputs。兩個 Windows workflow
+  固定 Node 22.23.3、setup action commit，停用 package-manager cache，
+  新增獨立必要的 manifest signature contracts gate，非零立即失敗。
+  workflow contract 先 RED（缺 pin）後 GREEN，14 項通過；Node 六組
+  本機 v22.22.0 通過；完整 Python 120（117 pass／3 skip）通過。
+  尚未取得固定 22.23.3 的 hosted/Win11 執行結果，不能把本機較舊
+  runtime 的成功當成新 CI 版本證據，也不代表所有其他依賴已固定。

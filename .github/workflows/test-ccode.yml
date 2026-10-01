@@ -20,6 +20,10 @@ jobs:
         version: ['2.1.221', '2.1.282']
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '22.23.3'
+          package-manager-cache: false
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: '1.3.0'
@@ -30,6 +34,12 @@ jobs:
         id: build
         shell: pwsh
         run: ./scripts/ccode/build.ps1 -Version '${{ matrix.version }}' -AdapterRevision '${{ github.sha }}' -OutputDir .
+      - name: Test manifest signature contracts
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          node --test tests/ccode/manifest-signature.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Manifest signature contracts failed' }
       - name: Test Python contracts
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         shell: pwsh

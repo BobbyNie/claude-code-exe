@@ -5,6 +5,19 @@ import ast
 
 
 class AcceptanceWorkflowTests(unittest.TestCase):
+    def test_signature_contracts_have_pinned_runtime_and_required_gate(self):
+        root = Path(__file__).resolve().parents[1]
+        for name in ('test-ccode.yml', 'test-ccode-windows11-x64.yml'):
+            workflow = (root / '.github/workflows' / name).read_text(encoding='utf-8')
+            self.assertIn('actions/setup-node@820762786026740c76f36085b0efc47a31fe5020', workflow)
+            self.assertIn("node-version: '22.23.3'", workflow)
+            step = workflow.split('      - name: Test manifest signature contracts', 1)[1].split('      - ', 1)[0]
+            self.assertIn('node --test tests/ccode/manifest-signature.test.mjs', step)
+            self.assertIn("if ($LASTEXITCODE -ne 0)", step)
+            self.assertNotIn('continue-on-error:', step)
+            self.assertLess(workflow.index('actions/setup-node@'),
+                            workflow.index('      - name: Test Python contracts'))
+
     def test_extension_gates_run_independently_after_other_test_failures(self):
         root = Path(__file__).resolve().parents[1]
         for name in ('test-ccode.yml', 'test-ccode-windows11-x64.yml'):
