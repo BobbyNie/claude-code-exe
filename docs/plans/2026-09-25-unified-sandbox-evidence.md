@@ -2562,3 +2562,15 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   passed: untrusted client rejected and explicitly trusted client negotiated
   TLS 1.2. Full local Python 134 tests / 5 Windows-only skips; diff-check passed.
   Actual Windows engine comparison remains pending; A19 remains incomplete.
+
+### Public package text audit bounds
+
+- Directory and ZIP public text reads now use a 16 MiB + 1 bounded read and
+  reject oversize content with E_PACKAGE_TEXT_LIMIT. Truncated prefixes are
+  never certified as passed. Explicit opaque PE binaries retain streaming hash
+  verification; the audit does not alter candidate contents.
+- TDD real directory/deflated ZIP oversize fixture first incorrectly passed
+  (RED), then both failed closed (GREEN). Package suite 15 tests passed; full
+  local Python 135 tests / 5 Windows-only skips; diff-check passed.
+- This closes the public-text allocation gap, not all adversarial archive
+  resource limits or package source/notices approval; A02/A04 remain unverified.

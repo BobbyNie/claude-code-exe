@@ -20,6 +20,21 @@ class PackageAuditTests(unittest.TestCase):
         self.audit = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self.audit)
 
+    def test_oversized_public_text_fails_closed_in_directory_and_archive(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / 'package'
+            root.mkdir()
+            (root / 'help.txt').write_bytes(b'neutral text beyond bound')
+            archive = Path(temporary) / 'package.zip'
+            with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_DEFLATED) as bundle:
+                bundle.write(root / 'help.txt', 'help.txt')
+            with mock.patch.object(self.audit, 'MAX_PUBLIC_TEXT_BYTES', 8, create=True):
+                for report in (self.audit.scan_directory(root, ['restricted']),
+                               self.audit.scan_archive(archive, ['restricted'])):
+                    self.assertEqual(report['status'], 'failed')
+                    self.assertIn({'path': 'help.txt', 'code': 'E_PACKAGE_TEXT_LIMIT'}, report['findings'])
+            self.assertEqual((root / 'help.txt').read_bytes(), b'neutral text beyond bound')
+
     def test_recursive_public_names_and_text_case_insensitive_without_parent_scope(self):
         with tempfile.TemporaryDirectory(prefix='Restricted-parent-') as temporary:
             root = Path(temporary)

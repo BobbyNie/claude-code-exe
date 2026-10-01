@@ -7,6 +7,18 @@ import zipfile
 import hashlib
 
 
+# Public configuration/notice text is bounded; oversize input is rejected,
+# never certified from a truncated prefix. Opaque binaries remain streamed.
+MAX_PUBLIC_TEXT_BYTES = 16 * 1024 * 1024
+
+
+def _public_contents(stream):
+    contents = stream.read(MAX_PUBLIC_TEXT_BYTES + 1)
+    if len(contents) > MAX_PUBLIC_TEXT_BYTES:
+        raise ValueError('E_PACKAGE_TEXT_LIMIT')
+    return contents
+
+
 def _link(status):
     return stat.S_ISLNK(status.st_mode) or bool(getattr(status, 'st_file_attributes', 0) & 0x400)
 
@@ -92,12 +104,14 @@ def scan_directory(root, restricted_names, opaque_files=()):
                     observed_opaque.add(relative)
                 else:
                     try:
-                        contents = path.read_bytes()
+                        with path.open('rb') as public:
+                            contents = _public_contents(public)
                         files.append({'path': relative, 'size': len(contents),
                                       'sha256': hashlib.sha256(contents).hexdigest()})
                         text = _text(contents, relative)
-                    except (UnicodeError, ValueError):
-                        finding(relative, 'E_PACKAGE_ENCODING')
+                    except (UnicodeError, ValueError) as error:
+                        finding(relative, 'E_PACKAGE_TEXT_LIMIT' if str(error) ==
+                                'E_PACKAGE_TEXT_LIMIT' else 'E_PACKAGE_ENCODING')
                         continue
                     if any(name in text for name in names):
                         finding(relative, 'E_PACKAGE_PUBLIC_TEXT')
@@ -157,12 +171,14 @@ def scan_archive(archive, restricted_names, opaque_files=()):
                     observed_opaque.add(relative)
                 else:
                     try:
-                        contents = bundle.read(entry)
+                        with bundle.open(entry) as public:
+                            contents = _public_contents(public)
                         files.append({'path': relative, 'size': len(contents),
                                       'sha256': hashlib.sha256(contents).hexdigest()})
                         text = _text(contents, relative)
-                    except (UnicodeError, ValueError):
-                        findings.append({'path': relative, 'code': 'E_PACKAGE_ENCODING'})
+                    except (UnicodeError, ValueError) as error:
+                        findings.append({'path': relative, 'code': 'E_PACKAGE_TEXT_LIMIT'
+                            if str(error) == 'E_PACKAGE_TEXT_LIMIT' else 'E_PACKAGE_ENCODING'})
                         continue
                     if any(name in text for name in names):
                         findings.append({'path': relative, 'code': 'E_PACKAGE_PUBLIC_TEXT'})
