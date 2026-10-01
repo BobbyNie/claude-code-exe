@@ -10,7 +10,8 @@ class AcceptanceWorkflowTests(unittest.TestCase):
         for name in ('test-ccode.yml', 'test-ccode-windows11-x64.yml'):
             workflow = (root / '.github/workflows' / name).read_text(encoding='utf-8')
             for title, option in (('Verify actual MCP allow and deny', '--mcp-only'),
-                                  ('Verify actual Skill body loading', '--skill-only')):
+                                  ('Verify actual Skill body loading', '--skill-only'),
+                                  ('Verify actual subagent execution', '--subagent-only')):
                 with self.subTest(workflow=name, gate=title):
                     self.assertIn('      - name: ' + title, workflow)
                     step = workflow.split('      - name: ' + title, 1)[1].split('      - ', 1)[0]

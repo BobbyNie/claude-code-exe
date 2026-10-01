@@ -2039,3 +2039,21 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   other 不能證明非 TLS；tls-record 亦不證明憑證拒絕。驗收門檻保持不變。
 - 分類測試先 missing helper AttributeError RED；實作後完整 Python 104 tests：
   101 pass／3 Windows-only skip。實際 Windows 協定觀測仍待推送後結果。
+
+### A17 真實 subagent 獨立子請求 gate
+
+- 新增 --subagent-only 合成驗收：從真實第一個模型請求的工具 schema 選取
+  Agent／Task（必須具 subagent_type、prompt、description），建立 workspace agent
+  定義；父 prompt 不注入子正文，只有包含子 system context 的真實請求才返回
+  固定 child result。父請求必須收到成功 tool_result 與 child marker，source bytes
+  不變，session 位於外置 data，program 不得有 JSONL。
+- verifier 先缺 helper RED，再 GREEN；無子請求、預載正文、只有 messages marker、
+  缺結果、error result、缺 child marker 均 fail。兩個 workflow 加獨立 required gate，
+  contract 先 missing gate RED，再 GREEN，不加 continue-on-error。
+- 完整 Python 106 tests：103 pass／3 Windows-only skip；diff-check pass。
+  Agent／Task 相容性與實際 child context 還須指定 engine 實跑驗證，不能以 verifier
+  通過宣稱 subagents／A17 已通過；官方網頁工具未返回可讀內容，未冒稱文件核實。
+- `6905c8f` / run `36904848916`：job `110512692716`（2.1.282）及
+  `110512693091`（2.1.221）TLS 都觀察兩次 tls-record、HTTP 0、exit 1，仍無
+  E_GATEWAY_TLS 或可信 structured cause。2.1.282 transport errno 10054；2.1.221
+  assertion 時 handshake_errors 為空。TLS gate 維持 fail，不作憑證拒絕推定。

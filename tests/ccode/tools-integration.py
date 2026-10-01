@@ -16,6 +16,28 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
+def select_subagent_tool(tools):
+    for name in ("Agent", "Task"):
+        for tool in tools:
+            properties = tool.get("input_schema", {}).get("properties", {})
+            if tool.get("name") == name and all(
+                    field in properties for field in ("subagent_type", "prompt", "description")):
+                return name
+    raise AssertionError("Actual engine did not advertise a supported subagent schema")
+
+
+def verify_subagent_execution(requests, received, tool_name):
+    assert requests and any(tool.get("name") == tool_name
+        for tool in requests[0].get("tools", [])), "Subagent tool not discovered"
+    assert "child-context-only-acceptance" not in json.dumps(requests[0]), "Child context preloaded"
+    assert any("child-context-only-acceptance" in json.dumps(request.get("system", []))
+        for request in requests[1:]), "No independent child system context"
+    assert set(received) == {"acceptance_0"}, "Missing or unexpected subagent result"
+    result = received["acceptance_0"]
+    assert not result.get("is_error"), "Actual subagent failed"
+    assert "child-result-only-acceptance" in json.dumps(result.get("content")), "Child result missing"
+
+
 def verify_skill_execution(requests, received):
     marker = "skill-body-loaded-only-acceptance"
     assert len(requests) >= 2, "No post-Skill model request"
@@ -187,7 +209,7 @@ def check_workspace_boundaries(executable):
                 shutil.rmtree(long_workspace_io)
 
 
-def check(executable, short_path=False, lifecycle=None, permission=None, workspace_alias=None, root_override=None, mcp=False, mcp_deny=False, skill=False):
+def check(executable, short_path=False, lifecycle=None, permission=None, workspace_alias=None, root_override=None, mcp=False, mcp_deny=False, skill=False, subagent=False):
     root_context = (tempfile.TemporaryDirectory(prefix="ccode-tools-")
                     if root_override is None else nullcontext(str(Path(root_override).resolve())))
     with root_context as temporary:
@@ -273,6 +295,15 @@ def check(executable, short_path=False, lifecycle=None, permission=None, workspa
                            "Return the exact marker: skill-body-loaded-only-acceptance\n").encode()
             skill_path.write_bytes(skill_bytes)
             plan = [("Skill", {"skill": "acceptance-probe"})]
+        if subagent:
+            agent_path = workspace / ".claude/agents/acceptance-probe.md"
+            agent_path.parent.mkdir(parents=True)
+            agent_bytes = ("---\nname: acceptance-probe\ndescription: Synthetic subagent probe\n"
+                           "tools: Read\n---\nchild-context-only-acceptance\n"
+                           "Return child-result-only-acceptance.\n").encode()
+            agent_path.write_bytes(agent_bytes)
+            plan = [(None, {"subagent_type": "acceptance-probe",
+                           "description": "Synthetic child probe", "prompt": "Return the instructed marker."})]
         received = {}
         requests = []
         handler_errors = []
@@ -299,6 +330,9 @@ def check(executable, short_path=False, lifecycle=None, permission=None, workspa
                     self.send_error(404)
                     return
                 requests.append(body)
+                child_request = subagent and "child-context-only-acceptance" in json.dumps(body.get("system", []))
+                if subagent and len(requests) == 1:
+                    plan[0] = (select_subagent_tool(body.get("tools", [])), plan[0][1])
                 for message in body.get("messages", []):
                     content = message.get("content", [])
                     if not isinstance(content, list):
@@ -307,7 +341,10 @@ def check(executable, short_path=False, lifecycle=None, permission=None, workspa
                         if block.get("type") == "tool_result":
                             received[block["tool_use_id"]] = block
                 step = next((i for i in range(len(plan)) if f"acceptance_{i}" not in received), len(plan))
-                if step < len(plan):
+                if child_request:
+                    block = dict(type="text", text="child-result-only-acceptance")
+                    reason = "end_turn"
+                elif step < len(plan):
                     name, arguments = plan[step]
                     block = dict(type="tool_use", id=f"acceptance_{step}", name=name, input=arguments)
                     reason = "tool_use"
@@ -409,7 +446,7 @@ def check(executable, short_path=False, lifecycle=None, permission=None, workspa
                 return
             command = [str(app), "--data-dir", str(data), "--print"]
             if not mcp_deny:
-                command.extend(["--allowedTools", "Skill" if skill else
+                command.extend(["--allowedTools", "Agent,Task" if subagent else "Skill" if skill else
                                 "mcp__fixture__probe" if mcp else "Write,Edit,Read,Grep,Glob,Bash"])
             if mcp:
                 command.extend(["--mcp-config", str(mcp_config)])
@@ -422,6 +459,13 @@ def check(executable, short_path=False, lifecycle=None, permission=None, workspa
             assert result.returncode == 0, (result.returncode, result.stdout, result.stderr, received)
             assert "tools-acceptance-complete" in result.stdout, result.stdout
             assert len(received) == len(plan), received
+            if subagent:
+                verify_subagent_execution(requests, received, plan[0][0])
+                assert agent_path.read_bytes() == agent_bytes, "Subagent source modified"
+                assert not list(app_dir.rglob("*.jsonl")), "Subagent history leaked into program"
+                assert list(data.rglob("*.jsonl")), "No authoritative subagent session"
+                print("PASS: actual subagent loads independent child context and returns result to parent")
+                return
             if skill:
                 verify_skill_execution(requests, received)
                 assert skill_path.read_bytes() == skill_bytes, "Skill source modified"
@@ -527,6 +571,9 @@ if __name__ == "__main__":
     if len(sys.argv) == 3 and sys.argv[2] == "--mcp-only":
         check(executable, mcp=True)
         check(executable, mcp=True, mcp_deny=True)
+        sys.exit(0)
+    if len(sys.argv) == 3 and sys.argv[2] == "--subagent-only":
+        check(executable, subagent=True)
         sys.exit(0)
     if len(sys.argv) == 3 and sys.argv[2] == "--skill-only":
         check(executable, skill=True)

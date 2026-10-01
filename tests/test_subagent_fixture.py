@@ -1,0 +1,37 @@
+"""Subagent acceptance requires child context and parent tool result evidence."""
+import importlib.util
+from pathlib import Path
+import unittest
+
+spec = importlib.util.spec_from_file_location('subagent_tools_fixture',
+    Path(__file__).parent / 'ccode/tools-integration.py')
+fixture = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(fixture)
+
+
+class SubagentFixtureTests(unittest.TestCase):
+    def test_subagent_requires_independent_child_request_and_successful_result(self):
+        parent = {'tools': [{'name': 'Agent'}], 'system': 'parent-only',
+                  'messages': [{'content': 'Use acceptance-probe'}]}
+        child = {'system': 'child-context-only-acceptance', 'messages': []}
+        received = {'acceptance_0': {'content': 'child-result-only-acceptance'}}
+        fixture.verify_subagent_execution([parent, child], received, 'Agent')
+        cases = [([parent], received), ([child, child], received),
+                 ([parent, child], {}),
+                 ([parent, child], {'acceptance_0': {'is_error': True,
+                    'content': 'child-result-only-acceptance'}}),
+                 ([parent, child], {'acceptance_0': {'content': 'missing'}}),
+                 ([parent, {'messages': [{'content': 'child-context-only-acceptance'}]}], received)]
+        for requests, results in cases:
+            with self.assertRaises(AssertionError):
+                fixture.verify_subagent_execution(requests, results, 'Agent')
+
+    def test_select_subagent_tool_requires_actual_schema_not_name_only(self):
+        for name in ('Agent', 'Task'):
+            tools = [{'name': name, 'input_schema': {'properties': {
+                'subagent_type': {'type': 'string'}, 'prompt': {'type': 'string'},
+                'description': {'type': 'string'}}}}]
+            self.assertEqual(fixture.select_subagent_tool(tools), name)
+        for tools in ([], [{'name': 'Agent'}], [{'name': 'Bash'}]):
+            with self.assertRaises(AssertionError):
+                fixture.select_subagent_tool(tools)
