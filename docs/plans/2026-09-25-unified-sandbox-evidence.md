@@ -2192,3 +2192,13 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   降級且序列化不含 PRIVATE_TOKEN。七組 C++ 通過；Python 115 項
   （112 pass／3 Windows-only skip）通過，diff-check 通過。
   此項只補強產生器，不能取代正式 Windows 11 x64 故障矩陣的實跑 JSON。
+
+- `524cf5e` / `36921309164`，2.1.282 job `110567777240`：payload gate
+  第 2 次嘗試 request_count=0／exit64／E_EXTRACT；不是 gateway 回覆失敗。
+  尚不能判定寫檔、替換、sharing 或磁碟原因。PrepareRuntime 分離
+  E_EXTRACT_WRITE 與 activation 失敗；只取 failed MoveFileExW 的即時
+  GetLastError，映射固定 access／sharing／lock／disk-full／unknown 類別，
+  不輸出路徑或任意 numeric error。不增加 extraction retry 或模型請求重放。
+  純分類測試先 RED（header 缺少）再 GREEN；fixture 六種新 exact startup
+  code 先 RED（None）再 GREEN；七組 C++、Python 115（112 pass／3 skip）
+  通過。僅增加可信故障定位，不代表間歇 E_EXTRACT 原因已修復。

@@ -44,7 +44,9 @@ def rejecting_gateway():
 def failure_summary(exit_code, request_count, terminal, attempt):
     """Only exact neutral renderer lines; never retain engine text or URLs."""
     lines = set(terminal.splitlines())
-    startup_codes = {b"E_EXTRACT", b"E_RUNTIME_BUSY", b"E_RUNTIME_PATH", b"E_CHECKSUM"}
+    startup_codes = {b"E_EXTRACT", b"E_RUNTIME_BUSY", b"E_RUNTIME_PATH", b"E_CHECKSUM",
+        b"E_EXTRACT_WRITE", b"E_EXTRACT_ACTIVATE", b"E_EXTRACT_ACCESS",
+        b"E_EXTRACT_SHARING", b"E_EXTRACT_LOCKED", b"E_EXTRACT_DISK_FULL"}
     exact_startup = terminal.strip()
     startup_code = (exact_startup.decode('ascii')
                     if exit_code == 64 and exact_startup in startup_codes else None)

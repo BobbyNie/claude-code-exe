@@ -15,6 +15,7 @@
 #include "diagnostics.hpp"
 #include "environment.hpp"
 #include "runtime-paths.hpp"
+#include "extraction-errors.hpp"
 #include "profile.hpp"
 #include "snapshot.hpp"
 #include "candidate.hpp"
@@ -224,8 +225,11 @@ fs::path PrepareRuntime(const fs::path& directory, const Json& metadata) {
         std::ofstream file(temporary, std::ios::binary | std::ios::trunc);
         file.write(reinterpret_cast<const char*>(resource.bytes), resource.size);
         file.close();
-        if (!file || !MoveFileExW(temporary.c_str(), payload.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
-            throw std::runtime_error("E_EXTRACT");
+        if (!file) throw std::runtime_error("E_EXTRACT_WRITE");
+        if (!MoveFileExW(temporary.c_str(), payload.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+            const auto error = GetLastError();
+            throw std::runtime_error(ccode::ExtractionActivationError(error));
+        }
     }
     return payload;
 }

@@ -28,7 +28,9 @@ class PayloadIntegrityFixtureTests(unittest.TestCase):
         spec = importlib.util.spec_from_file_location('payload_integrity', path)
         fixture = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(fixture)
-        for code in ('E_EXTRACT', 'E_RUNTIME_BUSY', 'E_RUNTIME_PATH', 'E_CHECKSUM'):
+        for code in ('E_EXTRACT', 'E_RUNTIME_BUSY', 'E_RUNTIME_PATH', 'E_CHECKSUM',
+                     'E_EXTRACT_WRITE', 'E_EXTRACT_ACTIVATE', 'E_EXTRACT_ACCESS',
+                     'E_EXTRACT_SHARING', 'E_EXTRACT_LOCKED', 'E_EXTRACT_DISK_FULL'):
             summary = fixture.failure_summary(64, 0, code.encode() + b'\r\n', 1)
             self.assertEqual(summary['startup_code'], code)
         for terminal in (b'private-token E_EXTRACT', b'E_EXTRACT C:/private',

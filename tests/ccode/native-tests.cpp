@@ -1,5 +1,6 @@
 #include "../../scripts/ccode/common.hpp"
 #include "../../scripts/ccode/runtime-paths.hpp"
+#include "../../scripts/ccode/extraction-errors.hpp"
 #include "../../scripts/ccode/concurrency.hpp"
 #include "../../scripts/ccode/workspace-boundary.hpp"
 #include <fstream>
@@ -10,6 +11,12 @@
 
 int main() {
     using namespace ccode;
+    assert(std::string(ExtractionActivationError(5)) == "E_EXTRACT_ACCESS");
+    assert(std::string(ExtractionActivationError(32)) == "E_EXTRACT_SHARING");
+    assert(std::string(ExtractionActivationError(33)) == "E_EXTRACT_LOCKED");
+    assert(std::string(ExtractionActivationError(39)) == "E_EXTRACT_DISK_FULL");
+    assert(std::string(ExtractionActivationError(112)) == "E_EXTRACT_DISK_FULL");
+    assert(std::string(ExtractionActivationError(999999)) == "E_EXTRACT_ACTIVATE");
 
     assert(MapEnvironmentName(L"ANTHROPIC_DEFAULT_HAIKU_MODEL") == L"A_DEFAULT_HAIKU_MODEL");
     assert(MapEnvironmentName(L"anthropic_api_key") == L"A_api_key");
