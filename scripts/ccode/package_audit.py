@@ -130,7 +130,9 @@ def scan_archive(archive, restricted_names, opaque_files=()):
             archive_hash = _fingerprint(source, archive.name)['sha256']
         with zipfile.ZipFile(archive) as bundle:
             for entry in sorted(bundle.infolist(), key=lambda entry: entry.filename):
-                relative = entry.filename.rstrip('/')
+                # ZipInfo.filename is normalized on Windows; validate the raw
+                # archive spelling before any content is opened.
+                relative = entry.orig_filename.rstrip('/')
                 if ('\\' in relative or ':' in relative or
                         any(part in ('', '.', '..') for part in relative.split('/'))):
                     findings.append({'path': relative, 'code': 'E_PACKAGE_PATH'})

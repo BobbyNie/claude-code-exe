@@ -9,6 +9,7 @@ import stat
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 MODULE = Path(__file__).resolve().parents[1] / 'scripts/ccode/package_audit.py'
 
@@ -161,6 +162,26 @@ class PackageAuditTests(unittest.TestCase):
             self.assertIn('E_PACKAGE_COLLISION', codes)
             self.assertIn('E_PACKAGE_LINK', codes)
             self.assertEqual(list(root.iterdir()), [archive])
+
+    def test_archive_raw_backslash_is_rejected_after_reader_normalization(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            archive = Path(temporary) / 'package.zip'
+            with zipfile.ZipFile(archive, 'w') as bundle:
+                entry = zipfile.ZipInfo('placeholder')
+                entry.filename = 'folder\\escape.txt'
+                bundle.writestr(entry, 'neutral')
+            original = zipfile.ZipInfo
+
+            class WindowsReaderInfo(original):
+                def __init__(self, filename='NoName', *args, **kwargs):
+                    super().__init__(filename, *args, **kwargs)
+                    self.filename = self.filename.replace('\\', '/')
+
+            with mock.patch.object(zipfile, 'ZipInfo', WindowsReaderInfo):
+                report = self.audit.scan_archive(archive, ['restricted'])
+            self.assertEqual(report['findings'],
+                             [{'path': 'folder\\escape.txt', 'code': 'E_PACKAGE_PATH'}])
+            self.assertEqual(report['files'], [])
 
     def test_invalid_archives_fail_closed_with_neutral_cli_error(self):
         with tempfile.TemporaryDirectory(prefix='private-location-') as temporary:
