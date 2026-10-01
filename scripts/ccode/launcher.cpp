@@ -203,9 +203,11 @@ fs::path PrepareRuntime(const fs::path& directory, const Json& metadata) {
     ccode::ValidateRuntimePaths(directory, hash);
     auto runtime = directory / L"runtime" / Wide(hash);
     fs::create_directories(runtime);
-    Handle lock(CreateFileW((runtime / L"prepare.lock").c_str(), GENERIC_WRITE, 0, nullptr,
-                           OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
-    if (!lock.valid()) throw std::runtime_error("E_RUNTIME_BUSY");
+    // Preparation is a short shared-runtime critical section, not a session
+    // writer conflict. Wait for another frontend to finish verifying/extracting
+    // the immutable payload, then independently verify the bytes under the lock.
+    auto lock = AcquireFileLock(runtime / L"prepare.lock", false, 30000,
+                                "E_RUNTIME_BUSY", "E_RUNTIME_PATH");
     auto payload = runtime / L"engine.exe";
     bool equal = fs::exists(payload) && fs::file_size(payload) == resource.size;
     if (equal) {

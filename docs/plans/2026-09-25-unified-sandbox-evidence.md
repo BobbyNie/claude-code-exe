@@ -1692,3 +1692,23 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   （71 通過、1 跳過）。仍待 Windows 確認，不能宣稱跨版本全量成功。
 - 上述證據均非乾淨 Windows 11 x64 普通帳戶實機證據；A01–A20 的外部
   gateway、端點政策、核准通知／簽署者、斷網及試運行門檻仍保留，未放行。
+
+### Runtime 準備鎖並行修正（Windows GREEN 尚待確認）
+
+- `36882992434` 的 2.1.282 job `110439192753` 真實並行案例 RED：
+  requests=1、exit_codes=[64,0]、neutral_codes=[[E_RUNTIME_BUSY],[]]。
+  檢查 launcher 確認 runtime/prepare.lock 原來以零等待 CreateFileW，
+  所以不同 session 也會在共用 runtime 準備階段互相拒絕。
+- 修正沿用 AcquireFileLock：prepare.lock 獨佔、有上限 30 秒等待，
+  只對 sharing／lock violation 重試；非一般單連結檔案或 reparse
+  仍以 E_RUNTIME_PATH 拒絕。取得鎖後仍獨立比較整個 embedded payload
+  bytes，必要時修復，鎖只涵蓋準備階段，並不涵蓋模型請求。
+  session.lock 仍零等待，不能將同 session 寫入衝突變成排隊／重放。
+- 本機 Python 74 項（73 通過、1 跳過）、七組 C++17 suites、MinGW
+  launcher 語法交叉編譯及 diff check 通過。MinGW 定義既有缺少的
+  BCRYPT_SHA256_ALG_HANDLE 常數僅用於語法檢查，非 Windows runtime 證據。
+- 此切片已有真實 Windows RED，Windows GREEN 必須以推送後的同一
+  concurrency integration 驗證，尚未取得，不宣稱 A16 完成。
+- 同一 job 的 TLS 診斷為 connections=2、transport errno=10054 兩次、
+  HTTP requests=0、engine exit=1；只證明曾連接且未送 HTTP，不單憑 reset
+  當作憑證拒絕或 E_GATEWAY_TLS 分類通過。
