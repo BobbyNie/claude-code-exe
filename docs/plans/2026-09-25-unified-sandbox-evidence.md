@@ -2433,3 +2433,12 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   當成憑證拒絕證據。此 job 的其他測試及證據上傳通過不放行 TLS gate，
   不代表 Windows 11 普通帳戶驗收。此記錄僅更新實測證據，未改程式、
   未重跑工作流、未放寬 acceptance。
+- 同 run 舊版 2.1.221 job 110595336068 已完成 failure，完整日誌也
+  回報 canonical_certificate_message_hint_not_tls_evidence=unmatched；
+  certificate_text=true、structured_tls_code=false、error_result=true、
+  success_subtype=true、result_text=true、exit=1、connections=2、HTTP=0。
+  Gateway 失敗快照與新版不同：protocol_observations 兩次 tls-record，
+  handshake_errors 為空；neutral diagnostics 仍 tls=false／retry=false／
+  engine=true。不得套用新版 errno=10054 到舊版，也不得將空陣列推論為
+  TLS 握手成功；此快照未證明兩版本共同根因。下一步調查必須區分
+  server handshake 觀察不足與 frontend 未取得結構化錯誤兩個問題。
