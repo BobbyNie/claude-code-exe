@@ -1979,3 +1979,13 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - `c14eb7c` / run `36901139794`：兩版本 job 日誌均確認 payload tamper／actual
   extracted bytes／cache repair PASS；這是新一次 regression，不證明間歇問題已修復。
   TLS gate 仍 RED（transport errno 10054、零 HTTP），不改變故障分類／驗收門檻。
+
+### A17 MCP 非互動拒絕／零 invocation 門檻
+
+- 與 allowed MCP case 分開使用全新 app/data/workspace；同樣提供使用者
+  --mcp-config，但不傳 --allowedTools，不能以成功 case 代替權限拒絕。
+  要求真實 engine 列出 MCP tool、回傳 is_error=true tool_result，且 server
+  invocation evidence 完全不存在；即使結果說拒絕，只要 server 執行過也 fail。
+- verifier 新測試先因 denied 參數不存在而 RED，再 GREEN；成功結果偽裝拒絕及
+  已執行但回錯誤均 fail。101 Python tests：98 pass／3 Windows skip；diff-check pass。
+  Windows engine 實跑尚待驗證，不能推定 MCP 安全隔離或第三方批准。

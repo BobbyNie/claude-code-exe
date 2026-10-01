@@ -53,3 +53,21 @@ class McpFixtureTests(unittest.TestCase):
             evidence.write_text(evidence.read_text() * 2)
             with self.assertRaises(AssertionError):
                 fixture.verify_mcp_execution(requests, received, evidence)
+
+    def test_denied_mcp_requires_error_result_and_no_server_invocation(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('tools_fixture',
+            Path(__file__).parent / 'ccode/tools-integration.py')
+        fixture = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture)
+        requests = [{'tools': [{'name': 'mcp__fixture__probe'}]}]
+        denied = {'acceptance_0': {'is_error': True, 'content': 'Permission denied'}}
+        with tempfile.TemporaryDirectory() as folder:
+            evidence = Path(folder) / 'calls.jsonl'
+            fixture.verify_mcp_execution(requests, denied, evidence, denied=True)
+            with self.assertRaises(AssertionError):
+                fixture.verify_mcp_execution(requests,
+                    {'acceptance_0': {'content': 'mcp-fixture-only'}}, evidence, denied=True)
+            evidence.write_text('{"tool":"probe","marker":"mcp-fixture-only"}\n')
+            with self.assertRaises(AssertionError):
+                fixture.verify_mcp_execution(requests, denied, evidence, denied=True)
