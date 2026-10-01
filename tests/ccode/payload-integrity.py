@@ -41,6 +41,28 @@ def rejecting_gateway():
         worker.join(timeout=5)
 
 
+def activation_snapshot(extracted, expected_hash, expected_size):
+    """Fixed booleans only; diagnostic read failures never expose exception text."""
+    evidence = {}
+    for label, path in (("cache", extracted), ("candidate", extracted.with_name("engine.new"))):
+        flags = dict.fromkeys(("present", "readable", "size_matches", "hash_matches", "readonly"), False)
+        try:
+            info = path.stat()
+            flags["present"] = True
+            flags["readonly"] = bool(getattr(info, "st_file_attributes", 0) & 1)
+            flags["size_matches"] = info.st_size == expected_size
+            digest = hashlib.sha256()
+            with path.open("rb") as source:
+                for chunk in iter(lambda: source.read(65536), b""):
+                    digest.update(chunk)
+            flags["readable"] = True
+            flags["hash_matches"] = digest.hexdigest() == expected_hash
+        except OSError:
+            pass
+        evidence[label] = flags
+    return evidence
+
+
 def failure_summary(exit_code, request_count, terminal, attempt):
     """Only exact neutral renderer lines; never retain engine text or URLs."""
     lines = set(terminal.splitlines())
@@ -196,6 +218,9 @@ def check(executable):
                 terminal = turn.stderr + turn.stdout
                 summary = failure_summary(turn.returncode, len(gateway.requests) - before,
                                           terminal, attempt)
+                if not summary['auth']:
+                    summary['activation_files'] = activation_snapshot(
+                        extracted, metadata['engineSha256'], len(payload))
                 assert summary['auth'], ('Engine did not reach auth fixture; ' +
                                          json.dumps(summary, sort_keys=True))
                 assert b'test-only-integrity-token' not in terminal, 'Fixture token disclosed'

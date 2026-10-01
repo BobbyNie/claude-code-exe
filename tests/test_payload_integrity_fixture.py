@@ -8,6 +8,30 @@ import urllib.error
 
 
 class PayloadIntegrityFixtureTests(unittest.TestCase):
+    def test_activation_snapshot_distinguishes_intact_candidate_from_changed_cache(self):
+        import tempfile
+        path = Path(__file__).parent / 'ccode/payload-integrity.py'
+        spec = importlib.util.spec_from_file_location('payload_integrity', path)
+        fixture = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture)
+        with tempfile.TemporaryDirectory(prefix='private-runtime-') as folder:
+            root = Path(folder)
+            original = b'MZ-original-fixture'
+            (root / 'engine.new').write_bytes(original)
+            (root / 'engine.exe').write_bytes(b'MZ-changed-fixture')
+            snapshot = fixture.activation_snapshot(root / 'engine.exe',
+                hashlib.sha256(original).hexdigest(), len(original))
+            self.assertEqual(snapshot, {
+                'cache': {'present': True, 'readable': True, 'size_matches': False,
+                          'hash_matches': False, 'readonly': False},
+                'candidate': {'present': True, 'readable': True, 'size_matches': True,
+                              'hash_matches': True, 'readonly': False}})
+            self.assertNotIn(folder, str(snapshot))
+            (root / 'engine.new').unlink()
+            self.assertEqual(fixture.activation_snapshot(root / 'engine.exe',
+                hashlib.sha256(original).hexdigest(), len(original))['candidate'],
+                dict.fromkeys(('present', 'readable', 'size_matches', 'hash_matches', 'readonly'), False))
+
     def test_failure_summary_is_exact_allowlisted_and_never_copies_private_output(self):
         path = Path(__file__).parent / 'ccode/payload-integrity.py'
         spec = importlib.util.spec_from_file_location('payload_integrity', path)

@@ -2498,3 +2498,18 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - TDD：真實 SSL fixture 與客戶端 negotiated version 比對先因缺少
   tls_versions 屬性 RED，再 GREEN；完整 Python 129 tests／4 Windows-only
   skips，diff-check 通過。Windows 引擎版本計數尚待 push 後實跑。
+
+### A15 解出負載 activation 失敗調查快照
+
+- `745285e` / run `36934636417` completed/failure：new 2.1.282 的
+  payload repair attempt 1 再現 exit 64／E_EXTRACT_ACCESS／HTTP 0。
+  兩個 gateway TLS gate 仍失敗；cross-version 及 workspace-boundary 成功。
+- old 2.1.221 gateway 與獨立 probe 成功握手均為 TLSv1.3 ×2；new
+  兩處均成功握手 0、transport reset ×2。不據此推定客戶端 trust 結果。
+- payload fixture 在 auth 未到達時新增 activation_files：僅保存 cache／
+  candidate 的存在、可讀、size/hash 相符及 Windows readonly 布林；hash
+  以 64KiB 分塊讀取，不输出 hash/path/contents/exception text。失敗
+  snapshot 不執行重試，不改動 production activation 與原 auth gate。
+- TDD：實際暫存檔完整 candidate／變更 cache／缺少 candidate 先缺函數
+  RED，再 GREEN。完整 Python 130 tests／4 Windows-only skips；diff-check
+  通過。間歇性 access 原因仍未證明，Windows 快照尚待觸發再現。
