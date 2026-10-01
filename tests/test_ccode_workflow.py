@@ -2,9 +2,20 @@
 from pathlib import Path
 import unittest
 import ast
+import re
 
 
 class AcceptanceWorkflowTests(unittest.TestCase):
+    def test_windows_workflow_actions_use_immutable_commit_references(self):
+        root = Path(__file__).resolve().parents[1]
+        for name in ('test-ccode.yml', 'test-ccode-windows11-x64.yml'):
+            workflow = (root / '.github/workflows' / name).read_text(encoding='utf-8')
+            references = re.findall(r'^\s*- uses: (\S+)', workflow, re.MULTILINE)
+            self.assertTrue(references)
+            for reference in references:
+                with self.subTest(workflow=name, action=reference):
+                    self.assertRegex(reference, r'^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40}$')
+
     def test_signature_contracts_have_pinned_runtime_and_required_gate(self):
         root = Path(__file__).resolve().parents[1]
         for name in ('test-ccode.yml', 'test-ccode-windows11-x64.yml'):
@@ -261,7 +272,7 @@ class AcceptanceWorkflowTests(unittest.TestCase):
     def test_failed_gateway_does_not_hide_independent_acceptance(self):
         workflow = (Path(__file__).resolve().parents[1] /
                     '.github/workflows/test-ccode.yml').read_text(encoding='utf-8')
-        upload = workflow.split('      - uses: actions/upload-artifact@v4', 1)[1].split('\n  workspace-boundary:', 1)[0]
+        upload = workflow.split('      - uses: actions/upload-artifact@', 1)[1].split('\n  workspace-boundary:', 1)[0]
         self.assertIn("if: ${{ !cancelled() && steps.build.outcome == 'success' }}", upload)
         self.assertIn('name: ccode-windows-built-${{ matrix.version }}', upload)
         self.assertIn('if-no-files-found: error', upload)

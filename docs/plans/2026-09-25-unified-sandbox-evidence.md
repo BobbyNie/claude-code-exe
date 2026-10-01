@@ -2408,3 +2408,14 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   frontend/gateway 分類。inventory 為調查假設，尚非已觀察原生契約。
   測試先 RED（缺函式）後 GREEN；probe 八項，完整 Python 126
   （122 pass／4 Windows skip），diff-check 通過。待遠端確認精確匹配。
+
+- A20 CI action 依賴固定：兩個 Windows workflow 的 checkout v4、
+  setup-bun v2、msvc-dev-cmd v1、upload-artifact v4、download-artifact
+  v4 均以各官方 repository git ref API 核實 commit type 及完整 SHA，
+  用該 SHA 取代可變 tag，保留版本註解；既有 setup-node SHA 不变。
+  未升級 action major 或 Bun/Node runtime，沒有降低測試 gate。
+  workflow contract 先 RED（16 個可變 tag 引用），改動後 GREEN；
+  workflow 16 項、完整 Python 127（123 pass／4 Windows skip）通過。
+  這只固定 action 原始碼，不宣稱 hosted image、MSVC/SDK、Python、
+  action 內部所有下載或 Windows 11 工程 runtime 已完整固定。
+  實際兩 workflow 執行與核准完整工具鏈仍待驗證。
