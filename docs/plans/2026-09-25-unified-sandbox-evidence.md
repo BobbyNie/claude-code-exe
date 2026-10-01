@@ -2244,3 +2244,19 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   E_LIFECYCLE_MANIFEST（GREEN），不進行任何 URL 網路請求。
   lifecycle 6 項、完整 Python 118 項（115 pass／3 Windows-only skip）
   通過；diff-check 通過。URL 格式重驗不提供官方來源真實性或可信簽署。
+
+### A20 工程簽章驗證核心（尚未接入放行）
+
+- 新增 manifest-signature.mjs，使用 Node 內建 crypto 的 Ed25519 驗證，
+  不自製密碼算法、不載入私鑰。外部 signer 必須簽署 UTF-8 固定前綴
+  `ccode-enterprise-manifest-v1` 加一個 NUL byte，再串接原始 manifest bytes。
+  public key 使用 canonical SPKI DER；其 SHA256 pin 必須由獨立核准政策
+  提供，不從候選中的 key/hash 自動建立信任。
+- 正向真實簽章測試先 RED（module 缺少），實作後 GREEN。四組 Node
+  測試涵蓋 byte/signature/key/pin 篡改、大小限制、缺 domain、RSA
+  誤用及 DER trailing bytes；全部通過，Node v22.22.0，diff-check 通過。
+  測試私鑰只在程序記憶體中生成，未写入檔案／repo。
+- 此函式僅為工程元件：尚無核准 key、CLI、企業候選簽章附檔、
+  launcher/update fail-closed gate、固定 Windows 驗證依賴及實機證據。
+  不給 ccode.exe 新增 Node 執行需求，不宣稱 A20 已通過；下一步須
+  接入完整候選重驗及簽章拒絕／回退矩陣，不能以函式測試代替放行。
