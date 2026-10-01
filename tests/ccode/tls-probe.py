@@ -355,7 +355,8 @@ def probe(executable):
                 'canonical_certificate_message_hint_not_tls_evidence': canonical_certificate_result(events),
                 'engine_version': metadata['engineVersion'], 'exit_code': result.returncode,
                 'connections': endpoint.connections,
-                'tls_handshakes_completed': endpoint.tls_handshakes_completed, 'http_requests': endpoint.http_requests,
+                'tls_handshakes_completed': endpoint.tls_handshakes_completed,
+                'tls_versions': endpoint.tls_versions, 'http_requests': endpoint.http_requests,
                 'invalid_json_lines': invalid_lines, 'stderr_present': bool(result.stderr)}))
 
 

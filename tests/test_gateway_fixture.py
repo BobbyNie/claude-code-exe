@@ -72,10 +72,14 @@ class GatewayFixtureTests(unittest.TestCase):
             trusted = ssl.create_default_context(cafile=str(endpoint.certificate))
             with socket.create_connection(endpoint.address, timeout=2) as connection:
                 with trusted.wrap_socket(connection, server_hostname="127.0.0.1") as secure:
+                    negotiated = secure.version()
                     secure.sendall(b"GET / HTTP/1.0\r\nHost: localhost\r\n\r\n")
                     self.assertIn(b"503", secure.recv(4096))
             self.assertEqual(endpoint.http_requests, 1)
             self.assertEqual(endpoint.tls_handshakes_completed, 1)
+            self.assertEqual(endpoint.tls_versions, {
+                "TLSv1.2": int(negotiated == "TLSv1.2"),
+                "TLSv1.3": int(negotiated == "TLSv1.3"), "other": 0})
 
     def test_tls_endpoint_records_failed_connection_without_http_or_private_details(self):
         with fixture.untrusted_tls_endpoint() as endpoint:

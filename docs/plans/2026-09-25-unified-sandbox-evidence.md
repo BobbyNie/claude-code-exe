@@ -2482,3 +2482,19 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   lifecycle 12（11 pass／1 Windows skip），完整 Python 129
   （125 pass／4 Windows skip），diff-check 通過。此不替代內建 gate、
   正式政策批准或 Windows 11 普通帳戶實機證據。
+
+### TLS 協商版本診斷（未放行）
+
+- `57f1e73` 的 run `36932757909` 已 completed/failure：兩個主 job
+  僅 actual gateway rejection 失敗；cross-version 與兩個 workspace-boundary
+  job 成功。兩個 Windows Python suite 均 129 tests／1 skip。
+- 舊引擎 gateway fixture 本次成功握手 1 次、transport reset 1 次；獨立
+  native probe 成功握手 2 次。新引擎兩處均成功握手 0 次、reset 2 次。
+  HTTP 均 0；正式診斷仍 E_ENGINE，structured TLS code 未取得。
+  不把握手完成當作客戶端信任成功，亦不把 reset 當作憑證拒絕證明。
+- 新增服務端成功握手 TLS 版本固定計數（TLSv1.2／TLSv1.3／other），
+  同步 gateway failure snapshot 與 native probe。僅在 wrap_socket 成功
+  後計數，未知版本不輸出原文；未改變 production classifier 或驗收 gate。
+- TDD：真實 SSL fixture 與客戶端 negotiated version 比對先因缺少
+  tls_versions 屬性 RED，再 GREEN；完整 Python 129 tests／4 Windows-only
+  skips，diff-check 通過。Windows 引擎版本計數尚待 push 後實跑。

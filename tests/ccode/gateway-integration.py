@@ -54,6 +54,8 @@ def untrusted_tls_endpoint():
                     classify_tls_prefix(connection.recv(3, socket.MSG_PEEK)))
                 secure = context.wrap_socket(connection, server_side=True)
                 self.tls_handshakes_completed += 1
+                version = secure.version()
+                self.tls_versions[version if version in ("TLSv1.2", "TLSv1.3") else "other"] += 1
                 return secure, address
             except ssl.SSLError as error:
                 self.handshake_errors.append({"kind": "tls", "errno": error.errno})
@@ -74,6 +76,7 @@ def untrusted_tls_endpoint():
     server.handshake_failed = threading.Event()
     server.connections = 0
     server.tls_handshakes_completed = 0
+    server.tls_versions = {"TLSv1.2": 0, "TLSv1.3": 0, "other": 0}
     server.handshake_errors = []
     server.protocol_observations = []
     server.http_requests = 0
@@ -185,6 +188,7 @@ def check_tls_rejection(executable):
                     "connections": endpoint.connections,
                     "handshake_errors": endpoint.handshake_errors,
                     "tls_handshakes_completed": endpoint.tls_handshakes_completed,
+                    "tls_versions": endpoint.tls_versions,
                     "protocol_observations": endpoint.protocol_observations,
                     "http_requests": endpoint.http_requests,
                     "exit_code": result.returncode,
