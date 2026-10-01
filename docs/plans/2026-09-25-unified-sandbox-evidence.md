@@ -1935,3 +1935,16 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   同時保留非零退出、恰好一次模型請求、hash/bytes 一致及無 disclosure 的要求；
   不重試引擎請求。新測試先因 helper 缺少而 RED，再 GREEN；96 項 Python
   回歸成功（3 項 Windows-only skip）。這是定位證據改善，不是 payload 問題已修復。
+
+### A15 真實 snapshot launcher 強制中斷／重新備份案例
+
+- 新增 `portable-integration.py` 案例：以約 58 MiB 合成 source file 保持真實
+  hash/copy 階段可觀測，僅在 launcher 存活且 `.pending/profile` 已建立、manifest
+  尚未出現時強制終止並等待退出。若觀察不到此階段或已發布 target，案例 fail，
+  不以事後預置 pending 代替實際中斷。
+- 中斷後 source bytes／active selection 保全；隨後新 snapshot 必須成功、UUID／
+  manifest inventory／每檔 size/SHA256／copied bytes 全部相符，並保留原 pending
+  evidence。無 engine/model request 重試；重新執行的是本地備份命令。
+- helper 測試先因未實作而 RED，再 GREEN；97 項 Python 回歸成功，3 項
+  Windows-only skip。尚待推送後 hosted Windows 與正式 Windows 11 x64 普通帳戶
+  實跑。這不替代磁碟滿、斷電、activation／rollback 各中斷點或整個 A15 驗收。

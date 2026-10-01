@@ -9,6 +9,7 @@ import sys
 import tempfile
 import uuid
 import shutil
+import time
 
 def validate_data_failure_report(path, code, exit_code):
     spec = importlib.util.spec_from_file_location('portable_gateway_diagnostics',
@@ -22,6 +23,68 @@ def profile_bytes(profile):
     return {path.relative_to(profile).as_posix(): path.read_bytes()
             for path in profile.rglob("*") if path.is_file() and
             path.relative_to(profile).as_posix() not in ("frontend.lock", "metadata.lock")}
+
+
+def interrupt_snapshot(process, snapshots, *, timeout=30):
+    deadline = time.monotonic() + timeout
+    while process.poll() is None and time.monotonic() < deadline:
+        pending = [path for path in snapshots.glob('*.pending')
+                   if (path / 'profile').is_dir() and not (path / 'manifest.json').exists()]
+        if len(pending) == 1:
+            process.kill()
+            process.communicate(timeout=15)
+            assert process.returncode != 0, 'Snapshot interruption did not terminate launcher'
+            assert pending[0].is_dir(), 'Interrupted snapshot evidence was removed'
+            assert not pending[0].with_suffix('').exists(), 'Snapshot published before interruption'
+            return pending[0]
+        time.sleep(0.001)
+    raise AssertionError('No live unpublished snapshot observed; interruption not proven')
+
+
+def check_interrupted_snapshot(executable):
+    """Real launcher termination, not simulated pending files or a power-loss claim."""
+    with tempfile.TemporaryDirectory(prefix='ccode-snapshot-interrupt-') as folder:
+        root = Path(folder)
+        app = root / 'ccode.exe'
+        shutil.copy2(executable, app)
+        data, profile = root / 'data', root / 'data/profile'
+        profile.mkdir(parents=True)
+        # Keep the real hash/copy phase observable without a product test hook.
+        with (profile / 'fixture.bin').open('wb') as output:
+            block = b'snapshot-interruption-fixture\n' * 32768
+            for _ in range(64):
+                output.write(block)
+        before = profile_bytes(profile)
+        env = {key: value for key, value in os.environ.items()
+               if not key.upper().startswith(('A_', 'C_', 'ANTHROPIC_', 'CLAUDE_', 'CCODE_'))}
+        args = [str(app), '--data-dir', str(data), '--snapshot-profile']
+        process = subprocess.Popen(args, cwd=root, env=env, stdin=subprocess.DEVNULL,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            pending = interrupt_snapshot(process, data / 'snapshots')
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.communicate(timeout=15)
+        assert profile_bytes(profile) == before, 'Interrupted snapshot changed source bytes'
+        assert not (data / 'active-profile.json').exists(), 'Snapshot changed active selection'
+        retained = profile_bytes(pending)
+        retry = subprocess.run(args, cwd=root, env=env, stdin=subprocess.DEVNULL,
+                               capture_output=True, text=True, encoding='utf-8', timeout=60)
+        assert retry.returncode == 0, 'Fresh snapshot after interruption failed'
+        snapshot_id = str(uuid.UUID(retry.stdout.strip()))
+        snapshot = data / 'snapshots' / snapshot_id
+        manifest = json.loads((snapshot / 'manifest.json').read_text(encoding='utf-8'))
+        assert manifest['snapshotId'] == snapshot_id and manifest['schema'] == 1
+        assert set(manifest['files']) == set(before), 'Retry snapshot inventory changed'
+        for name, contents in before.items():
+            assert (snapshot / 'profile' / name).read_bytes() == contents
+            assert manifest['files'][name] == {
+                'sha256': hashlib.sha256(contents).hexdigest(), 'size': len(contents)}
+        assert profile_bytes(profile) == before, 'Retry changed source bytes'
+        assert pending.is_dir() and profile_bytes(pending) == retained, 'Retry changed interruption evidence'
+        assert not (data / 'active-profile.json').exists(), 'Retry changed active selection'
+        print('PASS: real forced snapshot interruption preserves source and pending evidence; fresh retry verifies hashes')
 
 
 def check(executable):
@@ -319,3 +382,4 @@ def check(executable):
 
 if __name__ == "__main__":
     check(Path(sys.argv[1]).resolve())
+    check_interrupted_snapshot(Path(sys.argv[1]).resolve())

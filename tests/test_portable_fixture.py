@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import Mock
 
 spec = importlib.util.spec_from_file_location(
     'portable_fixture', Path(__file__).parent / 'ccode/portable-integration.py')
@@ -27,6 +28,24 @@ class PortableFixtureTests(unittest.TestCase):
                 path.write_text(json.dumps(dict(report, **change)), encoding='utf-8')
                 with self.assertRaises(AssertionError):
                     fixture.validate_data_failure_report(path, 'E_ACTIVE_PROFILE', 64)
+
+    def test_interruption_requires_live_unpublished_snapshot_and_reaps_launcher(self):
+        with tempfile.TemporaryDirectory() as folder:
+            snapshots = Path(folder)
+            pending = snapshots / 'a2345678-1234-1234-1234-123456789abc.pending'
+            (pending / 'profile').mkdir(parents=True)
+            process = Mock()
+            process.poll.return_value = None
+            process.returncode = 1
+            self.assertEqual(fixture.interrupt_snapshot(process, snapshots), pending)
+            process.kill.assert_called_once_with()
+            process.communicate.assert_called_once_with(timeout=15)
+            (pending / 'manifest.json').write_bytes(b'committed')
+            process = Mock()
+            process.poll.return_value = 0
+            with self.assertRaises(AssertionError):
+                fixture.interrupt_snapshot(process, snapshots)
+            process.kill.assert_not_called()
 
     def test_snapshot_bytes_exclude_only_root_operational_locks(self):
         with tempfile.TemporaryDirectory() as folder:
