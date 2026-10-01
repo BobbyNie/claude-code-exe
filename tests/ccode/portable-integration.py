@@ -9,6 +9,12 @@ import tempfile
 import uuid
 import shutil
 
+def profile_bytes(profile):
+    return {path.relative_to(profile).as_posix(): path.read_bytes()
+            for path in profile.rglob("*") if path.is_file() and
+            path.relative_to(profile).as_posix() not in ("frontend.lock", "metadata.lock")}
+
+
 def check(executable):
     with tempfile.TemporaryDirectory(prefix="ccode portable ") as folder:
         root = Path(folder)
@@ -242,10 +248,9 @@ def check(executable):
             assert transcript.read_bytes() == saved
         print("PASS: malformed history tails remain visible as unavailable and cannot resume; original bytes preserved")
         # Backup works without loading or repairing malformed history. The live
-        # profile lock is excluded; all other bytes are independently hashed.
+        # root operational locks are excluded; all other bytes are independently hashed.
         profile = history_data / "profile"
-        before = {path.relative_to(profile).as_posix(): path.read_bytes()
-                  for path in profile.rglob("*") if path.is_file() and path.name != "frontend.lock"}
+        before = profile_bytes(profile)
         backup = run("--data-dir", str(history_data), "--snapshot-profile")
         assert backup.returncode == 0, backup.stderr
         backup_id = str(uuid.UUID(backup.stdout.strip()))
@@ -257,7 +262,8 @@ def check(executable):
             assert (profile / name).read_bytes() == saved
             assert (snapshot / "profile" / name).read_bytes() == saved
             assert manifest["files"][name] == {"sha256": hashlib.sha256(saved).hexdigest(), "size": len(saved)}
-        assert not (snapshot / "profile/frontend.lock").exists()
+        for lock in ("frontend.lock", "metadata.lock"):
+            assert not (snapshot / "profile" / lock).exists()
         assert not (history_data / "snapshots" / (backup_id + ".pending")).exists()
         print("PASS: locked profile snapshot preserves source bytes and independently verified SHA256 manifest")
         staged = run("--data-dir", str(history_data), "--stage-profile", backup_id)
