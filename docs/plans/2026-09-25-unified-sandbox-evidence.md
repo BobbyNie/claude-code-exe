@@ -2147,3 +2147,12 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   notification 與 child result marker，不接受只有 async launch metadata；Python
   新案例 RED→GREEN。七組 C++、113 Python（110 pass／3 skip）通過。
   該通知格式仍須 Windows integration 核實，不把本機 GREEN 當 A17 全量通過。
+
+- `b41a596` / `36918944507`，jobs `110559845111`（2.1.282）、
+  `110559844711`（2.1.221）均明確打印兩次子代理 PASS：明示前景與預設背景
+  的 child context／後續 parent 結果驗證均成功，來源不變且 data history 存在。
+  僅此 deterministic Windows hosted CI 範圍成功，不替代 Win11 普通帳戶、
+  實際企業 gateway 或第三方完整矩陣；A17 整體仍未放行。
+  兩版本 TLS gate 仍失敗（tls-record 兩次／HTTP 0／E_ENGINE），不得分類為
+  憑證拒絕。新增 task ID 同 stream 不可重用負例先 RED 再 GREEN，防止已消費
+  task 完成授權被重用；七組 C++、Python 113（110 pass／3 skip）通過。

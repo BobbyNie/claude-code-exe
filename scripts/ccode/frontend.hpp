@@ -29,6 +29,7 @@ class EventReader {
     bool toolRegistryReceived = false;
     std::set<std::string> subagentToolIds;
     std::map<std::string, std::string> backgroundTasks;
+    std::set<std::string> seenTaskIds;
     bool interimResult = false;
     size_t queuedParentTurns = 0;
     std::string Event(const Json& event) {
@@ -80,7 +81,7 @@ class EventReader {
             const auto task = event.at("task_id").get<std::string>();
             const auto tool = event.at("tool_use_id").get<std::string>();
             if (complete || task.empty() || !subagentToolIds.count(tool) ||
-                !backgroundTasks.emplace(task, tool).second) throw ProtocolError("E_PROTOCOL_ORDER");
+                !seenTaskIds.insert(task).second || !backgroundTasks.emplace(task, tool).second) throw ProtocolError("E_PROTOCOL_ORDER");
             return "";
         }
         if (type == "system" && event.value("subtype", std::string()) == "task_notification") {

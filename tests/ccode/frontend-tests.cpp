@@ -202,6 +202,15 @@ int main() {
     queuedParent.Finish();
     assert(queuedParent.complete && queuedParent.session == "same");
     ExpectError(queuedParent, agentInit, "E_PROTOCOL_ORDER");
+    ccode::EventReader reusedTask;
+    reusedTask.Feed(agentInit);
+    reusedTask.Feed(tool("Agent", "reuse1", ccode::Json::object()));
+    const auto taskStart = ccode::Json{{"type", "system"}, {"subtype", "task_started"},
+        {"task_id", "once-only"}, {"tool_use_id", "reuse1"}}.dump() + "\n";
+    reusedTask.Feed(taskStart);
+    reusedTask.Feed(ccode::Json{{"type", "system"}, {"subtype", "task_notification"},
+        {"task_id", "once-only"}, {"status", "completed"}}.dump() + "\n");
+    ExpectError(reusedTask, taskStart, "E_PROTOCOL_ORDER");
     // A notification without a registered task cannot reopen a completed turn.
     ccode::EventReader unsolicitedTask;
     unsolicitedTask.Feed(init);
