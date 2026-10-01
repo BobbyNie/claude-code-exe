@@ -5,6 +5,7 @@ import socket
 import ssl
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 from types import SimpleNamespace
 import threading
 import tempfile
@@ -25,6 +26,22 @@ class GatewayFixtureTests(unittest.TestCase):
             with socket.socket() as competitor:
                 with self.assertRaises(OSError):
                     competitor.bind(address)
+
+    def test_unreachable_turn_requires_fresh_exact_failure_report(self):
+        with tempfile.TemporaryDirectory() as folder:
+            executable = Path(folder) / 'ccode.exe'
+            executable.write_bytes(b'fixture')
+            def run(args, **kwargs):
+                self.assertIn('--diagnostics', args)
+                report = Path(args[args.index('--diagnostics') + 1])
+                self.assertFalse(report.exists())
+                return SimpleNamespace(returncode=1, stdout='[E_ENGINE: turn failed]\n', stderr='')
+            with patch.object(fixture.subprocess, 'run', side_effect=run), patch.object(
+                    fixture, 'validate_failure_diagnostic') as validate, patch('builtins.print'):
+                fixture.check_unreachable(executable)
+                validate.assert_called_once()
+                self.assertEqual(validate.call_args.args[1:], ('E_ENGINE', 1))
+                self.assertEqual(validate.call_args.kwargs, {'category': 'local'})
 
     def test_tls_endpoint_rejects_untrusted_certificate_but_accepts_explicit_trust(self):
         with fixture.untrusted_tls_endpoint() as endpoint:

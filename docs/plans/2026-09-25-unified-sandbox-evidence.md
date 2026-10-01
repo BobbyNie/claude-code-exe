@@ -1854,3 +1854,20 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   including the exact diagnostic verifier executed before the PASS marker.
   Overall run still fails; payload auth-fixture and TLS failures remain unresolved.
   This is hosted CI evidence, not Windows 11 ordinary-account acceptance.
+
+### A19 unreachable endpoint diagnostic coverage
+
+- Added a fixture-level test that actually failed because --diagnostics was
+  missing; implementation now requests a fresh report and validates exact schema,
+  canonical neutral cause/category and nonzero exit code. No extra engine request
+  or retry is introduced. Unknown/private terminal text cannot choose a cause.
+- Local Python regression: 90 tests, 87 pass / 3 Windows skip; focused fixture
+  suite 11 pass. Mock-run PASS output is suppressed: this is not engine evidence.
+  Windows execution of this change remains pending.
+- Run 36893307372, completed 2.1.282 job 110473991313: native runtime, frontend,
+  actual tools, aliases, payload integrity and concurrency steps pass. All three
+  interrupted-stream cases pass before TLS (prior to the new A19 report checks).
+- Native TLS result shape is success_subtype=true/result_text=true with
+  is_error=true, no structured TLS code. Certificate fixture receives two
+  transport resets (10054), HTTP zero; portable code still E_ENGINE. Therefore
+  TLS remains RED; result text is not promoted to trusted TLS classification.

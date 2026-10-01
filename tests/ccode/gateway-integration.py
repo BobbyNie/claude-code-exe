@@ -94,6 +94,7 @@ def check_unreachable(executable):
         prompt = "fixture-private-unreachable-prompt-12974"
         env = {key: value for key, value in os.environ.items()
                if not key.startswith(("A_", "C_", "ANTHROPIC_", "CLAUDE_", "CCODE_"))}
+        report_path = root / "failure.json"
         with unreachable_endpoint() as address:
             # Verify refusal on the actual runner, not only in local unit tests.
             with socket.socket() as client:
@@ -102,7 +103,7 @@ def check_unreachable(executable):
             env.update(A_AUTH_TOKEN=token, A_BASE_URL=f"http://{address[0]}:{address[1]}")
             try:
                 result = subprocess.run([str(app), "--data-dir", str(data), "--print",
-                    "--tools", "", prompt], cwd=workspace, env=env, input="",
+                    "--diagnostics", str(report_path), "--tools", "", prompt], cwd=workspace, env=env, input="",
                     capture_output=True, text=True, encoding="utf-8", timeout=60)
             except subprocess.TimeoutExpired:
                 raise AssertionError("Unreachable gateway did not terminate within 60 seconds") from None
@@ -110,6 +111,8 @@ def check_unreachable(executable):
         assert result.returncode != 0, "Unreachable gateway turn incorrectly succeeded"
         assert "E_" in terminal, "Unreachable gateway needs a neutral error"
         assert token not in terminal and prompt not in terminal, "Private fixture data leaked"
+        report_code, category = stream_failure_diagnostic(terminal)
+        validate_failure_diagnostic(report_path, report_code, result.returncode, category=category)
         assert not list(workspace.iterdir()), "Unreachable gateway changed workspace"
         assert not list(program.rglob("*.jsonl")), "History leaked into program directory"
         print("PASS: actual engine unreachable gateway terminates with neutral error, no workspace writes or terminal secret disclosure")
