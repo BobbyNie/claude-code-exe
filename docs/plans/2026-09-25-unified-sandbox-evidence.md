@@ -2327,3 +2327,19 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   job 110584728848 與 110584729218 均正在執行；沒有 rerun。
   使用者提供的 run 36877451807 已成功執行編譯與多項測試，失敗
   是測試／runtime 問題，不是該 run 被 billing quota 阻擋。
+
+- A19 DNS 結構化分類工程契約：只在 assistant/system/result 的
+  error.code 明確為 ENOTFOUND 或 EAI_AGAIN 時拒絕並產生
+  E_GATEWAY_DNS；模型文字中的同名字串不得觸發分類，raw host/token
+  不渲染。診斷 allowlist 保留此中性碼並分類為 network。
+  frontend 與 diagnostic 測試先 RED（未拒絕／碼未 allowlist），
+  實作後兩組 GREEN；完整 Python 122（118 pass／4 Windows skip）。
+  此為合成結構化事件契約，不證明原生 engine 在 DNS 故障時實際提供
+  該欄位，不修復目前 TLS 分類缺口，A19 實機矩陣仍未完成。
+- run 36926412194／commit 29477d4 的新版 job 110584728848 已完成；
+  只有 actual engine gateway rejection gate 失敗，payload gate 本次
+  成功，不能據此宣稱間歇性 E_EXTRACT_ACCESS 已修復。
+  日誌明確列出 Windows-only unsigned candidate rejection test 為 ok；
+  Python 共 122、skipped=1。這是 hosted Windows 證據，非 Win11
+  普通帳戶實機證據。TLS 兩次 tls-record／transport errno10054、
+  HTTP=0、exit=1、tls=false／engine=true；不推斷憑證拒絕。

@@ -11,6 +11,8 @@ int main() {
     assert(NeutralErrorCode("E_bad: secret") == "E_LOCAL");
     assert(NeutralErrorCode("E_PRIVATE_TOKEN_12345: hidden") == "E_LOCAL");
     assert(NeutralErrorCode("E_GATEWAY_TLS_PRIVATE_HOST: hidden") == "E_LOCAL");
+    assert(NeutralErrorCode("E_GATEWAY_DNS") == "E_GATEWAY_DNS");
+    assert(DiagnosticCategory("E_GATEWAY_DNS") == "network");
     assert(DiagnosticCategory("E_GATEWAY_TLS") == "network");
     assert(DiagnosticCategory("E_PROTOCOL_JSON") == "protocol");
     assert(DiagnosticCategory("E_MISSING_RESULT") == "protocol");

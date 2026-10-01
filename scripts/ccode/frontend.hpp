@@ -43,6 +43,8 @@ class EventReader {
             const auto& error = event.at("error");
             if (error.contains("code") && error.at("code").is_string()) {
                 const auto code = error.at("code").get<std::string>();
+                if (code == "ENOTFOUND" || code == "EAI_AGAIN")
+                    throw ProtocolError("E_GATEWAY_DNS");
                 if (code == "CERT_HAS_EXPIRED" || code == "DEPTH_ZERO_SELF_SIGNED_CERT" ||
                     code == "SELF_SIGNED_CERT_IN_CHAIN" || code == "UNABLE_TO_VERIFY_LEAF_SIGNATURE" ||
                     code == "UNABLE_TO_GET_ISSUER_CERT_LOCALLY" || code == "ERR_TLS_CERT_ALTNAME_INVALID")

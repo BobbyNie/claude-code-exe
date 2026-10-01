@@ -87,6 +87,18 @@ int main() {
             ExpectError(tls, wire, "E_PROTOCOL_FAILED");
         }
     }
+    for (const auto& kind : {"assistant", "system", "result"}) {
+        for (const auto& code : {"ENOTFOUND", "EAI_AGAIN"}) {
+            ccode::EventReader dns;
+            const auto event = ccode::Json{{"type", kind}, {"error", {{"code", code},
+                {"message", "private-token private-host"}}}}.dump() + "\n";
+            ExpectError(dns, event, "E_GATEWAY_DNS");
+            ExpectError(dns, wire, "E_PROTOCOL_FAILED");
+        }
+    }
+    ccode::EventReader dnsText;
+    assert(dnsText.Feed("{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"ENOTFOUND\"}]}}\n") == "ENOTFOUND\n");
+    assert(!dnsText.failed && dnsText.failureCode.empty());
     ccode::EventReader tlsText;
     assert(tlsText.Feed("{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"CERT_HAS_EXPIRED\"}]}}\n") == "CERT_HAS_EXPIRED\n");
     assert(!tlsText.failed && tlsText.failureCode.empty());
