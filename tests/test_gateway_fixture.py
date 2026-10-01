@@ -36,6 +36,19 @@ class GatewayFixtureTests(unittest.TestCase):
                     self.assertIn(b"503", secure.recv(4096))
             self.assertEqual(endpoint.http_requests, 1)
 
+    def test_tls_endpoint_records_failed_connection_without_http_or_private_details(self):
+        with fixture.untrusted_tls_endpoint() as endpoint:
+            with socket.create_connection(endpoint.address, timeout=2):
+                pass
+            self.assertTrue(endpoint.handshake_failed.wait(3))
+            self.assertEqual(endpoint.connections, 1)
+            self.assertEqual(endpoint.http_requests, 0)
+            self.assertEqual(len(endpoint.handshake_errors), 1)
+            error = endpoint.handshake_errors[0]
+            self.assertIn(error['kind'], ('tls', 'transport'))
+            self.assertTrue(error['errno'] is None or isinstance(error['errno'], int))
+            self.assertEqual(set(error), {'kind', 'errno'})
+
     def test_complete_arguments_still_lack_block_and_message_termination(self):
         events = fixture.unfinished_tool_events("fixture-model", "target.txt", "marker", True)
         self.assertEqual([kind for kind, _ in events],

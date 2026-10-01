@@ -36,14 +36,19 @@ def untrusted_tls_endpoint():
     class Server(ThreadingHTTPServer):
         def get_request(self):
             connection, address = super().get_request()
+            self.connections += 1
             connection.settimeout(2)
             try:
                 return context.wrap_socket(connection, server_side=True), address
-            except ssl.SSLError:
+            except ssl.SSLError as error:
+                self.handshake_errors.append({"kind": "tls", "errno": error.errno})
+                self.handshake_failed.set()
                 self.rejected.set()
                 connection.close()
                 raise
-            except OSError:
+            except OSError as error:
+                self.handshake_errors.append({"kind": "transport", "errno": error.errno})
+                self.handshake_failed.set()
                 connection.close()
                 raise
 
@@ -51,6 +56,9 @@ def untrusted_tls_endpoint():
     server.address = server.server_address
     server.certificate = certificate
     server.rejected = threading.Event()
+    server.handshake_failed = threading.Event()
+    server.connections = 0
+    server.handshake_errors = []
     server.http_requests = 0
     worker = threading.Thread(target=server.serve_forever, daemon=True)
     worker.start()
@@ -129,7 +137,13 @@ def check_tls_rejection(executable):
                     capture_output=True, text=True, encoding="utf-8", timeout=60)
             except subprocess.TimeoutExpired:
                 raise AssertionError("Untrusted TLS gateway did not terminate within 60 seconds") from None
-            assert endpoint.rejected.is_set(), "No failed TLS handshake observed from actual engine"
+            assert endpoint.rejected.is_set(), (
+                "No failed TLS handshake observed from actual engine; " + json.dumps({
+                    "connections": endpoint.connections,
+                    "handshake_errors": endpoint.handshake_errors,
+                    "http_requests": endpoint.http_requests,
+                    "exit_code": result.returncode,
+                }))
             assert endpoint.http_requests == 0, "Engine bypassed TLS trust and sent an HTTP request"
         terminal = result.stdout + result.stderr
         assert result.returncode != 0, "Untrusted TLS gateway turn incorrectly succeeded"
