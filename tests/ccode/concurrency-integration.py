@@ -182,6 +182,16 @@ def assert_request_markers(requests, expected, forbidden=()):
         assert marker not in encoded, f"Unexpected API request marker: {marker}"
 
 
+def parallel_failure_evidence(request_count, exit_codes, outputs):
+    # Never print captured engine output: it may include prompts or credentials.
+    return (
+        "Two different sessions did not both reach the API before either response was released; "
+        f"requests={request_count}; exit_codes={exit_codes}; "
+        f"stdout_present={[bool(stdout) for stdout, _ in outputs]}; "
+        f"stderr_present={[bool(stderr) for _, stderr in outputs]}"
+    )
+
+
 def verify(executable):
     state = FixtureState()
     server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(state))
@@ -280,15 +290,16 @@ def verify(executable):
                 )
             ]
             try:
-                assert state.arrived.wait(30), (
-                    "Two different sessions did not both reach the API before either response was released"
-                )
+                arrived = state.arrived.wait(30)
                 blocked = state.blocked_requests()
-                assert len(blocked) == 2, f"Expected two parallel model requests, got {len(blocked)}"
-                assert_request_markers(blocked, [parallel_first, parallel_second])
             finally:
                 state.finish_block()
                 outputs = [process.communicate(timeout=60) for process in processes]
+            assert arrived, parallel_failure_evidence(
+                len(blocked), [process.returncode for process in processes], outputs
+            )
+            assert len(blocked) == 2, f"Expected two parallel model requests, got {len(blocked)}"
+            assert_request_markers(blocked, [parallel_first, parallel_second])
             for process, (stdout, stderr) in zip(processes, outputs):
                 assert process.returncode == 0, stdout + stderr
             assert not state.errors, state.errors
