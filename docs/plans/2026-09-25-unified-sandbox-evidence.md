@@ -2099,3 +2099,12 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   complete 後拒絕事件的規則，也不把背景啟動 metadata 當成功結果。
   該 run cross-version 與兩個 workspace-boundary job 成功；2.1.221 payload gate
   另有失敗，尚需獨立定位；TLS gate 仍失敗。整體不放行。
+
+- `effe8c0` / `36910938078` 兩版本原生順序摘要均為 result_count=2、
+  assistant_after_result=true、exit_code=0、invalid_lines=0。這證明背景子代理
+  有第一個 result 後的事件，尚未足以定義可信 task-completion 狀態機。
+  新增獨立明示 run_in_background=false 的前景案例，必須在真實 API schema
+  宣告 boolean 控制才執行；原始預設／背景案例仍保留為 required gate，不能用
+  前景通過代替背景完成。Python TDD RED→GREEN；110 項 107 通過／3 skip。
+  2.1.221 job `110533125931` payload gate 失敗觀察為 E_EXTRACT、request_count=0，
+  尚不能歸因於 gateway 或容許重送。TLS／背景子代理仍未通過。

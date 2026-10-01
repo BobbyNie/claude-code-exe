@@ -16,6 +16,10 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
+def subagent_arguments(arguments, *, foreground):
+    return dict(arguments, run_in_background=False) if foreground else dict(arguments)
+
+
 def summarize_subagent_order(events):
     """Observe native lifecycle ordering without publishing message content."""
     result_count = 0
@@ -265,7 +269,7 @@ def check_workspace_boundaries(executable):
                 shutil.rmtree(long_workspace_io)
 
 
-def check(executable, short_path=False, lifecycle=None, permission=None, workspace_alias=None, root_override=None, mcp=False, mcp_deny=False, skill=False, subagent=False, subagent_probe=False):
+def check(executable, short_path=False, lifecycle=None, permission=None, workspace_alias=None, root_override=None, mcp=False, mcp_deny=False, skill=False, subagent=False, subagent_probe=False, subagent_foreground=False):
     root_context = (tempfile.TemporaryDirectory(prefix="ccode-tools-")
                     if root_override is None else nullcontext(str(Path(root_override).resolve())))
     with root_context as temporary:
@@ -358,8 +362,9 @@ def check(executable, short_path=False, lifecycle=None, permission=None, workspa
                            "tools: Read\n---\nchild-context-only-acceptance\n"
                            "Return child-result-only-acceptance.\n").encode()
             agent_path.write_bytes(agent_bytes)
-            plan = [(None, {"subagent_type": "acceptance-probe",
-                           "description": "Synthetic child probe", "prompt": "Return the instructed marker."})]
+            plan = [(None, subagent_arguments({"subagent_type": "acceptance-probe",
+                           "description": "Synthetic child probe", "prompt": "Return the instructed marker."},
+                           foreground=subagent_foreground))]
         received = {}
         requests = []
         handler_errors = []
@@ -389,6 +394,12 @@ def check(executable, short_path=False, lifecycle=None, permission=None, workspa
                 child_request = subagent and "child-context-only-acceptance" in json.dumps(body.get("system", []))
                 if subagent and len(requests) == 1:
                     plan[0] = (select_subagent_tool(body.get("tools", [])), plan[0][1])
+                    if subagent_foreground:
+                        advertised = next(tool for tool in body['tools'] if tool['name'] == plan[0][0])
+                        properties = advertised.get('input_schema', {}).get('properties', {})
+                        assert properties.get('run_in_background', {}).get('type') == 'boolean', \
+                            'Actual subagent schema lacks explicit foreground control'
+
                 for message in body.get("messages", []):
                     content = message.get("content", [])
                     if not isinstance(content, list):
@@ -662,6 +673,7 @@ if __name__ == "__main__":
         sys.exit(0)
     if len(sys.argv) == 3 and sys.argv[2] == "--subagent-only":
         check(executable, subagent=True, subagent_probe=True)
+        check(executable, subagent=True, subagent_foreground=True)
         check(executable, subagent=True)
         sys.exit(0)
     if len(sys.argv) == 3 and sys.argv[2] == "--skill-only":

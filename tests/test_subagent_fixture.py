@@ -43,6 +43,13 @@ class SubagentFixtureTests(unittest.TestCase):
             'emitted_task': False, 'emitted_unregistered': True})
         self.assertNotIn('private', str(fixture.summarize_subagent_registry(events)))
 
+    def test_foreground_subagent_arguments_preserve_background_default_case(self):
+        base = {'subagent_type': 'acceptance-probe', 'description': 'probe', 'prompt': 'probe'}
+        self.assertEqual(fixture.subagent_arguments(base, foreground=False), base)
+        self.assertEqual(fixture.subagent_arguments(base, foreground=True),
+                         dict(base, run_in_background=False))
+        self.assertNotIn('run_in_background', base)
+
     def test_native_order_summary_does_not_expose_event_content(self):
         events = [{'type': 'assistant', 'message': {'content': 'private'}},
                   {'type': 'result'}, {'type': 'assistant'}, {'type': 'result'}]
