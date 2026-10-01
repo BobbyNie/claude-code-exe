@@ -73,6 +73,18 @@ class TlsProbeTests(unittest.TestCase):
         self.assertEqual(probe.canonical_certificate_result([None, event, event]),
                          "UNABLE_TO_VERIFY_LEAF_SIGNATURE")
 
+    def test_native_binary_certificate_inventory_requires_complete_failed_result(self):
+        message = ("Unable to connect to API: Self-signed certificate detected. "
+                   "Check your proxy or corporate SSL certificates")
+        event = {"type": "result", "is_error": True, "result": message}
+        self.assertEqual(probe.canonical_certificate_result([event]),
+                         "DEPTH_ZERO_SELF_SIGNED_CERT")
+        for text in (message + " private-token", "API Error: " + message,
+                     message[:message.index(". Check")]):
+            self.assertEqual(probe.canonical_certificate_result([
+                dict(event, result=text)]), "unmatched")
+        self.assertFalse(probe.summarize_events([event])["structured_tls_code"])
+
     def test_probe_refuses_wrong_size_or_non_windows_payload_metadata(self):
         import hashlib
         payload = b'MZ-fixture'

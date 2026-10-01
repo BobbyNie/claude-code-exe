@@ -2513,3 +2513,20 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - TDD：實際暫存檔完整 candidate／變更 cache／缺少 candidate 先缺函數
   RED，再 GREEN。完整 Python 130 tests／4 Windows-only skips；diff-check
   通過。間歇性 access 原因仍未證明，Windows 快照尚待觸發再現。
+
+### TLS 精確訊息假設改由本機負載靜態內容建立
+
+- `8f7313a` / run `36936089650` completed/failure：兩個主 job 僅 TLS
+  gateway gate 失敗，payload repair 本次成功，未再現 access-denied；
+  因而沒有 activation failure snapshot，不能宣稱間歇性問題已修復。
+  Windows Python 均 130 tests／1 skip，cross-version／workspace-boundary 成功。
+- 讀取本機既有 release/ccode-fixed/ccode.exe 的靜態內容，觀測到完整
+  `Unable to connect to API: Self-signed certificate detected. Check your proxy
+  or corporate SSL certificates`。這是本機負載字串，不是已取得的 actual
+  result event，也未重新證明該既有負載的來源／版本。
+- 只將此完整固定訊息加入診斷 inventory；不匹配 prefix、不加 API Error
+  前綴、不放寬 unknown 字串、不改 production classifier。新版本機負載
+  的分段字串不猜測拼接。下一步由 actual native probe 驗證假設。
+- TDD exact failed-result match RED→GREEN，額外 suffix／prefix／截斷仍
+  unmatched；structured TLS code 仍 false。完整 Python 131 tests／4
+  Windows-only skips、diff-check 通過。A19 TLS 分類仍未通過。

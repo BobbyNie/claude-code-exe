@@ -81,6 +81,10 @@ def summarize_failure_text(events):
 def canonical_certificate_result(events):
     """Exact-message investigation inventory, not a production classifier."""
     inventory = {
+        # Complete static message observed in the local packaged payload.
+        # Still an investigation hint; no prefix matching or production evidence.
+        "Unable to connect to API: Self-signed certificate detected. "
+        "Check your proxy or corporate SSL certificates": "DEPTH_ZERO_SELF_SIGNED_CERT",
         "API Error: unable to verify the first certificate": "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
         "API Error: unable to get local issuer certificate": "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
         "API Error: self signed certificate": "DEPTH_ZERO_SELF_SIGNED_CERT",
