@@ -1751,3 +1751,21 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   `6aec27a` 以同一精確根鎖政策擷取 baseline；巢狀同名檔仍比較全部 bytes。
   新測試實際缺 helper RED，再 GREEN；完整 Python 76 項（75 通過、1 跳過）。
   尚待修正後的 Windows cross-version GREEN，不能標記 A14/A15 完成。
+
+### 2026-10-02：跨版本 CI GREEN 與 TLS 觀測競態修正
+
+- 重新透過 GitHub API 確認 run `36886068270` 的 cross-version job
+  `110453169843` success；兩個 workspace-boundary jobs 也 success。
+  這是 CI 跨版本流程證據，不等於 A14/A15 全部故障矩陣或 Windows 11
+  x64 普通帳戶實機驗收；整個 workflow 仍因 gateway 測試失敗。
+- 最新 `d2c7719` run `36888569723` / job `110458089880` 日誌顯示 TLS
+  connections=2、handshake_errors=[]、HTTP=0、exit=1、tls=false、engine=true。
+  引擎退出與 server 記錄握手之間存在競態；驗收 predicate 現在可有界等待
+  handshake event，實機 fixture 使用 3 秒。仍必須明確 E_GATEWAY_TLS，
+  未觀測到事件、HTTP>0、exit=0 或泛用 E_ENGINE 均不能通過。
+- TDD：新增延遲 event 行為測試，實際 RED（缺 handshake_timeout）；
+  修正後完整 Python 82 項，81 通過、1 Windows API 跳過；diff-check 通過。
+  Windows 整合 GREEN 尚待本次提交後的工作流，不宣稱 TLS 已通過。
+- 同一最新 job 的 native probe 仍遇到 WinError 32/5 workspace 清理失敗；
+  native process tree containment 尚未修復，不能忽略清理錯誤。
+  native runtime 診斷測試另因 collector timeout 失敗，仍待定位。

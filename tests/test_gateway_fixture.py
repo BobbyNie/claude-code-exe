@@ -64,6 +64,22 @@ class GatewayFixtureTests(unittest.TestCase):
         failed.clear()
         self.assertFalse(fixture.tls_rejection_observed(endpoint, 1, 'E_GATEWAY_TLS'))
 
+    def test_tls_evidence_waits_for_delayed_server_observation_without_relaxing_classification(self):
+        failed = threading.Event()
+        endpoint = SimpleNamespace(handshake_failed=failed, connections=1, http_requests=0)
+        timer = threading.Timer(0.02, failed.set)
+        timer.start()
+        try:
+            self.assertTrue(fixture.tls_rejection_observed(
+                endpoint, 1, 'E_GATEWAY_TLS', handshake_timeout=1))
+            self.assertFalse(fixture.tls_rejection_observed(
+                endpoint, 1, 'E_ENGINE', handshake_timeout=0))
+        finally:
+            timer.join()
+        failed.clear()
+        self.assertFalse(fixture.tls_rejection_observed(
+            endpoint, 1, 'E_GATEWAY_TLS', handshake_timeout=0.01))
+
     def test_tls_terminal_evidence_accepts_only_canonical_neutral_lines(self):
         flags = fixture.tls_terminal_evidence(
             '[E_GATEWAY_RETRY: automatic retry refused]\n'

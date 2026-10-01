@@ -127,9 +127,9 @@ def tls_terminal_evidence(terminal):
     }
 
 
-def tls_rejection_observed(endpoint, returncode, diagnostic):
+def tls_rejection_observed(endpoint, returncode, diagnostic, *, handshake_timeout=0):
     """A transport abort alone is not evidence of engine certificate rejection."""
-    return (endpoint.handshake_failed.is_set() and endpoint.connections > 0
+    return (endpoint.handshake_failed.wait(handshake_timeout) and endpoint.connections > 0
             and endpoint.http_requests == 0 and returncode != 0
             and diagnostic == "E_GATEWAY_TLS")
 
@@ -158,7 +158,8 @@ def check_tls_rejection(executable):
             except subprocess.TimeoutExpired:
                 raise AssertionError("Untrusted TLS gateway did not terminate within 60 seconds") from None
             assert tls_rejection_observed(endpoint, result.returncode,
-                "E_GATEWAY_TLS" if tls_terminal_evidence(result.stdout + result.stderr)["tls"] else None), (
+                "E_GATEWAY_TLS" if tls_terminal_evidence(result.stdout + result.stderr)["tls"] else None,
+                handshake_timeout=3), (
                 "No failed TLS handshake observed from actual engine; " + json.dumps({
                     "connections": endpoint.connections,
                     "handshake_errors": endpoint.handshake_errors,
