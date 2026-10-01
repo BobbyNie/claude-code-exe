@@ -2216,3 +2216,23 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   此解析也覆蓋 manifest，不能用 last-key-wins 掩蓋歧義。
   lifecycle 5 項通過；完整 Python 117 項（114 pass／3 Windows-only skip）
   通過；diff-check 通過。仍不構成 A20 簽署或 Windows 11 實機證據。
+
+### 2026-10-02 同一診斷 run 的實際結果核對
+
+- GitHub run 36922839494（adapter 1e6e068）新版 2.1.282 job
+  110572849885 已完成，唯一失敗步驟是 actual engine gateway rejection。
+  Python contracts、native runtime/resume、frontend、actual tools、MCP、
+  Skill、兩種 subagent、workspace aliases、payload integrity 及 session
+  concurrency 均成功。payload 本次通過不證明間歇 extraction 故障根因消失。
+- TLS endpoint 實際收到兩次 tls-record，均 transport errno 10054；
+  HTTP request count 0，前端 exit 1／E_ENGINE，未取得 E_GATEWAY_TLS。
+  native probe：error_result=true、success_subtype=true、result_text=true，
+  structured_tls_code=false、retry_event=false、stderr_present=false。
+  不能把 transport reset 或零 HTTP 當作憑證拒絕的充分證據，TLS gate
+  保持失敗。不能以獨立預檢代替此實際 engine model request 的證據。
+- 同一 run 的舊版 job 110572850175 查詢時仍 in_progress；沒有 rerun。
+  GitHub runners API 當次 total_count=0，無可用 Windows 11 self-hosted
+  驗收端點。以上 hosted 結果均只算補充回歸，不放行 A01–A20。
+- 下一階段必須補 actual TLS 故障分類、A20 簽名 manifest／信任政策及
+  Windows 11 普通帳戶實跑；核准 signer、通知／受限名稱／再分發政策
+  必須由外部提供，不可自造核准。不要將私鑰寫入 repo 或聊天。
