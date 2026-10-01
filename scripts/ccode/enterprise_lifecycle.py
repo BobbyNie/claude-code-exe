@@ -166,7 +166,9 @@ def inspect_candidate(path):
         opaque_unpacked = saved["unpacked"]["scope"]["opaqueContents"]
     except (KeyError, TypeError):
         raise LifecycleError("E_LIFECYCLE_AUDIT") from None
-    if (restricted_archive != restricted_unpacked or not restricted_archive or
+    if (not isinstance(restricted_archive, list) or
+            not isinstance(restricted_unpacked, list) or
+            restricted_archive != restricted_unpacked or not restricted_archive or
             opaque_archive != ["ccode.exe"] or opaque_unpacked != ["ccode.exe"]):
         raise LifecycleError("E_LIFECYCLE_AUDIT")
     try:

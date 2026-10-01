@@ -2474,3 +2474,11 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   完整 Python 128（124 pass／4 Windows skip），diff-check 通過。
   不以 catch-all 掩蓋例外，不降低候選檢查；此為既有驗收器修復，
   不代表內建啟動／更新驗簽、核准 signer 或 Win11 實機已完成。
+- A20 保存 audit 政策的型別拒絕：公開 inspect 對 archive/unpacked
+  restrictedNames 同為非零數字的 audit，原先進入掃描器後拋 TypeError
+  並輸出 traceback。公開 CLI 測試先 RED，入口要求兩者均為 array
+  後 GREEN：exit=2、E_LIFECYCLE_AUDIT、stderr 空；仍重算完整候選，
+  不將保存的 passed/matched 當可信證據，不使用 catch-all。
+  lifecycle 12（11 pass／1 Windows skip），完整 Python 129
+  （125 pass／4 Windows skip），diff-check 通過。此不替代內建 gate、
+  正式政策批准或 Windows 11 普通帳戶實機證據。

@@ -172,6 +172,20 @@ class EnterpriseLifecycleTests(unittest.TestCase):
         self.assertFalse(working.exists())
         self.assertFalse(evidence.exists())
 
+    def test_inspect_rejects_non_array_audit_policy_without_traceback(self):
+        candidate = self.root / "private-malformed-policy"
+        self.build(candidate)
+        audit_path = candidate / "package-audit.json"
+        audit = json.loads(audit_path.read_text())
+        for scope in ("archive", "unpacked"):
+            audit[scope]["scope"]["restrictedNames"] = 7
+        audit_path.write_text(json.dumps(audit), encoding="utf-8")
+        rejected = self.run_lifecycle("inspect", "--candidate-root", candidate)
+        self.assertEqual(rejected.returncode, 2, rejected.stderr)
+        self.assertEqual(json.loads(rejected.stdout)["code"], "E_LIFECYCLE_AUDIT")
+        self.assertEqual(rejected.stderr, "")
+        self.assertNotIn(str(candidate), rejected.stdout)
+
     def test_inspect_rejects_non_object_public_boundary_with_neutral_error(self):
         candidate = self.root / "private-malformed-boundary"
         self.build(candidate)
