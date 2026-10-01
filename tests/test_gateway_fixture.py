@@ -5,6 +5,8 @@ import socket
 import ssl
 from pathlib import Path
 import unittest
+from types import SimpleNamespace
+import threading
 
 spec = importlib.util.spec_from_file_location(
     "gateway_fixture", Path(__file__).parent / "ccode/gateway-integration.py")
@@ -28,7 +30,7 @@ class GatewayFixtureTests(unittest.TestCase):
             with socket.create_connection(endpoint.address, timeout=2) as connection:
                 with self.assertRaises(ssl.SSLCertVerificationError):
                     ssl.create_default_context().wrap_socket(connection, server_hostname="127.0.0.1")
-            self.assertTrue(endpoint.rejected.wait(2), "No actual failed TLS handshake observed")
+            self.assertTrue(endpoint.handshake_failed.wait(2), "No actual failed TLS handshake observed")
             trusted = ssl.create_default_context(cafile=str(endpoint.certificate))
             with socket.create_connection(endpoint.address, timeout=2) as connection:
                 with trusted.wrap_socket(connection, server_hostname="127.0.0.1") as secure:
@@ -48,6 +50,19 @@ class GatewayFixtureTests(unittest.TestCase):
             self.assertIn(error['kind'], ('tls', 'transport'))
             self.assertTrue(error['errno'] is None or isinstance(error['errno'], int))
             self.assertEqual(set(error), {'kind', 'errno'})
+
+    def test_transport_reset_requires_engine_tls_classification(self):
+        failed = threading.Event()
+        failed.set()
+        endpoint = SimpleNamespace(handshake_failed=failed, connections=1, http_requests=0)
+        self.assertFalse(fixture.tls_rejection_observed(endpoint, 1, 'E_ENGINE_API'))
+        self.assertTrue(fixture.tls_rejection_observed(endpoint, 1, 'E_GATEWAY_TLS'))
+        self.assertFalse(fixture.tls_rejection_observed(endpoint, 0, 'E_GATEWAY_TLS'))
+        endpoint.http_requests = 1
+        self.assertFalse(fixture.tls_rejection_observed(endpoint, 1, 'E_GATEWAY_TLS'))
+        endpoint.http_requests = 0
+        failed.clear()
+        self.assertFalse(fixture.tls_rejection_observed(endpoint, 1, 'E_GATEWAY_TLS'))
 
     def test_complete_arguments_still_lack_block_and_message_termination(self):
         events = fixture.unfinished_tool_events("fixture-model", "target.txt", "marker", True)

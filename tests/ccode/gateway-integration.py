@@ -114,6 +114,13 @@ def check_unreachable(executable):
         print("PASS: actual engine unreachable gateway terminates with neutral error, no workspace writes or terminal secret disclosure")
 
 
+def tls_rejection_observed(endpoint, returncode, diagnostic):
+    """A transport abort alone is not evidence of engine certificate rejection."""
+    return (endpoint.handshake_failed.is_set() and endpoint.connections > 0
+            and endpoint.http_requests == 0 and returncode != 0
+            and diagnostic == "E_GATEWAY_TLS")
+
+
 def check_tls_rejection(executable):
     with tempfile.TemporaryDirectory(prefix="ccode-tls-") as folder:
         root = Path(folder).resolve()
@@ -137,7 +144,8 @@ def check_tls_rejection(executable):
                     capture_output=True, text=True, encoding="utf-8", timeout=60)
             except subprocess.TimeoutExpired:
                 raise AssertionError("Untrusted TLS gateway did not terminate within 60 seconds") from None
-            assert endpoint.rejected.is_set(), (
+            assert tls_rejection_observed(endpoint, result.returncode,
+                "E_GATEWAY_TLS" if "E_GATEWAY_TLS" in result.stderr.splitlines() else None), (
                 "No failed TLS handshake observed from actual engine; " + json.dumps({
                     "connections": endpoint.connections,
                     "handshake_errors": endpoint.handshake_errors,
