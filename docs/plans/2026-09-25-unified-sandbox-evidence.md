@@ -2176,3 +2176,11 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   （111 pass／3 Windows-only skip）通過，diff-check 通過。
   僅驗證 schema fail-closed；不是 A02／A04 外部政策核准、A20 簽署或
   Windows 11 x64 實機放行證據。
+
+- 企業 lifecycle 獨立重驗 boundary 型別：公開 inspect 負例修改候選
+  originalRuntimeNamesPresent 為數值 1，再重建 ZIP 與完全匹配的 audit／hash。
+  舊驗收器仍回報 passed（RED），證明 assembly 型別檢查不足以保護後續
+  不可信候選。lifecycle 改用排序 JSON 型別敏感比較後 E_LIFECYCLE_MANIFEST
+  （GREEN）；未以 saved audit 或 hash 一致取代語義驗證。企業 11 項通過，
+  完整 Python 115 項（112 pass／3 Windows-only skip）通過，diff-check 通過。
+  不把 synthetic 候選重驗成功當成簽名、合法通知或 Win11 實機驗收證據。

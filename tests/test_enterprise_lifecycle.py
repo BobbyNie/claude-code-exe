@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -134,6 +135,29 @@ class EnterpriseLifecycleTests(unittest.TestCase):
         completed = self.run_lifecycle("inspect", "--candidate-root", candidate)
         self.assertEqual(completed.returncode, 2)
         self.assertEqual(json.loads(completed.stdout)["code"], "E_LIFECYCLE_AUDIT")
+
+    def test_inspect_rejects_numeric_boundary_even_with_recomputed_matching_audit(self):
+        candidate = self.root / "numeric-boundary"
+        self.build(candidate)
+        unpacked = candidate / "unpacked"
+        manifest_path = unpacked / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["runtimeBoundary"]["childRuntimeEnvironment"]["originalRuntimeNamesPresent"] = 1
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        archive = next(candidate.glob("*.zip"))
+        with zipfile.ZipFile(archive, "w") as bundle:
+            for source in sorted(unpacked.rglob("*")):
+                if source.is_file():
+                    bundle.write(source, source.relative_to(unpacked).as_posix())
+        audit = subprocess.run([sys.executable, str(ROOT / "scripts/ccode/package_audit.py"),
+            str(archive), "--archive", "--unpacked", str(unpacked),
+            "--restricted-name", "restricted", "--opaque", "ccode.exe"],
+            capture_output=True, text=True)
+        self.assertEqual(audit.returncode, 0, audit.stdout + audit.stderr)
+        (candidate / "package-audit.json").write_text(audit.stdout, encoding="utf-8")
+        completed = self.run_lifecycle("inspect", "--candidate-root", candidate)
+        self.assertEqual(completed.returncode, 2)
+        self.assertEqual(json.loads(completed.stdout)["code"], "E_LIFECYCLE_MANIFEST")
 
     def test_compare_requires_identical_unpacked_delivery_but_records_archive_digests(self):
         original = self.root / "original"

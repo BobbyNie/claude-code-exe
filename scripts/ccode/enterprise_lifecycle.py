@@ -90,7 +90,9 @@ def _manifest_files(unpacked, manifest):
             not HEX_64.fullmatch(str(provenance["engineSha256"])) or
             not HEX_64.fullmatch(str(provenance["officialManifestSha256"])) or
             isinstance(provenance["engineSize"], bool) or not isinstance(provenance["engineSize"], int) or
-            provenance["engineSize"] <= 0 or manifest["runtimeBoundary"] != BOUNDARY_DOCUMENT):
+            provenance["engineSize"] <= 0 or
+            json.dumps(manifest["runtimeBoundary"], sort_keys=True) !=
+            json.dumps(BOUNDARY_DOCUMENT, sort_keys=True)):
         raise LifecycleError("E_LIFECYCLE_MANIFEST")
     entries = manifest["files"]
     notices = manifest["notices"]
