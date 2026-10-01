@@ -7,7 +7,7 @@ import re
 import stat
 
 import package_audit
-from build_enterprise_package import BOUNDARY_DOCUMENT, _unique_json_object
+from build_enterprise_package import BOUNDARY_DOCUMENT, _unique_json_object, _https
 
 
 HEX_64 = re.compile(r"^[0-9a-f]{64}$")
@@ -94,6 +94,13 @@ def _manifest_files(unpacked, manifest):
             provenance["engineSize"] <= 0 or
             json.dumps(manifest["runtimeBoundary"], sort_keys=True) !=
             json.dumps(BOUNDARY_DOCUMENT, sort_keys=True)):
+        raise LifecycleError("E_LIFECYCLE_MANIFEST")
+    try:
+        valid_sources = (_https(provenance["officialManifestUrl"]) and
+                         _https(provenance["officialPayloadUrl"]))
+    except ValueError:
+        valid_sources = False
+    if not valid_sources:
         raise LifecycleError("E_LIFECYCLE_MANIFEST")
     entries = manifest["files"]
     notices = manifest["notices"]

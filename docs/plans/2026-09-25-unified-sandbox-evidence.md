@@ -2236,3 +2236,11 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - 下一階段必須補 actual TLS 故障分類、A20 簽名 manifest／信任政策及
   Windows 11 普通帳戶實跑；核准 signer、通知／受限名稱／再分發政策
   必須由外部提供，不可自造核准。不要將私鑰寫入 repo 或聊天。
+
+- lifecycle provenance 來源 URL 獨立重驗：將候選 payload URL 改為 HTTP，
+  重打 ZIP 並重算完全匹配 audit，公開 inspect 舊版仍退出 0（RED）。
+  現在沿用組裝端 HTTPS／無 URL credentials／無 fragment 規則，
+  manifest 或 payload URL 不合格及 malformed URL 均降為
+  E_LIFECYCLE_MANIFEST（GREEN），不進行任何 URL 網路請求。
+  lifecycle 6 項、完整 Python 118 項（115 pass／3 Windows-only skip）
+  通過；diff-check 通過。URL 格式重驗不提供官方來源真實性或可信簽署。

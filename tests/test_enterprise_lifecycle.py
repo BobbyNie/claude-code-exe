@@ -144,6 +144,13 @@ class EnterpriseLifecycleTests(unittest.TestCase):
         manifest = json.loads(manifest_path.read_text())
         manifest["runtimeBoundary"]["childRuntimeEnvironment"]["originalRuntimeNamesPresent"] = 1
         manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        self.refresh_candidate_audit(candidate)
+        completed = self.run_lifecycle("inspect", "--candidate-root", candidate)
+        self.assertEqual(completed.returncode, 2)
+        self.assertEqual(json.loads(completed.stdout)["code"], "E_LIFECYCLE_MANIFEST")
+
+    def refresh_candidate_audit(self, candidate):
+        unpacked = candidate / "unpacked"
         archive = next(candidate.glob("*.zip"))
         with zipfile.ZipFile(archive, "w") as bundle:
             for source in sorted(unpacked.rglob("*")):
@@ -155,6 +162,15 @@ class EnterpriseLifecycleTests(unittest.TestCase):
             capture_output=True, text=True)
         self.assertEqual(audit.returncode, 0, audit.stdout + audit.stderr)
         (candidate / "package-audit.json").write_text(audit.stdout, encoding="utf-8")
+
+    def test_inspect_rejects_non_https_provenance_with_matching_audit(self):
+        candidate = self.root / "unsafe-provenance"
+        self.build(candidate)
+        manifest_path = candidate / "unpacked/manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["provenance"]["officialPayloadUrl"] = "http://downloads.example.test/engine.exe"
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        self.refresh_candidate_audit(candidate)
         completed = self.run_lifecycle("inspect", "--candidate-root", candidate)
         self.assertEqual(completed.returncode, 2)
         self.assertEqual(json.loads(completed.stdout)["code"], "E_LIFECYCLE_MANIFEST")
