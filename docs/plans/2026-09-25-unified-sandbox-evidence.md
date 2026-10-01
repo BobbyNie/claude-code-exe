@@ -1881,3 +1881,19 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - Mock unit test does not prove real engine TLS classification; its PASS output
   is suppressed. Local Python 91 tests: 88 pass, 3 Windows skip; diff-check pass.
   Actual TLS remains unresolved and must still fail if only E_ENGINE is emitted.
+
+### Native probe cleanup regression and process-object wait
+
+- Run 36894764599 / job 110478859618 (2.1.282) has actual RED:
+  normal-parent-exit containment returns, but workspace.rmdir fails WinError 32.
+  Earlier GREEN does not prove stable cleanup. Unreachable gateway with new
+  exact A19 diagnostic checks passes; TLS remains RED.
+- Added process-handle wait tests: missing helper produced actual RED, then
+  GREEN. Before terminating the job, enumerate its members, retain synchronized
+  process handles, verify membership against PID reuse, and wait for signaled
+  process objects. Still require active count zero and parent wait; close all
+  acquired handles. Enumeration, membership and wait failures fail closed.
+- Final local Python: 93 tests, 90 pass / 3 Windows skip; diff-check pass.
+  This is a candidate cleanup correction, not confirmed Windows GREEN: live
+  process enumeration can race, and the unchanged workspace.rmdir assertion
+  remains the actual Windows gate. No deletion retry or ignored cleanup error.

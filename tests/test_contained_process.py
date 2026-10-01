@@ -13,6 +13,20 @@ spec.loader.exec_module(probe)
 
 
 class ContainedProcessTests(unittest.TestCase):
+    def test_cleanup_waits_for_each_process_handle_not_only_job_accounting(self):
+        calls = []
+        def wait(handle, milliseconds):
+            calls.append((handle, milliseconds))
+            return 0
+        probe.wait_process_handles([11, 22], wait)
+        self.assertEqual([handle for handle, _ in calls], [11, 22])
+        self.assertTrue(all(0 <= milliseconds <= 5000 for _, milliseconds in calls))
+
+    def test_unsignaled_or_failed_process_wait_is_not_cleanup_success(self):
+        for status in (258, 0xffffffff):
+            with self.assertRaisesRegex(RuntimeError, 'process termination'):
+                probe.wait_process_handles([11], lambda *_: status)
+
     @unittest.skipIf(sys.platform == 'win32', 'Non-Windows refusal only')
     def test_non_windows_refuses_to_launch_uncontained_probe(self):
         with self.assertRaisesRegex(RuntimeError, 'Windows'):

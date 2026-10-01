@@ -86,6 +86,15 @@ def load_fixture(name, filename):
     return module
 
 
+def wait_process_handles(handles, wait, *, timeout=5):
+    """Require process objects to be signaled within one shared cleanup budget."""
+    deadline = time.monotonic() + timeout
+    for handle in handles:
+        milliseconds = max(0, int((deadline - time.monotonic()) * 1000))
+        if wait(handle, milliseconds) != 0:
+            raise RuntimeError('Probe process termination wait failed')
+
+
 def run_contained(args, *, cwd, env, input, timeout):
     """Start suspended, contain before execution, and reap the entire Windows tree."""
     if sys.platform != 'win32':
@@ -125,6 +134,9 @@ def run_contained(args, *, cwd, env, input, timeout):
         'Thread32Next': ([w.HANDLE, c.POINTER(ThreadEntry)], w.BOOL),
         'OpenThread': ([w.DWORD, w.BOOL, w.DWORD], w.HANDLE),
         'ResumeThread': ([w.HANDLE], w.DWORD),
+        'OpenProcess': ([w.DWORD, w.BOOL, w.DWORD], w.HANDLE),
+        'WaitForSingleObject': ([w.HANDLE, w.DWORD], w.DWORD),
+        'IsProcessInJob': ([w.HANDLE, w.HANDLE, c.POINTER(w.BOOL)], w.BOOL),
         'CloseHandle': ([w.HANDLE], w.BOOL),
     }
     for name, (arguments, result) in signatures.items():
@@ -138,21 +150,58 @@ def run_contained(args, *, cwd, env, input, timeout):
 
     def reap_tree():
         nonlocal cleaned
-        if not kernel.TerminateJobObject(job, 1):
-            raise RuntimeError('Probe process-tree termination failed')
-        deadline = time.monotonic() + 5
-        accounting = Accounting()
+        # ActiveProcesses may become zero before asynchronous termination has
+        # signaled every process object. Retain job-member handles before kill.
+        capacity = 16
         while True:
-            if not kernel.QueryInformationJobObject(job, 1, c.byref(accounting),
-                                                   c.sizeof(accounting), None):
-                raise RuntimeError('Probe process-tree verification failed')
-            if accounting.active == 0:
-                break
-            if time.monotonic() >= deadline:
-                raise RuntimeError('Probe process-tree cleanup timed out')
-            time.sleep(0.01)
-        process.wait(timeout=5)
-        cleaned = True
+            buffer = c.create_string_buffer(8 + capacity * c.sizeof(c.c_size_t))
+            if kernel.QueryInformationJobObject(job, 3, buffer, len(buffer), None):
+                count = c.cast(c.addressof(buffer) + 4, c.POINTER(w.DWORD)).contents.value
+                assigned_count = c.cast(buffer, c.POINTER(w.DWORD)).contents.value
+                if count == assigned_count and count <= capacity:
+                    ids = list((c.c_size_t * count).from_address(c.addressof(buffer) + 8))
+                    break
+                if capacity >= 65536:
+                    raise RuntimeError('Probe process-tree enumeration failed')
+                capacity *= 2
+                continue
+            if c.get_last_error() != 234 or capacity >= 65536:
+                raise RuntimeError('Probe process-tree enumeration failed')
+            capacity *= 2
+        handles = []
+        try:
+            for pid in ids:
+                handle = kernel.OpenProcess(0x100000 | 0x1000, False, pid)
+                if not handle:
+                    if c.get_last_error() == 87:  # Process already ceased to exist.
+                        continue
+                    raise RuntimeError('Probe process termination handle failed')
+                handles.append(handle)
+                member = w.BOOL()
+                if not kernel.IsProcessInJob(handle, job, c.byref(member)):
+                    raise RuntimeError('Probe process membership verification failed')
+                if not member.value:
+                    # PID was reused after the enumerated member exited.
+                    kernel.CloseHandle(handles.pop())
+            if not kernel.TerminateJobObject(job, 1):
+                raise RuntimeError('Probe process-tree termination failed')
+            wait_process_handles(handles, kernel.WaitForSingleObject)
+            deadline = time.monotonic() + 5
+            accounting = Accounting()
+            while True:
+                if not kernel.QueryInformationJobObject(job, 1, c.byref(accounting),
+                                                       c.sizeof(accounting), None):
+                    raise RuntimeError('Probe process-tree verification failed')
+                if accounting.active == 0:
+                    break
+                if time.monotonic() >= deadline:
+                    raise RuntimeError('Probe process-tree cleanup timed out')
+                time.sleep(0.01)
+            process.wait(timeout=5)
+            cleaned = True
+        finally:
+            for handle in handles:
+                kernel.CloseHandle(handle)
 
     process = None
     assigned = False
