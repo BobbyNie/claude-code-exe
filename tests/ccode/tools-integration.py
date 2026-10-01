@@ -16,6 +16,17 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
+def verify_mcp_execution(requests, received, evidence):
+    assert requests and any(tool.get("name") == "mcp__fixture__probe"
+        for tool in requests[0].get("tools", [])), "MCP tool not discovered by actual engine"
+    assert set(received) == {"acceptance_0"}, "Missing or unexpected MCP result"
+    result = received["acceptance_0"]
+    assert not result.get("is_error"), "Actual MCP tool failed"
+    assert "mcp-fixture-only" in json.dumps(result.get("content")), "MCP marker missing"
+    assert evidence.read_text(encoding="utf-8") == (
+        '{"tool":"probe","marker":"mcp-fixture-only"}\n'), "MCP call missing or replayed"
+
+
 def verify_rename_files(source, target):
     assert not source.exists(), "Tool rename left the old name visible"
     assert target.read_bytes() == b"marker-renamed\n", "Tool rename/edit changed expected bytes"
@@ -160,7 +171,7 @@ def check_workspace_boundaries(executable):
                 shutil.rmtree(long_workspace_io)
 
 
-def check(executable, short_path=False, lifecycle=None, permission=None, workspace_alias=None, root_override=None):
+def check(executable, short_path=False, lifecycle=None, permission=None, workspace_alias=None, root_override=None, mcp=False):
     root_context = (tempfile.TemporaryDirectory(prefix="ccode-tools-")
                     if root_override is None else nullcontext(str(Path(root_override).resolve())))
     with root_context as temporary:
@@ -232,6 +243,13 @@ def check(executable, short_path=False, lifecycle=None, permission=None, workspa
         if permission:
             target = workspace / f"permission-{permission}-{time.time_ns()}.txt"
             plan = [("Write", {"file_path": str(target), "content": "approved-write\n"})]
+        if mcp:
+            plan = [("mcp__fixture__probe", {"marker": "mcp-fixture-only"})]
+            mcp_evidence = root / "mcp-calls.jsonl"
+            mcp_config = root / "mcp-config.json"
+            mcp_config.write_text(json.dumps({"mcpServers": {"fixture": {
+                "command": sys.executable, "args": [str(Path(__file__).with_name(
+                    "mcp-fixture.py").resolve()), str(mcp_evidence)]}}}), encoding="utf-8")
         received = {}
         requests = []
         handler_errors = []
@@ -366,9 +384,12 @@ def check(executable, short_path=False, lifecycle=None, permission=None, workspa
                 assert not (workspace / "after-wait.txt").exists(), "Recovery replayed the interrupted tool"
                 assert not handler_errors, handler_errors
                 return
-            result = subprocess.run([str(app), "--data-dir", str(data), "--print",
-                                     "--allowedTools", "Write,Edit,Read,Grep,Glob,Bash",
-                                     "Exercise the six tools in this workspace."],
+            command = [str(app), "--data-dir", str(data), "--print", "--allowedTools",
+                       "mcp__fixture__probe" if mcp else "Write,Edit,Read,Grep,Glob,Bash"]
+            if mcp:
+                command.extend(["--mcp-config", str(mcp_config)])
+            command.append("Exercise the six tools in this workspace.")
+            result = subprocess.run(command,
                                     cwd=workspace,
                                     env=env, input="", capture_output=True,
                                     text=True, encoding="utf-8", errors="replace", timeout=120)
@@ -376,6 +397,13 @@ def check(executable, short_path=False, lifecycle=None, permission=None, workspa
             assert result.returncode == 0, (result.returncode, result.stdout, result.stderr, received)
             assert "tools-acceptance-complete" in result.stdout, result.stdout
             assert len(received) == len(plan), received
+            if mcp:
+                verify_mcp_execution(requests, received, mcp_evidence)
+                assert not (app_dir / "data").exists(), "MCP run ignored external data root"
+                assert not list(app_dir.rglob("*.jsonl")), "MCP session leaked into program"
+                assert list(data.rglob("*.jsonl")), "No authoritative MCP session"
+                print("PASS: actual engine discovers and calls synthetic stdio MCP exactly once")
+                return
             if short_path:
                 # Native engines deliberately require approval for suspicious 8.3 paths.
                 # The frontend must preserve this policy, not silently auto-approve it.
@@ -463,6 +491,7 @@ if __name__ == "__main__":
         check(executable, workspace_alias="junction")
         sys.exit(0)
     check(executable)
+    check(executable, mcp=True)
     check(executable, short_path=True)
     check(executable, lifecycle="cancel")
     check(executable, lifecycle="crash")

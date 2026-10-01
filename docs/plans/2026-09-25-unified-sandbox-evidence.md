@@ -1962,3 +1962,20 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   diff-check pass。這只是定位補強，不是 cache repair 已修復。
 - 同一 job 的 TLS gate 仍因兩次 errno 10054 transport reset、零 HTTP request 而 RED；
   不將 reset 推定為憑證錯誤。正式 Win11 與完整 A15／A19 驗收仍未完成。
+
+### A17 真實引擎 synthetic stdio MCP 驗收切片
+
+- 新增固定 read-only `probe` 的 stdio MCP fixture；initialize／ping／tools/list／
+  tools/call 使用與既有 permission MCP 相同的 newline JSON-RPC 模式，notifications
+  不回應，未知工具或非固定參數拒絕。只保存固定合成 invocation marker。
+- `tools-integration.py` 主流程新增獨立 mcp case：由實際 engine 接收 user
+  --mcp-config，允許單一 fixture tool；要求初始 model request 真實列出工具、
+  model 後續請求含成功 tool_result、server evidence 恰好一次 call、外置 data/session。
+  不合併／繞過內部 permission MCP，不猜測多個 config 的效果；實際不相容則 fail。
+- stdio subprocess test 先 missing file RED 再 GREEN；驗收 verifier 先 missing helper
+  RED 再 GREEN，拒絕缺發現、缺結果、error result 及重複呼叫。100 Python tests：
+  97 pass／3 Windows skip；diff-check pass。實際 Windows engine MCP case 待 CI，
+  正式 Windows 11 x64、技能／子代理及核准第三方 MCP 尚未驗收；A17 不標通過。
+- `c14eb7c` / run `36901139794`：兩版本 job 日誌均確認 payload tamper／actual
+  extracted bytes／cache repair PASS；這是新一次 regression，不證明間歇問題已修復。
+  TLS gate 仍 RED（transport errno 10054、零 HTTP），不改變故障分類／驗收門檻。
