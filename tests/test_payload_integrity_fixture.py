@@ -15,13 +15,26 @@ class PayloadIntegrityFixtureTests(unittest.TestCase):
         spec.loader.exec_module(fixture)
         private = b'private-token E_GATEWAY_AUTH C:/private/workspace'
         summary = fixture.failure_summary(1, 0, private + b'\n[E_ENGINE: turn failed]\n', 1)
-        self.assertEqual(summary, {'attempt': 1, 'exit_code': 1, 'request_count': 0,
+        self.assertEqual(summary, {'startup_code': None, 'attempt': 1, 'exit_code': 1, 'request_count': 0,
                                   'auth': False, 'engine': True, 'retry': False})
         self.assertNotIn('private', str(summary))
         self.assertTrue(fixture.failure_summary(1, 1,
             b'[E_GATEWAY_AUTH: authentication failed]\n', 0)['auth'])
         self.assertFalse(fixture.failure_summary(1, 1,
             b'prefix [E_GATEWAY_AUTH: authentication failed] suffix\n', 0)['auth'])
+
+    def test_startup_failure_summary_only_accepts_exact_known_codes(self):
+        path = Path(__file__).parent / 'ccode/payload-integrity.py'
+        spec = importlib.util.spec_from_file_location('payload_integrity', path)
+        fixture = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture)
+        for code in ('E_EXTRACT', 'E_RUNTIME_BUSY', 'E_RUNTIME_PATH', 'E_CHECKSUM'):
+            summary = fixture.failure_summary(64, 0, code.encode() + b'\r\n', 1)
+            self.assertEqual(summary['startup_code'], code)
+        for terminal in (b'private-token E_EXTRACT', b'E_EXTRACT C:/private',
+                         b'E_UNKNOWN', b'E_EXTRACT\nE_RUNTIME_PATH\n'):
+            self.assertIsNone(fixture.failure_summary(64, 0, terminal, 1)['startup_code'])
+        self.assertIsNone(fixture.failure_summary(1, 0, b'E_EXTRACT\n', 1)['startup_code'])
 
     def test_only_a_verified_unique_payload_is_modified(self):
         path = Path(__file__).parent / 'ccode/payload-integrity.py'

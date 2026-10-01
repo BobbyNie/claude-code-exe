@@ -44,7 +44,11 @@ def rejecting_gateway():
 def failure_summary(exit_code, request_count, terminal, attempt):
     """Only exact neutral renderer lines; never retain engine text or URLs."""
     lines = set(terminal.splitlines())
-    return {"attempt": attempt, "exit_code": exit_code, "request_count": request_count,
+    startup_codes = {b"E_EXTRACT", b"E_RUNTIME_BUSY", b"E_RUNTIME_PATH", b"E_CHECKSUM"}
+    exact_startup = terminal.strip()
+    startup_code = (exact_startup.decode('ascii')
+                    if exit_code == 64 and exact_startup in startup_codes else None)
+    return {"startup_code": startup_code, "attempt": attempt, "exit_code": exit_code, "request_count": request_count,
             "auth": b"[E_GATEWAY_AUTH: authentication failed]" in lines,
             "engine": bool(lines & {b"[E_ENGINE: turn failed]",
                 b"[E_ENGINE: request failed]",

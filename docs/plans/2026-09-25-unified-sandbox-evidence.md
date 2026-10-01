@@ -1948,3 +1948,17 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - helper 測試先因未實作而 RED，再 GREEN；97 項 Python 回歸成功，3 項
   Windows-only skip。尚待推送後 hosted Windows 與正式 Windows 11 x64 普通帳戶
   實跑。這不替代磁碟滿、斷電、activation／rollback 各中斷點或整個 A15 驗收。
+
+### Payload cache repair 啟動失敗的 exact-code 定位
+
+- `ee23db8` / run `36899884966` / job `110496106333` 實際日誌確認
+  forced snapshot interruption／fresh backup hash case PASS（hosted Windows，
+  不替代正式 Windows 11 x64）。payload attempt 1 失敗：exit 64、request count 0，
+  auth/engine/retry 均 false；故此案例尚未抵達 auth fixture，不能推定為 gateway 問題。
+- failure summary 增加 startup_code：僅 exit 64 且完整 terminal 去首尾 whitespace
+  後精確等於 E_EXTRACT／E_RUNTIME_BUSY／E_RUNTIME_PATH／E_CHECKSUM 時記錄。
+  未知碼、多行混合、附帶路徑及非 64 退出一律 null；不輸出 raw stderr。
+  單元測試先 KeyError RED，再 GREEN；98 Python tests，95 pass／3 Windows skip；
+  diff-check pass。這只是定位補強，不是 cache repair 已修復。
+- 同一 job 的 TLS gate 仍因兩次 errno 10054 transport reset、零 HTTP request 而 RED；
+  不將 reset 推定為憑證錯誤。正式 Win11 與完整 A15／A19 驗收仍未完成。
