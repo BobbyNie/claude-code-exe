@@ -20,7 +20,7 @@ def rejecting_gateway():
 
         def do_POST(self):
             self.rfile.read(int(self.headers.get('Content-Length', '0')))
-            self.server.requests.append(self.path)
+            self.server.requests.append(self.path.split('?', 1)[0])
             body = b'{"type":"error","error":{"type":"authentication_error","message":"test rejection"}}'
             self.send_response(401)
             self.send_header('Content-Type', 'application/json')

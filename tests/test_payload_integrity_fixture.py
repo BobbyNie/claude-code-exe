@@ -25,6 +25,20 @@ class PayloadIntegrityFixtureTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 fixture.tamper_payload(candidate, payload, expected)
 
+    def test_auth_fixture_counts_query_variants_without_hiding_duplicate_requests(self):
+        path = Path(__file__).parent / 'ccode/payload-integrity.py'
+        spec = importlib.util.spec_from_file_location('payload_integrity', path)
+        fixture = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture)
+        with fixture.rejecting_gateway() as server:
+            for suffix in ('?beta=true', '?beta=false'):
+                request = urllib.request.Request(server.url + '/v1/messages' + suffix,
+                                                 data=b'{}')
+                with self.assertRaises(urllib.error.HTTPError) as error:
+                    urllib.request.urlopen(request, timeout=5)
+                error.exception.close()
+            self.assertEqual(server.requests, ['/v1/messages', '/v1/messages'])
+
     def test_auth_rejection_fixture_observes_real_http_without_retaining_secrets(self):
         path = Path(__file__).parent / 'ccode/payload-integrity.py'
         spec = importlib.util.spec_from_file_location('payload_integrity', path)
