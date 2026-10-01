@@ -31,7 +31,8 @@ inline std::string DiagnosticCategory(const std::string& errorCode) {
     if (HasPrefix(errorCode, "E_GATEWAY") || HasPrefix(errorCode, "E_NETWORK") ||
         HasPrefix(errorCode, "E_TLS") || HasPrefix(errorCode, "E_DNS")) return "network";
     if (HasPrefix(errorCode, "E_PROTOCOL") || HasPrefix(errorCode, "E_EVENT") ||
-        HasPrefix(errorCode, "E_TOOL")) return "protocol";
+        HasPrefix(errorCode, "E_TOOL") || errorCode == "E_MISSING_RESULT" ||
+        errorCode == "E_TRUNCATED_EVENT") return "protocol";
     if (errorCode.find("_BUSY") != std::string::npos || HasPrefix(errorCode, "E_SESSION_LOCK"))
         return "concurrency";
     if (HasPrefix(errorCode, "E_CREDENTIAL") || HasPrefix(errorCode, "E_ARGUMENT") ||

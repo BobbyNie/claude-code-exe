@@ -11,6 +11,9 @@ int main() {
     assert(NeutralErrorCode("E_bad: secret") == "E_LOCAL");
     assert(DiagnosticCategory("E_GATEWAY_TLS") == "network");
     assert(DiagnosticCategory("E_PROTOCOL_JSON") == "protocol");
+    assert(DiagnosticCategory("E_MISSING_RESULT") == "protocol");
+    assert(DiagnosticCategory("E_TRUNCATED_EVENT") == "protocol");
+    assert(DiagnosticCategory("E_MISSING_RESULT_PRIVATE") == "local");
     assert(DiagnosticCategory("E_CREDENTIAL") == "configuration");
     assert(DiagnosticCategory("E_SESSION_BUSY") == "concurrency");
     assert(DiagnosticCategory("E_PACKAGE_METADATA") == "integrity");

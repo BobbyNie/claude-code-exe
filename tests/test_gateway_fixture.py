@@ -110,6 +110,16 @@ class GatewayFixtureTests(unittest.TestCase):
                 with self.assertRaises(AssertionError):
                     fixture.validate_failure_diagnostic(path, 'E_GATEWAY_AUTH', 1)
 
+    def test_stream_failure_report_uses_only_canonical_failure_lines(self):
+        self.assertEqual(fixture.stream_failure_diagnostic(
+            'private E_GATEWAY_RETRY text\n[E_MISSING_RESULT: incomplete turn]\n'),
+            ('E_MISSING_RESULT', 'protocol'))
+        self.assertEqual(fixture.stream_failure_diagnostic(
+            '[E_GATEWAY_RETRY: automatic retry refused]\n'),
+            ('E_GATEWAY_RETRY', 'network'))
+        with self.assertRaises(AssertionError):
+            fixture.stream_failure_diagnostic('private E_MISSING_RESULT text')
+
     def test_complete_arguments_still_lack_block_and_message_termination(self):
         events = fixture.unfinished_tool_events("fixture-model", "target.txt", "marker", True)
         self.assertEqual([kind for kind, _ in events],

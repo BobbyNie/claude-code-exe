@@ -197,7 +197,7 @@ def unfinished_tool_events(model, target, marker, complete_arguments=False):
     ]
 
 
-def validate_failure_diagnostic(path, expected_code, exit_code):
+def validate_failure_diagnostic(path, expected_code, exit_code, *, category="network"):
     """A19: accept exactly the neutral schema, not arbitrary extra private fields."""
     try:
         report = json.loads(path.read_text(encoding='utf-8'))
@@ -208,11 +208,30 @@ def validate_failure_diagnostic(path, expected_code, exit_code):
     assert identifier.version == 4 and str(identifier) == operation_id.lower(), 'Invalid operation ID'
     expected = {'schemaVersion': 1, 'product': 'ccode', 'platform': 'windows',
                 'architecture': 'x64', 'status': 'error', 'operationId': operation_id,
-                'errorCode': expected_code, 'category': 'network', 'exitCode': exit_code,
+                'errorCode': expected_code, 'category': category, 'exitCode': exit_code,
                 'privacy': dict.fromkeys(('argumentsCaptured', 'environmentValuesCaptured',
                                          'promptOrContentCaptured', 'credentialsCaptured'), False)}
     assert json.dumps(report, sort_keys=True) == json.dumps(expected, sort_keys=True), (
         'Gateway failure report lost cause or violates neutral schema')
+
+
+def stream_failure_diagnostic(terminal):
+    """Choose only exact neutral renderer lines, never substring-match private text."""
+    lines = set(terminal.splitlines())
+    candidates = (
+        ('E_GATEWAY_RETRY', 'network', '[E_GATEWAY_RETRY: automatic retry refused]'),
+        ('E_MISSING_RESULT', 'protocol', '[E_MISSING_RESULT: incomplete turn]'),
+        ('E_TRUNCATED_EVENT', 'protocol', '[E_TRUNCATED_EVENT: incomplete turn]'),
+        ('E_PROTOCOL_JSON', 'protocol', '[E_PROTOCOL_JSON: invalid engine event]'),
+        ('E_PROTOCOL_SCHEMA', 'protocol', '[E_PROTOCOL_SCHEMA: invalid engine event]'),
+        ('E_ENGINE', 'local', '[E_ENGINE: turn failed]'),
+        ('E_ENGINE', 'local', '[E_ENGINE: request failed]'),
+        ('E_ENGINE', 'local', '[E_ENGINE: incomplete turn; check gateway and configuration]'),
+    )
+    for code, category, rendered in candidates:
+        if rendered in lines:
+            return code, category
+    raise AssertionError('Interrupted stream lacks a known neutral failure classification')
 
 
 def check_rejection(executable, status_code, error_type, diagnostic, stream_cut=False,
@@ -280,7 +299,7 @@ def check_rejection(executable, status_code, error_type, diagnostic, stream_cut=
         try:
             tool_options = ["--tools", "Write", "--allowedTools", "Write"] if stream_cut else ["--tools", ""]
             report_path = root / "failure.json"
-            report_options = [] if stream_cut else ["--diagnostics", str(report_path)]
+            report_options = ["--diagnostics", str(report_path)]
             try:
                 result = subprocess.run([str(app), "--data-dir", str(data), "--print",
                                      *report_options, *tool_options, "gateway rejection fixture"],
@@ -333,7 +352,10 @@ def check_rejection(executable, status_code, error_type, diagnostic, stream_cut=
             terminal = result.stdout + result.stderr
             assert private_marker not in terminal and token not in terminal, "Gateway details leaked to terminal"
             assert diagnostic in terminal, f"HTTP {status_code} needs its neutral diagnostic"
-            if not stream_cut:
+            if stream_cut:
+                report_code, category = stream_failure_diagnostic(terminal)
+                validate_failure_diagnostic(report_path, report_code, result.returncode, category=category)
+            else:
                 validate_failure_diagnostic(report_path, diagnostic, result.returncode)
             assert not list(workspace.iterdir()), "Rejected request changed workspace"
             assert not list(program.rglob("*.jsonl")), "History leaked into program directory"

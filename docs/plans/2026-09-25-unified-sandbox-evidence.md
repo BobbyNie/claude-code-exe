@@ -1838,3 +1838,19 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - GitHub runners API 查核 repository self-hosted runners total_count=0。
   Windows 11 x64 普通帳戶實機驗收環境仍未提供；hosted CI 與上述清理
   GREEN 不替代完整 A01–A20 實機／企業及离線證據。
+
+### A19 interrupted-stream diagnostic coverage
+
+- TDD: exact E_MISSING_RESULT / E_TRUNCATED_EVENT category assertions failed
+  before the implementation and pass after mapping them to protocol. Unknown
+  E_MISSING_RESULT_PRIVATE remains local. Canonical-renderer verifier test also
+  failed before its helper existed, then passed; reflected substrings are refused.
+- Three interrupted-stream integration cases now request a fresh diagnostic report
+  and require exact schema, neutral cause/category, UUID v4, matching exit code
+  and false privacy flags. Existing single-request/no-write checks remain intact.
+- Local regression: 89 Python tests, 86 pass / 3 Windows skips; all seven C++
+  suites exit 0; git diff --check passes. Windows execution of this slice pending.
+- Run 36892763897 (bc95280) logs confirm 2.1.282 HTTP 401 and 429 checks pass,
+  including the exact diagnostic verifier executed before the PASS marker.
+  Overall run still fails; payload auth-fixture and TLS failures remain unresolved.
+  This is hosted CI evidence, not Windows 11 ordinary-account acceptance.
