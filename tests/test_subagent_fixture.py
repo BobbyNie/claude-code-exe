@@ -43,6 +43,17 @@ class SubagentFixtureTests(unittest.TestCase):
             'emitted_task': False, 'emitted_unregistered': True})
         self.assertNotIn('private', str(fixture.summarize_subagent_registry(events)))
 
+    def test_native_task_lifecycle_reports_only_allowlisted_event_shapes(self):
+        events = [{'type': 'system', 'subtype': 'task_started', 'task_id': 'private-id'},
+                  {'type': 'system', 'subtype': 'task_notification', 'status': 'completed',
+                   'summary': 'private-result'},
+                  {'type': 'system', 'subtype': 'private-subtype'},
+                  {'type': 'assistant', 'parent_tool_use_id': 'private-id'}]
+        self.assertEqual(fixture.summarize_subagent_lifecycle(events), {
+            'task_started': 1, 'task_notification': 1, 'completed_notification': 1,
+            'failed_notification': 0, 'child_assistant': 1})
+        self.assertNotIn('private', str(fixture.summarize_subagent_lifecycle(events)))
+
     def test_foreground_subagent_arguments_preserve_background_default_case(self):
         base = {'subagent_type': 'acceptance-probe', 'description': 'probe', 'prompt': 'probe'}
         self.assertEqual(fixture.subagent_arguments(base, foreground=False), base)

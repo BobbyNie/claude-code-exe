@@ -16,6 +16,26 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
+def summarize_subagent_lifecycle(events):
+    counts = dict.fromkeys(('task_started', 'task_notification', 'completed_notification',
+                            'failed_notification', 'child_assistant'), 0)
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        if event.get('type') == 'system':
+            subtype = event.get('subtype')
+            if subtype in ('task_started', 'task_notification'):
+                counts[subtype] += 1
+            if subtype == 'task_notification':
+                if event.get('status') == 'completed':
+                    counts['completed_notification'] += 1
+                elif event.get('status') == 'failed':
+                    counts['failed_notification'] += 1
+        elif event.get('type') == 'assistant' and isinstance(event.get('parent_tool_use_id'), str):
+            counts['child_assistant'] += 1
+    return counts
+
+
 def subagent_arguments(arguments, *, foreground):
     return dict(arguments, run_in_background=False) if foreground else dict(arguments)
 
@@ -540,6 +560,7 @@ def check(executable, short_path=False, lifecycle=None, permission=None, workspa
                         invalid_lines += 1
                 print(json.dumps({'native_subagent_registry': summarize_subagent_registry(events),
                     'native_subagent_order': summarize_subagent_order(events),
+                    'native_subagent_lifecycle': summarize_subagent_lifecycle(events),
                     'exit_code': result.returncode, 'invalid_lines': invalid_lines}))
                 assert not handler_errors, 'Native subagent fixture handler failed'
                 return  # Diagnostic only; independent frontend acceptance follows.

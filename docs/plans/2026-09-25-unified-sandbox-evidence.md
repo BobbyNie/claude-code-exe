@@ -2108,3 +2108,12 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   前景通過代替背景完成。Python TDD RED→GREEN；110 項 107 通過／3 skip。
   2.1.221 job `110533125931` payload gate 失敗觀察為 E_EXTRACT、request_count=0，
   尚不能歸因於 gateway 或容許重送。TLS／背景子代理仍未通過。
+
+- `50b0499` / `36912651148` 已完成 failure；兩版本 job `110538863528`、
+  `110538863687` 均明確打印前景案例 PASS：獨立 child system context、子代理結果
+  進入後續 parent model request、來源不變、歷史只進 data。僅證明明示前景
+  deterministic fixture；預設背景仍 E_PROTOCOL_ORDER，A17 整體仍未通過。
+  新增固定 allowlist 的原生 task lifecycle 計數（task_started、task_notification、
+  completed／failed notification、帶 parent_tool_use_id 的 assistant），不輸出
+  task ID、summary 或未知 subtype，不放寬產品事件順序。TDD RED→GREEN，
+  Python 111 項 108 通過／3 Windows-only skip；後續 CI 須核實實際事件 schema。
