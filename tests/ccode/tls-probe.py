@@ -33,6 +33,21 @@ def summarize_events(events):
     return evidence
 
 
+def probe_environment(inherited, root):
+    env = {key: value for key, value in inherited.items()
+           if key.upper() in ('SYSTEMROOT', 'WINDIR', 'PATH')}
+    home = root / 'home'
+    env.update(HOME=str(home), USERPROFILE=str(home), CLAUDE_CONFIG_DIR=str(home),
+        APPDATA=str(root / 'roaming'), LOCALAPPDATA=str(root / 'local'),
+        TEMP=str(root / 'temp'), TMP=str(root / 'temp'),
+        ANTHROPIC_AUTH_TOKEN='fixture-native-tls-dummy-token',
+        CLAUDE_CODE_MAX_RETRIES='0', CLAUDE_CODE_RETRY_WATCHDOG='0',
+        CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK='1',
+        CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC='1',
+        DISABLE_AUTOUPDATER='1', DISABLE_TELEMETRY='1')
+    return env
+
+
 def load_fixture(name, filename):
     spec = importlib.util.spec_from_file_location(name, Path(__file__).with_name(filename))
     module = importlib.util.module_from_spec(spec)
@@ -57,12 +72,9 @@ def probe(executable):
         home.mkdir()
         workspace = root / 'workspace'
         workspace.mkdir()
-        env = {key: value for key, value in os.environ.items()
-               if key.upper() in ('SYSTEMROOT', 'WINDIR', 'PATH', 'TEMP', 'TMP')}
-        env.update(HOME=str(home), USERPROFILE=str(home), CLAUDE_CONFIG_DIR=str(home),
-                   ANTHROPIC_AUTH_TOKEN='fixture-native-tls-dummy-token',
-                   CLAUDE_CODE_MAX_RETRIES='0', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC='1',
-                   DISABLE_AUTOUPDATER='1', DISABLE_TELEMETRY='1')
+        for storage in ('roaming', 'local', 'temp'):
+            (root / storage).mkdir()
+        env = probe_environment(os.environ, root)
         with gateway.untrusted_tls_endpoint() as endpoint:
             env['ANTHROPIC_BASE_URL'] = f'https://127.0.0.1:{endpoint.server_port}'
             try:

@@ -21,6 +21,20 @@ class TlsProbeTests(unittest.TestCase):
             'assistant_api_error': True, 'assistant_authentication_failed': False,
             'retry_event': True, 'error_result': True, 'structured_tls_code': False})
 
+    def test_probe_environment_isolates_storage_and_enforces_no_fallback(self):
+        root = Path('isolated')
+        env = probe.probe_environment({'SystemRoot': 'system', 'PATH': 'path',
+            'ANTHROPIC_API_KEY': 'private', 'APPDATA': 'private-home',
+            'NODE_TLS_REJECT_UNAUTHORIZED': '0', 'HTTPS_PROXY': 'private-proxy'}, root)
+        self.assertNotIn('private', str(env))
+        self.assertNotIn('NODE_TLS_REJECT_UNAUTHORIZED', env)
+        self.assertNotIn('HTTPS_PROXY', env)
+        self.assertEqual(env['APPDATA'], str(root / 'roaming'))
+        self.assertEqual(env['TEMP'], str(root / 'temp'))
+        self.assertEqual(env['CLAUDE_CODE_MAX_RETRIES'], '0')
+        self.assertEqual(env['CLAUDE_CODE_RETRY_WATCHDOG'], '0')
+        self.assertEqual(env['CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK'], '1')
+
     def test_tls_code_requires_structured_error_code_not_content(self):
         self.assertFalse(probe.summarize_events([{'type': 'assistant', 'message': {
             'content': [{'type': 'text', 'text': 'CERT_HAS_EXPIRED'}]}}])['structured_tls_code'])
