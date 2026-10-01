@@ -2465,3 +2465,12 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   繞過 trust 或新版 reset 的精確根因；服務端握手完成不是 client
   憑證驗證成功的替代證據。後續必須保留版本分開調查，不能將兩版
   合併成同一個「握手失敗」結論。本次沒有修改分類或降低 gate。
+
+- A20 候選拒絕的中性診斷修復：公開 inspect 對 audit/ZIP/unpacked
+  全部重新匹配、但 publicBoundary=[] 的候選原先拋 AttributeError，
+  exit=1 並輸出含程式來源路徑的 traceback。公開 CLI 測試先 RED，
+  加入 object 型別檢查後 GREEN：exit=2、E_LIFECYCLE_MANIFEST、
+  stderr 空且不輸出候選路徑。lifecycle 11（10 pass／1 Windows skip），
+  完整 Python 128（124 pass／4 Windows skip），diff-check 通過。
+  不以 catch-all 掩蓋例外，不降低候選檢查；此為既有驗收器修復，
+  不代表內建啟動／更新驗簽、核准 signer 或 Win11 實機已完成。

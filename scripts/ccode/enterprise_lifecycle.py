@@ -86,7 +86,8 @@ def _manifest_files(unpacked, manifest):
             manifest["redistributionApproval"] != "external-gate-not-asserted" or
             manifest["excludedDynamicData"] !=
             ["data/", "profile/", "runtime/", "sessions/", "temp/"] or
-            manifest.get("publicBoundary", {}).get("opaqueContents") != ["ccode.exe"]):
+            not isinstance(manifest["publicBoundary"], dict) or
+            manifest["publicBoundary"].get("opaqueContents") != ["ccode.exe"]):
         raise LifecycleError("E_LIFECYCLE_MANIFEST")
     provenance = manifest["provenance"]
     required_provenance = {

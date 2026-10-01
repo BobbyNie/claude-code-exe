@@ -172,6 +172,20 @@ class EnterpriseLifecycleTests(unittest.TestCase):
         self.assertFalse(working.exists())
         self.assertFalse(evidence.exists())
 
+    def test_inspect_rejects_non_object_public_boundary_with_neutral_error(self):
+        candidate = self.root / "private-malformed-boundary"
+        self.build(candidate)
+        manifest_path = candidate / "unpacked/manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["publicBoundary"] = []
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        self.refresh_candidate_audit(candidate)
+        rejected = self.run_lifecycle("inspect", "--candidate-root", candidate)
+        self.assertEqual(rejected.returncode, 2, rejected.stderr)
+        self.assertEqual(json.loads(rejected.stdout)["code"], "E_LIFECYCLE_MANIFEST")
+        self.assertEqual(rejected.stderr, "")
+        self.assertNotIn(str(candidate), rejected.stdout)
+
     def test_inspect_rejects_oversized_valid_audit_json_without_raw_details(self):
         candidate = self.root / "oversized-audit"
         self.build(candidate)
