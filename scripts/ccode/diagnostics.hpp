@@ -44,7 +44,7 @@ inline std::string DiagnosticCategory(const std::string& errorCode) {
         HasPrefix(errorCode, "E_ACTIVATION") || HasPrefix(errorCode, "E_ROLLBACK")) return "integrity";
     if (HasPrefix(errorCode, "E_PROFILE") || HasPrefix(errorCode, "E_SESSION") ||
         HasPrefix(errorCode, "E_WORKSPACE") || HasPrefix(errorCode, "E_DATA") ||
-        HasPrefix(errorCode, "E_NO_SESSION")) return "data";
+        HasPrefix(errorCode, "E_NO_SESSION") || errorCode == "E_ACTIVE_PROFILE") return "data";
     return "local";
 }
 

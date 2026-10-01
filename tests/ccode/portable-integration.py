@@ -1,5 +1,6 @@
 """Public Windows launcher contract. No live credentials or model required."""
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -8,6 +9,14 @@ import sys
 import tempfile
 import uuid
 import shutil
+
+def validate_data_failure_report(path, code, exit_code):
+    spec = importlib.util.spec_from_file_location('portable_gateway_diagnostics',
+        Path(__file__).with_name('gateway-integration.py'))
+    verifier = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(verifier)
+    verifier.validate_failure_diagnostic(path, code, exit_code, category='data')
+
 
 def profile_bytes(profile):
     return {path.relative_to(profile).as_posix(): path.read_bytes()
@@ -141,8 +150,11 @@ def check(executable):
         broken_selection = root / "broken selection"
         broken_selection.mkdir()
         (broken_selection / "active-profile.json").write_text("{broken", encoding="utf-8")
-        rejected_selection = run("--data-dir", str(broken_selection), "--sessions")
+        report_path = root / "broken-selection-diagnostic.json"
+        rejected_selection = run("--data-dir", str(broken_selection),
+                                 "--diagnostics", str(report_path), "--sessions")
         assert rejected_selection.returncode == 64 and rejected_selection.stderr.strip() == "E_ACTIVE_PROFILE", rejected_selection
+        validate_data_failure_report(report_path, "E_ACTIVE_PROFILE", rejected_selection.returncode)
         assert not (broken_selection / "profile").exists(), "Invalid active pointer must not create a fallback profile"
         assert (broken_selection / "active-profile.json").read_text(encoding="utf-8") == "{broken"
         print("PASS: invalid active-profile pointer fails closed without fallback or overwriting state")

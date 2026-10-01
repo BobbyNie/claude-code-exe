@@ -1910,3 +1910,16 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   still fails the job; native-runtime failure independently fails the job.
 - Local regression: 94 Python tests, 91 pass / 3 Windows skip; diff-check pass.
   Actual execution of the split workflow and 012cb75 cleanup fix remains pending.
+
+### A19 corrupted committed profile-pointer report
+
+- Exact E_ACTIVE_PROFILE incorrectly categorized local; C++ assertion produced
+  actual RED, then GREEN after exact data classification. Unknown suffixed code
+  remains local; no broad ACTIVE prefix rule.
+- Existing portable actual-product broken-pointer case now requests fresh
+  --diagnostics and uses the shared exact JSON verifier for E_ACTIVE_PROFILE,
+  data category, exit 64, UUID v4 and privacy flags. Existing original-byte and
+  no-fallback-profile checks remain. No additional engine request.
+- Local verifier rejects wrong category and extra private fields. Final Python
+  95 tests: 92 pass / 3 Windows skip; all seven C++ suites pass, diff-check pass.
+  Windows actual diagnostic report remains pending; not A19 overall GREEN.

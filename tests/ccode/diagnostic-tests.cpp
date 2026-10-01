@@ -18,6 +18,8 @@ int main() {
     assert(DiagnosticCategory("E_SESSION_BUSY") == "concurrency");
     assert(DiagnosticCategory("E_PACKAGE_METADATA") == "integrity");
     assert(DiagnosticCategory("E_PROFILE_DATA") == "data");
+    assert(DiagnosticCategory("E_ACTIVE_PROFILE") == "data");
+    assert(DiagnosticCategory("E_ACTIVE_PROFILE_PRIVATE") == "local");
     assert(DiagnosticCategory("E_LOCAL") == "local");
 
     const std::string operation = "a2345678-1234-4234-8234-123456789abc";
