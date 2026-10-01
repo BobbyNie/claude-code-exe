@@ -75,6 +75,7 @@ class GatewayFixtureTests(unittest.TestCase):
                     secure.sendall(b"GET / HTTP/1.0\r\nHost: localhost\r\n\r\n")
                     self.assertIn(b"503", secure.recv(4096))
             self.assertEqual(endpoint.http_requests, 1)
+            self.assertEqual(endpoint.tls_handshakes_completed, 1)
 
     def test_tls_endpoint_records_failed_connection_without_http_or_private_details(self):
         with fixture.untrusted_tls_endpoint() as endpoint:

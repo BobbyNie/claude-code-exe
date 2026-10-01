@@ -2442,3 +2442,13 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   engine=true。不得套用新版 errno=10054 到舊版，也不得將空陣列推論為
   TLS 握手成功；此快照未證明兩版本共同根因。下一步調查必須區分
   server handshake 觀察不足與 frontend 未取得結構化錯誤兩個問題。
+
+- TLS server 觀察補齊：loopback fixture 只在 wrap_socket 成功返回後
+  累計 tls_handshakes_completed，gateway 失敗快照與 native probe 同時
+  輸出該固定數值，不發布 peer bytes／錯誤原文。不修改拒絕判定或
+  frontend 分類；握手完成本身不是憑證拒絕或驗收通過證據。
+  實際 Python SSL client 先拒絕 fixture 憑證，再以顯式 fixture trust
+  完成握手及 HTTP；新增公開 counter 斷言先 RED（缺欄位），實作後
+  GREEN。fixture 13、probe 8 通過；完整 Python 127（123 pass／4
+  Windows skip），diff-check 通過。原生 engine 計數仍待遠端實測，
+  不把本機 Python client 結果替代 Windows engine／Win11 驗收。

@@ -52,7 +52,9 @@ def untrusted_tls_endpoint():
                 # Peek without consuming bytes or retaining private peer content.
                 self.protocol_observations.append(
                     classify_tls_prefix(connection.recv(3, socket.MSG_PEEK)))
-                return context.wrap_socket(connection, server_side=True), address
+                secure = context.wrap_socket(connection, server_side=True)
+                self.tls_handshakes_completed += 1
+                return secure, address
             except ssl.SSLError as error:
                 self.handshake_errors.append({"kind": "tls", "errno": error.errno})
                 self.handshake_failed.set()
@@ -71,6 +73,7 @@ def untrusted_tls_endpoint():
     server.rejected = threading.Event()
     server.handshake_failed = threading.Event()
     server.connections = 0
+    server.tls_handshakes_completed = 0
     server.handshake_errors = []
     server.protocol_observations = []
     server.http_requests = 0
@@ -181,6 +184,7 @@ def check_tls_rejection(executable):
                 "No failed TLS handshake observed from actual engine; " + json.dumps({
                     "connections": endpoint.connections,
                     "handshake_errors": endpoint.handshake_errors,
+                    "tls_handshakes_completed": endpoint.tls_handshakes_completed,
                     "protocol_observations": endpoint.protocol_observations,
                     "http_requests": endpoint.http_requests,
                     "exit_code": result.returncode,
