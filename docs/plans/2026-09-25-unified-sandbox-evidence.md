@@ -40,7 +40,7 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 | A16 | 並發 | 已實作 profile shared／維護 exclusive、metadata 短鎖及每 session 單 writer；`concurrency-integration.py` 使用真實引擎與 barrier fixture 驗證新 session 固定 UUID、同 session 拒絕及不同 session 並行 | 本機 helper／回歸已通過；仍欠 Windows 11 x64 上 2.1.221、2.1.282 的實際執行證據，不得以 Windows Server 或程式存在代替 |
 | A17 | 擴展 | CLI 參數可接設定／MCP／agents | 技能、子代理、核准 MCP 真實流程及明確版本相容矩陣 |
 | A18 | 網路 | gateway 設定入口；實際引擎本機 fixture 已覆蓋不可達、401、429、傳輸截斷、正常 EOF 未完成／完整參數但缺終止；指定案例要求非零退出、無寫入／洩漏，HTTP 案例一次模型請求 | TLS／DNS／過期憑證及完整分類、企業核准端點／部署政策仍欠；不得推廣為所有故障無重放，亦不宣稱 OS 網路隔離 |
-| A19 | 診斷 | 中性錯誤碼；parser 內容不直接外洩 | 操作／追蹤 ID、分類診斷包、憑證遮罩、預設不記提示／內容的實測 |
+| A19 | 診斷 | 中性錯誤碼及 parser 內容不直接外洩；已實作 `--diagnostics PATH` create-new JSON、UUID operation ID、分類、exit code、四項 privacy=false、敏感內容不落檔及 `E_DIAGNOSTIC_WRITE` 不遮蔽主要退出碼；本機純函式／contract 已通過 | 尚須 Windows 11 x64 普通帳戶實跑並保存 JSON，且逐一覆蓋 A01-A18 的 TLS／DNS／429／串流／資料損壞／政策拒絕等全部失敗；目前單一 gateway 缺設定案例及程式存在不能標記通過 |
 | A20 | 更新 | SHA256、版本化 runtime | 可信簽名 manifest、固定依賴、簽名失敗、中斷、相容資料快照回退 |
 
 ## 設計額外要求與放行條件
@@ -1648,3 +1648,12 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   六組 C++17 native/profile/environment/frontend/session/permission 測試全部通過，另有
   `py_compile` 與 `git diff --check` 通過。曾以 C++20 編譯會碰到既有 `u8string`／`char8_t`
   相容問題，依專案既有標準改回 C++17 後全綠；這不構成本輪產品測試失敗。
+
+
+### A19 隱私安全失敗診斷（待 Windows 11 x64 實跑）
+
+- 2026-10-01 依 TDD 先新增 `tests/ccode/diagnostic-tests.cpp` 與 workflow contract；因 `diagnostics.hpp` 及 build suite 尚不存在，純 C++ 編譯與 Python contract 都實際 RED，再作最小實作至 GREEN。後續另先加入選項值／`--` literal 的預掃描測試，舊 scanner 不存在而 RED，實作後轉綠。
+- `ccode.exe --diagnostics PATH` 只在失敗時以 Windows `CreateFileW(..., CREATE_NEW, ...)` 寫入 JSON；既有檔、無法建立或 flush 失敗均只輸出 `E_DIAGNOSTIC_WRITE`，保留原 64／65／75／其他主要退出碼，不覆寫 sentinel。
+- schema 1 僅記錄 `product=ccode`、Windows/x64、status、隨機 UUID v4 operation ID、中性 `E_*`、category、exit code，並把 arguments/environment values/prompt or content/credentials 四項 captured flag 固定為 false。`NeutralErrorCode` 不保存冒號後訊息；非核准格式降級為 `E_LOCAL`，因此 token、prompt、使用者路徑及 raw exception 不進報告。
+- `scripts/ccode/test-windows.ps1` 以假 token、敏感 prompt 與私有 test root 觸發缺 gateway 設定，要求 exit 64、`E_GATEWAY`／network、可解析 operation ID、所有 privacy flag 為 false且三類敏感字串不存在；再以既有 sentinel 驗證不覆寫及主要 exit code 不被診斷寫入錯誤遮蔽。
+- 本輪本地回歸為 Python 66 項（65 通過、1 項 Windows process/thread API 專用跳過）及七組 C++17 native/profile/environment/frontend/session/permission/diagnostic 全通過；MinGW 在補入其缺少的既有 MSVC `BCRYPT_SHA256_ALG_HANDLE` pseudo-handle define 後可編譯 `launcher.cpp`，只作語法補充證據。Windows 11 x64 實機尚未執行，GitHub Actions 最新 run 仍因 account payment／spending limit 在 0 steps 前被阻擋，因此 A19 仍為部分，不是放行。

@@ -169,6 +169,24 @@ class AcceptanceWorkflowTests(unittest.TestCase):
         self.assertIn('original_prompt_marker', resume_text)
         self.assertIn('not a live model or enterprise gateway', resume_text)
 
+    def test_failure_diagnostics_are_built_and_exercised_without_sensitive_values(self):
+        root = Path(__file__).resolve().parents[1]
+        build = (root / 'scripts/ccode/build.ps1').read_text()
+        self.assertIn('"diagnostic"', build)
+        windows_test = (root / 'scripts/ccode/test-windows.ps1').read_text()
+        for requirement in (
+            '--diagnostics',
+            'diagnostic-super-secret',
+            'sensitive diagnostic prompt',
+            'E_GATEWAY',
+            'operationId',
+            'promptOrContentCaptured',
+            'credentialsCaptured',
+            'E_DIAGNOSTIC_WRITE',
+            'diagnostic-sentinel',
+        ):
+            self.assertIn(requirement, windows_test)
+
     def test_failed_gateway_does_not_hide_independent_acceptance(self):
         workflow = (Path(__file__).resolve().parents[1] /
                     '.github/workflows/test-ccode.yml').read_text()

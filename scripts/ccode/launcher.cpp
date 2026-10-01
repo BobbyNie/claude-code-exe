@@ -2,6 +2,7 @@
 #define NOMINMAX
 #include <windows.h>
 #include <bcrypt.h>
+#include <array>
 #include <atomic>
 #include <climits>
 #include <cwchar>
@@ -11,6 +12,7 @@
 #include <iostream>
 #include <thread>
 #include "boundary.hpp"
+#include "diagnostics.hpp"
 #include "environment.hpp"
 #include "runtime-paths.hpp"
 #include "profile.hpp"
@@ -273,7 +275,7 @@ int PermissionServer() {
 }
 struct Options {
     bool print = false, sessions = false, resumePicker = false, latest = false, workspaceId = false, snapshotProfile = false, allSessions = false, archivePending = false, archiveWorkspacePending = false;
-    fs::path data, workspace;
+    fs::path data, workspace, diagnostics;
     std::string prompt, session, stageSnapshot, validateCandidate, activateCandidate, rollbackSnapshot, validateRollback, activateRollback;
     std::vector<std::wstring> engine;
 };
@@ -289,6 +291,11 @@ Options Parse(int argc, wchar_t** argv, const fs::path& module) {
         };
         if (!literal && arg == L"--") { literal = true; continue; }
         if (!literal && arg == L"--data-dir") options.data = next();
+        else if (!literal && arg == L"--diagnostics") {
+            if (!options.diagnostics.empty()) throw std::runtime_error("E_ARGUMENT");
+            options.diagnostics = next();
+            if (options.diagnostics.empty()) throw std::runtime_error("E_ARGUMENT");
+        }
         else if (!literal && arg == L"--workspace") {
             if (!options.workspace.empty()) throw std::runtime_error("E_ARGUMENT");
             options.workspace = next();
@@ -560,6 +567,7 @@ int Main(int argc, wchar_t** argv) {
             "  --continue             Use the latest session in this workspace\n"
             "  --sessions             List saved sessions for this workspace\n"
             "  --data-dir PATH        Persistent data (or CCODE_DATA_DIR)\n"
+            "  --diagnostics PATH     Create a privacy-safe failure report (never overwrite)\n"
             "  --workspace PATH       Select a local workspace (MAX_PATH current-dir limit)\n"
             "  --model NAME           Select a model\n"
             "  --workspace-id         Show persistent workspace identity\n"
@@ -755,14 +763,65 @@ int Main(int argc, wchar_t** argv) {
     }
     return code;
 }
+
+std::string NewOperationId() {
+    std::array<unsigned char, 16> bytes{};
+    if (BCryptGenRandom(nullptr, bytes.data(), static_cast<ULONG>(bytes.size()),
+                        BCRYPT_USE_SYSTEM_PREFERRED_RNG) < 0)
+        throw std::runtime_error("E_DIAGNOSTIC_ID");
+    bytes[6] = static_cast<unsigned char>((bytes[6] & 0x0f) | 0x40);
+    bytes[8] = static_cast<unsigned char>((bytes[8] & 0x3f) | 0x80);
+    static constexpr char hex[] = "0123456789abcdef";
+    std::string result;
+    result.reserve(36);
+    for (size_t i = 0; i < bytes.size(); ++i) {
+        if (i == 4 || i == 6 || i == 8 || i == 10) result.push_back('-');
+        result.push_back(hex[bytes[i] >> 4]);
+        result.push_back(hex[bytes[i] & 0x0f]);
+    }
+    return result;
+}
+void WriteFailureDiagnostic(const fs::path& destination, const std::string& failure, int exitCode) {
+    const auto path = ccode::NativeIoPath(destination);
+    Handle output(CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
+                              FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+    if (!output.valid()) throw std::runtime_error("E_DIAGNOSTIC_WRITE");
+    const auto document = ccode::FailureDiagnostic(failure, exitCode, NewOperationId()).dump(2) + "\n";
+    size_t offset = 0;
+    while (offset < document.size()) {
+        DWORD written = 0;
+        const auto remaining = document.size() - offset;
+        if (!WriteFile(output, document.data() + offset,
+                       static_cast<DWORD>(std::min<size_t>(remaining, MAXDWORD)), &written, nullptr) || !written)
+            throw std::runtime_error("E_DIAGNOSTIC_WRITE");
+        offset += written;
+    }
+    if (!FlushFileBuffers(output)) throw std::runtime_error("E_DIAGNOSTIC_WRITE");
+}
 }
 int wmain(int argc, wchar_t** argv) {
-    try { return Main(argc, argv); }
+    std::vector<std::wstring> arguments;
+    arguments.reserve(argc);
+    for (int i = 0; i < argc; ++i) arguments.emplace_back(argv[i]);
+    const auto diagnostic = ccode::DiagnosticDestination(arguments);
+    try {
+        const int code = Main(argc, argv);
+        if (code != 0 && diagnostic) {
+            try { WriteFailureDiagnostic(*diagnostic, "E_ENGINE", code); }
+            catch (...) { std::cerr << "E_DIAGNOSTIC_WRITE\n"; }
+        }
+        return code;
+    }
     catch (const std::exception& error) {
         std::string message = error.what();
         // Library exceptions may contain user content or internal absolute paths.
         if (message.rfind("E_", 0) != 0) message = "E_LOCAL: operation failed; check data access and configuration";
         std::cerr << message << '\n';
-        return message.rfind("E_PROFILE_BUSY", 0) == 0 || message.rfind("E_SESSION_BUSY", 0) == 0 ? 75 : 64;
+        const int code = message.rfind("E_PROFILE_BUSY", 0) == 0 || message.rfind("E_SESSION_BUSY", 0) == 0 ? 75 : 64;
+        if (diagnostic) {
+            try { WriteFailureDiagnostic(*diagnostic, message, code); }
+            catch (...) { std::cerr << "E_DIAGNOSTIC_WRITE\n"; }
+        }
+        return code;
     }
 }

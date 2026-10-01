@@ -52,6 +52,35 @@ try {
     Remove-Item Env:A_BASE_URL -ErrorAction SilentlyContinue
     Invoke-ExpectExit -Arguments @("--version") -Expected 0
 
+    $diagnosticPath = Join-Path $testRoot 'failure-diagnostic.json'
+    $env:A_AUTH_TOKEN = 'diagnostic-super-secret'
+    Remove-Item Env:A_BASE_URL -ErrorAction SilentlyContinue
+    Invoke-ExpectExit -Arguments @('--diagnostics', $diagnosticPath, '--print', 'sensitive diagnostic prompt') -Expected 64
+    $diagnostic = Get-Content -LiteralPath $diagnosticPath -Raw | ConvertFrom-Json
+    $operationId = [Guid]::Empty
+    $validOperationId = [Guid]::TryParse([string]$diagnostic.operationId, [ref]$operationId)
+    if ($diagnostic.schemaVersion -ne 1 -or $diagnostic.status -ne 'error' -or
+        $diagnostic.errorCode -ne 'E_GATEWAY' -or $diagnostic.category -ne 'network' -or
+        $diagnostic.exitCode -ne 64 -or -not $validOperationId -or
+        $diagnostic.privacy.argumentsCaptured -or $diagnostic.privacy.environmentValuesCaptured -or
+        $diagnostic.privacy.promptOrContentCaptured -or $diagnostic.privacy.credentialsCaptured) {
+        throw 'Failure diagnostic schema or privacy flags are invalid'
+    }
+    $diagnosticText = Get-Content -LiteralPath $diagnosticPath -Raw
+    foreach ($forbidden in @('diagnostic-super-secret', 'sensitive diagnostic prompt', $testRoot)) {
+        if ($diagnosticText.Contains($forbidden, [StringComparison]::OrdinalIgnoreCase)) {
+            throw 'Failure diagnostic retained a credential, prompt, or private path'
+        }
+    }
+    $sentinelDiagnostic = Join-Path $testRoot 'diagnostic-sentinel.json'
+    Set-Content -LiteralPath $sentinelDiagnostic -Value 'diagnostic-sentinel' -NoNewline
+    $diagnosticStderr = Join-Path $testRoot 'diagnostic-stderr.txt'
+    & $testExe --diagnostics $sentinelDiagnostic --print 'sensitive diagnostic prompt' 2> $diagnosticStderr
+    if ($LASTEXITCODE -ne 64 -or (Get-Content -LiteralPath $sentinelDiagnostic -Raw) -ne 'diagnostic-sentinel' -or
+        -not (Select-String -LiteralPath $diagnosticStderr -SimpleMatch 'E_DIAGNOSTIC_WRITE' -Quiet)) {
+        throw 'Failure diagnostic overwrote an existing file or masked the primary exit code'
+    }
+
     $env:A_BASE_URL = "http://gateway.example.test"
     Invoke-ExpectExit -Arguments @("login") -Expected 64
     Invoke-ExpectExit -Arguments @("--ccode-self-test") -Expected 0

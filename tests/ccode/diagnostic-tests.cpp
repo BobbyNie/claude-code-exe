@@ -1,0 +1,59 @@
+#include "../../scripts/ccode/diagnostics.hpp"
+#include <cassert>
+#include <iostream>
+
+int main() {
+    using namespace ccode;
+
+    assert(NeutralErrorCode("E_GATEWAY_AUTH: token=do-not-record") == "E_GATEWAY_AUTH");
+    assert(NeutralErrorCode("E_SESSION_BUSY") == "E_SESSION_BUSY");
+    assert(NeutralErrorCode("private C:\\Users\\person\\secret.txt") == "E_LOCAL");
+    assert(NeutralErrorCode("E_bad: secret") == "E_LOCAL");
+    assert(DiagnosticCategory("E_GATEWAY_TLS") == "network");
+    assert(DiagnosticCategory("E_PROTOCOL_JSON") == "protocol");
+    assert(DiagnosticCategory("E_CREDENTIAL") == "configuration");
+    assert(DiagnosticCategory("E_SESSION_BUSY") == "concurrency");
+    assert(DiagnosticCategory("E_PACKAGE_METADATA") == "integrity");
+    assert(DiagnosticCategory("E_PROFILE_DATA") == "data");
+    assert(DiagnosticCategory("E_LOCAL") == "local");
+
+    const std::string operation = "a2345678-1234-4234-8234-123456789abc";
+    const auto report = FailureDiagnostic(
+        "E_GATEWAY_AUTH: token=do-not-record prompt=private C:\\Users\\person", 64, operation);
+    assert(report == Json({
+        {"schemaVersion", 1},
+        {"product", "ccode"},
+        {"platform", "windows"},
+        {"architecture", "x64"},
+        {"status", "error"},
+        {"operationId", operation},
+        {"errorCode", "E_GATEWAY_AUTH"},
+        {"category", "network"},
+        {"exitCode", 64},
+        {"privacy", {
+            {"argumentsCaptured", false},
+            {"environmentValuesCaptured", false},
+            {"promptOrContentCaptured", false},
+            {"credentialsCaptured", false}
+        }}
+    }));
+    const auto encoded = report.dump();
+    for (const auto* forbidden : {"do-not-record", "private", "Users", "token="})
+        assert(encoded.find(forbidden) == std::string::npos);
+
+    assert(DiagnosticDestination({L"ccode.exe", L"--diagnostics", L"failure.json", L"--print"}) ==
+           std::filesystem::path(L"failure.json"));
+    assert(!DiagnosticDestination({L"ccode.exe", L"--model", L"--diagnostics", L"prompt"}));
+    assert(!DiagnosticDestination({L"ccode.exe", L"--", L"--diagnostics", L"failure.json"}));
+    assert(!DiagnosticDestination({L"ccode.exe", L"--diagnostics"}));
+
+    bool invalidId = false;
+    try { FailureDiagnostic("E_LOCAL", 64, "not-an-operation-id"); }
+    catch (const std::runtime_error& error) {
+        invalidId = std::string(error.what()) == "E_DIAGNOSTIC_ID";
+    }
+    assert(invalidId);
+
+    std::cout << "ccode diagnostic privacy tests passed\n";
+    return 0;
+}

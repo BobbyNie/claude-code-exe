@@ -156,6 +156,8 @@ guest 可寫 profile 跨次啟動保存，temp 可清理但不可每次丟掉整
 
 診斷必須區分：啟動、檔案访问、工具協定、代理 HTTP／串流、會話損壞及政策拒絕。未知錯誤不包裝成「檔案不存在」，不靜默改用未隔離執行。
 
+2026-10-01 已加入選用的 `--diagnostics PATH` 失敗報告入口。報告使用 create-new 語義，不覆寫既有檔；包含隨機 UUID operation ID、中性 `E_*`、分類、exit code、Windows/x64 及四項明確為 false 的隱私旗標，不保存 argv、環境值、提示／內容、憑證、私有路徑或原始 exception message。診斷寫入失敗只額外輸出 `E_DIAGNOSTIC_WRITE`，不得改變主要退出碼。此實作仍須由 Windows 11 x64 普通帳戶實跑全部故障矩陣，不能以本機 header 測試或交叉編譯標記 A19 通過。
+
 ## 8. 發布與營運
 
 另建企業交付包，不能沿用包含其他品牌工具及原始 README 的完整公共包。交付根目錄建議包含 `ccode.exe`、`assets/`、`data/`、`docs/usage.md`、`manifest.json`；依方案放入真正所需檔案，清單不是最終已驗證包。

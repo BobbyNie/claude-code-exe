@@ -75,3 +75,12 @@ pwsh ./scripts/ccode/accept-enterprise-lifecycle-windows11-x64.ps1 `
 `CandidateRoot` 必須是 `build_enterprise_package.py` 的完整輸出根，包含 `unpacked/`、`package-audit.json` 及唯一 ZIP。驗收器以 `enterprise_lifecycle.py inspect` 不信任地重算 archive／unpacked audit 與 manifest hashes，複製完整 `unpacked/` 到中文／空格 program path，使用外置 data/workspace 執行真實 engine／六工具，搬移整個 program directory 後核對相同 workspace ID、列出並真實續接既有歷史；最後從已運行的程式目錄重新組裝 fresh candidate，並以 `compare` 強制解包 path/size/SHA256 及 manifest 完全一致。ZIP byte digest 會分別記錄；跨 Python／zlib 工具鏈時不以壓縮 bytes 相同作唯一通過條件。此案例仍使用 deterministic loopback fixture，且未在實際 Windows 11 x64 成功執行前不得把 A05 標為通過。
 
 既有兩版本 Windows 回歸證據只能沿用到未改變的舊功能，不替代新前端、新啟動環境及名稱掃描。`windows-latest` 可驗證補充回歸，但路徑邊界仍須在真實 Windows 11 x64 普通帳戶 runner 以 `--workspace-boundary-only` 取得成功結果；歷史 `WinError 267` 不是通過證據。A03 來源清單須由 Windows 11 x64 workflow 產出 `package-provenance.json`；只有程式碼或 Windows Server 結果不能標記通過。任何代碼修改遵守先失敗測試、再最小實作、再回歸的 TDD 流程。
+
+
+A19 診斷驗收須對每個故障案例使用事前不存在的路徑，例如：
+
+```powershell
+./ccode.exe --diagnostics D:/ccode-evidence/failure.json --print "synthetic prompt"
+```
+
+每份 JSON 必須能以 UUID 解析 `operationId`，只含中性 `errorCode`／`category`／`exitCode` 及明確隱私旗標；不得含測試 token、prompt、使用者根、workspace/data 絕對路徑或 raw exception。以既有 sentinel 檔重跑時，sentinel bytes 必須不變、stderr 額外包含 `E_DIAGNOSTIC_WRITE`，主要 exit code 不變。2026-10-01 已完成產生器、純函式測試與 Windows 驗收腳本案例；尚未取得 Windows 11 x64 普通帳戶的實跑 JSON，亦未覆蓋 TLS、DNS、過期憑證、429、串流、資料損壞、政策拒絕全部案例，故 A19 不得標為通過。
