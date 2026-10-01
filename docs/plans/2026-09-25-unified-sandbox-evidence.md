@@ -2530,3 +2530,19 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - TDD exact failed-result match RED→GREEN，額外 suffix／prefix／截斷仍
   unmatched；structured TLS code 仍 false。完整 Python 131 tests／4
   Windows-only skips、diff-check 通過。A19 TLS 分類仍未通過。
+
+### Portable cleanup sharing violation: observation without masking failure
+
+- Rechecked d800137 run 36937510594: old-version portable contract prints its
+  success marker before TemporaryDirectory cleanup fails with WinError 32 on
+  the copied frontend. Forced snapshot interruption has not run at this point;
+  attributing this failure to that interruption is unsupported.
+- Added read-only Windows Restart Manager observation on PermissionError:
+  availability, process count and whether the test process is present only.
+  No PID, process name, path, service name or exception text is emitted by the
+  observation. The original exception is re-raised; no cleanup retry, shutdown,
+  ignored failure or production change. A zero count is not proof of no lock.
+- TDD missing context manager RED, privacy/original-exception test GREEN.
+  Full local Python: 133 tests, 5 Windows-only skips. Added Windows-only test
+  against the actual executing Python image; its execution remains pending CI.
+  Real failing frontend occupancy evidence and Win11 acceptance remain pending.

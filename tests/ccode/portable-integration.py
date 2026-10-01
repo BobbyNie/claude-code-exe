@@ -11,6 +11,66 @@ import uuid
 import shutil
 import time
 
+def file_occupancy(path):
+    """Restart Manager observation only: no shutdown, retries, or private identifiers."""
+    result = {'available': False, 'process_count': 0, 'test_process_present': False}
+    if os.name != 'nt':
+        return result
+    import ctypes
+    from ctypes import wintypes as w
+    class UniqueProcess(ctypes.Structure):
+        _fields_ = [('pid', w.DWORD), ('start', w.FILETIME)]
+    class ProcessInfo(ctypes.Structure):
+        _fields_ = [('process', UniqueProcess), ('name', w.WCHAR * 256),
+                    ('service', w.WCHAR * 64), ('kind', ctypes.c_int),
+                    ('status', w.ULONG), ('session', w.DWORD), ('restartable', w.BOOL)]
+    api = ctypes.WinDLL('rstrtmgr')
+    session = w.DWORD()
+    key = ctypes.create_unicode_buffer(33)
+    if api.RmStartSession(ctypes.byref(session), 0, key) != 0:
+        return result
+    try:
+        files = (w.LPCWSTR * 1)(str(path))
+        if api.RmRegisterResources(session, 1, files, 0, None, 0, None) != 0:
+            return result
+        needed, count, reasons = w.UINT(), w.UINT(), w.DWORD()
+        code = api.RmGetList(session, ctypes.byref(needed), ctypes.byref(count), None,
+                             ctypes.byref(reasons))
+        if code == 0:
+            result['available'] = True
+            return result
+        if code != 234 or needed.value > 4096:
+            return result
+        entries = (ProcessInfo * needed.value)()
+        count.value = needed.value
+        code = api.RmGetList(session, ctypes.byref(needed), ctypes.byref(count), entries,
+                             ctypes.byref(reasons))
+        if code != 0:
+            return result
+        result.update(available=True, process_count=count.value,
+                      test_process_present=any(entry.process.pid == os.getpid()
+                                               for entry in entries[:count.value]))
+        return result
+    finally:
+        api.RmEndSession(session)
+
+
+from contextlib import contextmanager
+
+@contextmanager
+def diagnose_cleanup(path):
+    try:
+        yield
+    except PermissionError:
+        try:
+            observation = file_occupancy(path() if callable(path) else path)
+        except Exception:
+            observation = {'available': False, 'process_count': 0,
+                           'test_process_present': False}
+        print('portable cleanup occupancy: ' + json.dumps(observation, sort_keys=True))
+        raise
+
+
 def validate_data_failure_report(path, code, exit_code):
     spec = importlib.util.spec_from_file_location('portable_gateway_diagnostics',
         Path(__file__).with_name('gateway-integration.py'))
@@ -99,7 +159,8 @@ def check_interrupted_snapshot(executable):
 
 
 def check(executable):
-    with tempfile.TemporaryDirectory(prefix="ccode portable ") as folder:
+    root = None
+    with diagnose_cleanup(lambda: root / "ccode.exe"), tempfile.TemporaryDirectory(prefix="ccode portable ") as folder:
         root = Path(folder)
         app = root / "ccode.exe"
         shutil.copy2(executable, app)

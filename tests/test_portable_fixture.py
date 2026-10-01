@@ -1,6 +1,8 @@
 """Portable snapshot evidence follows the exact operational lock scope."""
 import importlib.util
 import json
+import os
+import sys
 from pathlib import Path
 import tempfile
 import unittest
@@ -14,6 +16,26 @@ spec.loader.exec_module(fixture)
 
 
 class PortableFixtureTests(unittest.TestCase):
+    def test_cleanup_probe_is_private_and_preserves_original_failure(self):
+        error = PermissionError('private-path-marker')
+        with unittest.mock.patch.object(fixture, 'file_occupancy', return_value={
+                'available': True, 'process_count': 2, 'test_process_present': False}, create=True):
+            with unittest.mock.patch('builtins.print') as output:
+                with self.assertRaises(PermissionError) as caught:
+                    with fixture.diagnose_cleanup(Path('private-path-marker')):
+                        raise error
+                self.assertIs(caught.exception, error)
+                self.assertNotIn('private-path-marker', str(output.call_args))
+                self.assertIn('process_count', str(output.call_args))
+
+    @unittest.skipUnless(os.name == 'nt', 'Restart Manager requires Windows')
+    def test_restart_manager_observes_actual_test_executable_without_identifiers(self):
+        observation = fixture.file_occupancy(Path(sys.executable))
+        self.assertEqual(set(observation), {'available', 'process_count', 'test_process_present'})
+        self.assertTrue(observation['available'])
+        self.assertGreater(observation['process_count'], 0)
+        self.assertTrue(observation['test_process_present'])
+
     def test_corrupt_pointer_report_requires_data_category_and_exact_privacy_schema(self):
         report = {'schemaVersion': 1, 'product': 'ccode', 'platform': 'windows',
             'architecture': 'x64', 'status': 'error',
