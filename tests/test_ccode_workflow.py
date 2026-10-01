@@ -18,6 +18,23 @@ class AcceptanceWorkflowTests(unittest.TestCase):
                                 for keyword in node.keywords),
                             f'Source read at line {node.lineno} relies on Windows locale')
 
+    def test_python_failure_does_not_hide_native_runtime_gate(self):
+        root = Path(__file__).resolve().parents[1]
+        for name in ('test-ccode.yml', 'test-ccode-windows11-x64.yml'):
+            with self.subTest(workflow=name):
+                workflow = (root / '.github/workflows' / name).read_text(encoding='utf-8')
+                python_step = workflow.split('      - name: Test Python contracts', 1)[1].split('      - ', 1)[0]
+                native_step = workflow.split('      - name: Test native runtime and resume', 1)[1].split('      - ', 1)[0]
+                self.assertIn('python -m unittest discover -s tests -v', python_step)
+                self.assertIn("throw 'Python tests failed'", python_step)
+                self.assertNotIn('test-windows.ps1', python_step)
+                self.assertIn('./scripts/ccode/test-windows.ps1 -Executable ./ccode.exe', native_step)
+                self.assertNotIn('unittest', native_step)
+                self.assertIn("!cancelled() && steps.build.outcome == 'success'", native_step)
+                if 'windows11' in name:
+                    self.assertIn("steps.platform.outcome == 'success'", native_step)
+                self.assertNotIn('continue-on-error:', python_step + native_step)
+
     def test_portable_failure_does_not_hide_tool_lifecycle_acceptance(self):
         workflow = (Path(__file__).resolve().parents[1] /
                     '.github/workflows/test-ccode.yml').read_text(encoding='utf-8')

@@ -1897,3 +1897,16 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   This is a candidate cleanup correction, not confirmed Windows GREEN: live
   process enumeration can race, and the unchanged workspace.rmdir assertion
   remains the actual Windows gate. No deletion retry or ignored cleanup error.
+
+### Keep Python and native-runtime CI evidence independent
+
+- The 1bf99b8 Windows Python cleanup regression caused test-windows.ps1 to
+  be skipped inside a combined step. Both hosted and Windows 11 workflows now
+  have separate required Python-contract and native-runtime steps. Native runs
+  after Python failure only when build succeeded and the job is not cancelled;
+  Windows 11 still additionally requires the ordinary-account platform gate.
+- New workflow contract test produced actual RED for both missing independent
+  steps, then GREEN. No continue-on-error or reduced assertions. Python failure
+  still fails the job; native-runtime failure independently fails the job.
+- Local regression: 94 Python tests, 91 pass / 3 Windows skip; diff-check pass.
+  Actual execution of the split workflow and 012cb75 cleanup fix remains pending.

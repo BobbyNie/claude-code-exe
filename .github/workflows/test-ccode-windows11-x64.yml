@@ -44,13 +44,16 @@ jobs:
             --expected-version '${{ matrix.version }}' `
             --adapter-revision '${{ github.sha }}' `
             --evidence './windows11-evidence/${{ matrix.version }}/package-provenance.json'
-      - name: Test native runtime and resume
+      - name: Test Python contracts
         if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.platform.outcome == 'success' }}
         shell: pwsh
         run: |
           python -m unittest discover -s tests -v
           if ($LASTEXITCODE -ne 0) { throw 'Python tests failed' }
-          ./scripts/ccode/test-windows.ps1 -Executable ./ccode.exe
+      - name: Test native runtime and resume
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.platform.outcome == 'success' }}
+        shell: pwsh
+        run: ./scripts/ccode/test-windows.ps1 -Executable ./ccode.exe
       - name: Test portable frontend contract
         if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.platform.outcome == 'success' }}
         shell: pwsh
