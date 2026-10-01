@@ -1712,3 +1712,24 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - 同一 job 的 TLS 診斷為 connections=2、transport errno=10054 兩次、
   HTTP requests=0、engine exit=1；只證明曾連接且未送 HTTP，不單憑 reset
   當作憑證拒絕或 E_GATEWAY_TLS 分類通過。
+
+### 2026-10-01：準備鎖實際 CI GREEN 與 TLS 嚴格證據閘門
+
+- run `36884421476`，SHA `ab3deb2c8ba7cef93294e17bc6691fa2d04482d6`，
+  2.1.282 job `110443965688` 的 `Verify session writer concurrency` 成功：
+  真實新 session identity、同 session 第二寫入者提前退出 75、不同 session
+  在同一 workspace 並行且不覆蓋歷史均通過。這是準備鎖修正的 CI GREEN，
+  不等於 Windows 11 普通帳戶 A16 全量實機驗收。
+- 同 job 的 embedded payload tamper／cache repair 步驟通過；gateway 的
+  unreachable、401、429、截斷及兩種語義 EOF 案例通過。TLS 仍失败：
+  connections=2、transport errno=10054、HTTP=0、exit=1。
+- native 步驟的唯一 Python failure 是 TLS fixture 的 server-side rejected
+  event 未設置；客戶端憑證例外驗證仍保留。`210efa6` 本機實際 RED→GREEN：
+  新增測試先因缺少 helper 失敗，再以握手失敗、有連線、零 HTTP、非零退出、
+  明確 E_GATEWAY_TLS 的共同閘門通過。不接受單純 reset 或 E_ENGINE_API。
+  engine integration 另要求 stderr 完整行 E_GATEWAY_TLS；不打印私人內容。
+  完整 Python 75 項（74 通過、1 Windows API 跳過）。
+- `210efa64d44979d81628c3afaefa470b2c8252c3` 對應 run `36885251680`
+  已確認 in_progress。尚未取得實際 engine TLS GREEN，不能標記 TLS 通過。
+- 查核時 `36884421476` 的 2.1.221 portable frontend 步驟成功，但 run
+  仍 in_progress；跨版本及其餘版本不得由單一步驟成功推論完成。
