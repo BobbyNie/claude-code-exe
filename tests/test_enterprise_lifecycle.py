@@ -171,6 +171,16 @@ class EnterpriseLifecycleTests(unittest.TestCase):
         self.assertFalse(working.exists())
         self.assertFalse(evidence.exists())
 
+    def test_inspect_rejects_oversized_valid_audit_json_without_raw_details(self):
+        candidate = self.root / "oversized-audit"
+        self.build(candidate)
+        audit = candidate / "package-audit.json"
+        audit.write_bytes(b" " * (1024 * 1024) + audit.read_bytes())
+        rejected = self.run_lifecycle("inspect", "--candidate-root", candidate)
+        self.assertEqual(rejected.returncode, 2)
+        self.assertEqual(json.loads(rejected.stdout)["code"], "E_LIFECYCLE_AUDIT")
+        self.assertNotIn(str(candidate), rejected.stdout + rejected.stderr)
+
     def test_inspect_recomputes_candidate_and_returns_repack_inputs(self):
         candidate = self.root / "candidate"
         self.build(candidate)

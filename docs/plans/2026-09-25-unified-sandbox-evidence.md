@@ -2355,3 +2355,13 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   handshake_errors=[]、兩次 tls-record、HTTP=0、exit=1，仍不能
   當成憑證拒絕證據。新版 payload 成功不消除先前間歇 activation
   access-denied 失敗，TLS 與 A15 未放行。
+
+- A20 驗簽前 JSON 讀取上限：enterprise lifecycle 的 audit/manifest
+  JSON 統一最多 1 MiB（與 manifest signature CLI 上限一致），先拒絕
+  超大 regular file，並以 maximum+1 有界讀取防止 size check 後增長
+  導致無界配置。超限保留 caller-selected E_LIFECYCLE_AUDIT／MANIFEST，
+  不輸出原始路徑。公開 inspect 有效但超大 audit 測試先 RED（原先
+  接受），實作後 GREEN；lifecycle 9（8 pass／1 Windows skip），
+  完整 Python 123（119 pass／4 Windows skip），diff-check 通過。
+  這不聲稱解決任意 symlink/reparse/concurrent replacement race，
+  不代表內建 launcher/update 簽章 gate 或 Windows 11 全量验收完成。

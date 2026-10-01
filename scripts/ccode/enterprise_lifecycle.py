@@ -32,12 +32,21 @@ def _sha256(path):
     return digest.hexdigest()
 
 
+JSON_MAX_BYTES = 1024 * 1024
+
+
 def _json(path, code="E_LIFECYCLE_FORMAT"):
     try:
         status = Path(path).lstat()
-        if stat.S_ISLNK(status.st_mode) or not stat.S_ISREG(status.st_mode):
+        if (stat.S_ISLNK(status.st_mode) or not stat.S_ISREG(status.st_mode) or
+                status.st_size > JSON_MAX_BYTES):
             raise LifecycleError(code)
-        return json.loads(Path(path).read_text(encoding="utf-8-sig"),
+        # Bound the read itself: a file may grow after the size check.
+        with Path(path).open("rb") as source:
+            contents = source.read(JSON_MAX_BYTES + 1)
+        if len(contents) > JSON_MAX_BYTES:
+            raise LifecycleError(code)
+        return json.loads(contents.decode("utf-8-sig"),
                           object_pairs_hook=_unique_json_object)
     except LifecycleError:
         raise
