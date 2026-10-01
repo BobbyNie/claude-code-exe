@@ -2600,3 +2600,24 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   not explain the old-engine result. Gates remain failed, not weakened.
 - GitHub self-hosted runners API still returns total_count=0. Actual Win11 x64
   ordinary-account acceptance remains unavailable and is not marked passed.
+
+### Native manifest signature contract and newly blocked CI
+
+- Added native exact manifest/domain/NUL verification, canonical 44-byte
+  Ed25519 SPKI prefix validation and independent lowercase SHA256 signer pin.
+  Empty/over-1MiB manifests and invalid signature/key/pin forms fail closed.
+  Windows uses BCrypt SHA256; macOS engineering tests use system CommonCrypto.
+  No candidate-derived pin is promoted to approved policy.
+- TDD missing VerifyManifestSignature RED, then independently generated Node
+  RFC8032 test-key domain signature GREEN. Rejects changed manifest bytes,
+  absent/uppercase/wrong pin, signature without domain, invalid/extra DER even
+  when the mutated DER's own digest is supplied as the test pin. This demonstrates
+  structural rejection rather than merely a pin mismatch. Native tests and full
+  Python 135 tests / 5 Windows-only skips passed; diff-check passed.
+- b09a700 run 36941994105 completed/failure with zero steps in every job.
+  Check-run 110635402504 annotation explicitly states jobs were not started
+  because recent account payments failed or spending limit needs increasing.
+  This NEW billing block does not reattribute earlier executed-test failures.
+  No rerun performed; MSVC native verifier remains unverified.
+- Startup/update integration, approved public signer policy, candidate locking,
+  signed schema inventory validation and real Win11 x64 acceptance remain open.
