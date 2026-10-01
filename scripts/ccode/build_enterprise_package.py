@@ -155,7 +155,9 @@ def _validated_boundary(path):
         document = json.loads(raw.decode("utf-8-sig"))
     except (UnicodeError, json.JSONDecodeError):
         raise PackageBuildError("E_BOUNDARY") from None
-    if document != BOUNDARY_DOCUMENT:
+    # Canonical JSON distinguishes booleans, integers and floats; Python
+    # container equality incorrectly accepts True == 1 and False == 0.
+    if json.dumps(document, sort_keys=True) != json.dumps(BOUNDARY_DOCUMENT, sort_keys=True):
         raise PackageBuildError("E_BOUNDARY")
     return document
 

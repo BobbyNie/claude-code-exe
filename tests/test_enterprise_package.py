@@ -226,6 +226,24 @@ class EnterprisePackageTests(unittest.TestCase):
         self.assertEqual(failed.returncode, 2)
         self.assertEqual(json.loads(failed.stdout)["code"], "E_INPUT_TYPE")
 
+    def test_boundary_rejects_boolean_numeric_substitution_without_output(self):
+        for label, change in (
+            ("schema-bool", lambda doc: doc.update(schemaVersion=True)),
+            ("schema-float", lambda doc: doc.update(schemaVersion=1.0)),
+            ("runtime-number", lambda doc: doc["childRuntimeEnvironment"].update(originalRuntimeNamesPresent=1)),
+            ("side-effect-number", lambda doc: doc["sideEffects"].update(createsData=0)),
+        ):
+            with self.subTest(label=label):
+                document = json.loads(json.dumps(self.boundary_document))
+                change(document)
+                invalid = self.root / (label + ".json")
+                invalid.write_text(json.dumps(document), encoding="utf-8")
+                output = self.root / (label + "-output")
+                result = self.run_builder(output, boundary=invalid)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("E_BOUNDARY", result.stdout + result.stderr)
+                self.assertFalse(output.exists())
+
     def test_boundary_manifest_is_required_and_must_match_windows11_x64_contract(self):
         missing = subprocess.run([
             sys.executable, str(BUILDER),

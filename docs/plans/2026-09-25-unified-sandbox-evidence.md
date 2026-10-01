@@ -2167,3 +2167,12 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   此修改僅證明分類器能消費結構化證據；當前兩版原生引擎尚未觀察到該欄位，
   不代表 TLS gateway gate 或 Windows 11 x64 正式驗收通過。GitHub runner
   inventory 本次核對仍為 0 個 self-hosted runner。
+
+- 企業組裝 boundary 固定 schema 型別加固：公開組裝命令的四個負例
+  （schemaVersion=true／1.0、originalRuntimeNamesPresent=1、createsData=0）
+  先 RED：原比較錯誤成功並產生候選。改用排序 JSON 比較，保留物件鍵順序
+  無關性，同時區分 bool／int／float；四例 GREEN，均 E_BOUNDARY 且輸出
+  路徑不存在。企業包／生命週期 10 項通過；完整 Python 114 項
+  （111 pass／3 Windows-only skip）通過，diff-check 通過。
+  僅驗證 schema fail-closed；不是 A02／A04 外部政策核准、A20 簽署或
+  Windows 11 x64 實機放行證據。
