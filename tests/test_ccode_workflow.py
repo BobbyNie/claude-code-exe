@@ -189,6 +189,17 @@ class AcceptanceWorkflowTests(unittest.TestCase):
             workflow = (root / '.github/workflows' / workflow_name).read_text(encoding='utf-8')
             self.assertNotIn('accept-offline-windows11-x64.ps1', workflow)
 
+    def test_enterprise_acceptance_requires_signature_before_copy_or_execution(self):
+        root = Path(__file__).resolve().parents[1]
+        verifier = (root / 'scripts/ccode/accept-enterprise-lifecycle-windows11-x64.ps1').read_text(encoding='utf-8')
+        for parameter in ('SignaturePath', 'PublicKeyPath', 'TrustedPin'):
+            self.assertIn('[Parameter(Mandatory = $true)]\n    [string]$' + parameter, verifier)
+        self.assertIn("'inspect-signed'", verifier)
+        self.assertIn("$inspection.signatureVerification -ne 'passed'", verifier)
+        self.assertLess(verifier.index("'inspect-signed'"), verifier.index('Copy-Item'))
+        self.assertLess(verifier.index('E_LIFECYCLE_COPY'), verifier.index('& $platformGate'))
+        self.assertIn('signedManifestSha256 = $inspection.signedManifestSha256', verifier)
+
     def test_enterprise_lifecycle_acceptance_uses_complete_candidate_and_external_data(self):
         root = Path(__file__).resolve().parents[1]
         verifier_path = root / 'scripts/ccode/accept-enterprise-lifecycle-windows11-x64.ps1'
@@ -198,7 +209,7 @@ class AcceptanceWorkflowTests(unittest.TestCase):
             '[string]$CandidateRoot',
             '[string]$EvidencePath',
             'enterprise_lifecycle.py',
-            "'inspect'",
+            "'inspect-signed'",
             'package-audit.json',
             'assert-windows11-x64.ps1',
             'portable app 中文',

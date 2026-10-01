@@ -150,6 +150,27 @@ class EnterpriseLifecycleTests(unittest.TestCase):
         self.assertEqual(stale_signature.returncode, 2)
         self.assertEqual(json.loads(stale_signature.stdout)["code"], "E_LIFECYCLE_SIGNATURE")
 
+    @unittest.skipUnless(sys.platform == "win32", "Requires Windows PowerShell execution")
+    def test_windows_acceptance_rejects_unsigned_candidate_before_working_files(self):
+        candidate = self.root / "unsigned-windows-candidate"
+        self.build(candidate)
+        signature = self.root / "invalid.sig"
+        key = self.root / "invalid.der"
+        signature.write_bytes(bytes(64))
+        key.write_bytes(b"invalid-public-key")
+        working = self.root / "must-not-be-created"
+        evidence = self.root / "must-not-be-written.json"
+        completed = subprocess.run(["pwsh", "-NoProfile", "-NonInteractive", "-File",
+            str(ROOT / "scripts/ccode/accept-enterprise-lifecycle-windows11-x64.ps1"),
+            "-CandidateRoot", str(candidate), "-EvidencePath", str(evidence),
+            "-SignaturePath", str(signature), "-PublicKeyPath", str(key),
+            "-TrustedPin", "0" * 64, "-WorkingRoot", str(working)],
+            capture_output=True, text=True, timeout=60)
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("E_LIFECYCLE_COMMAND", completed.stdout + completed.stderr)
+        self.assertFalse(working.exists())
+        self.assertFalse(evidence.exists())
+
     def test_inspect_recomputes_candidate_and_returns_repack_inputs(self):
         candidate = self.root / "candidate"
         self.build(candidate)

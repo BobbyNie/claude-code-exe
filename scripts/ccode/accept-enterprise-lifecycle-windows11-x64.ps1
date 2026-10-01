@@ -5,6 +5,17 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$EvidencePath,
 
+    [Parameter(Mandatory = $true)]
+    [string]$SignaturePath,
+
+    [Parameter(Mandatory = $true)]
+    [string]$PublicKeyPath,
+
+    [Parameter(Mandatory = $true)]
+    [string]$TrustedPin,
+
+    [string]$NodeCommand = 'node',
+
     [string]$PythonCommand = 'python',
 
     [string]$WorkingRoot,
@@ -170,20 +181,24 @@ $prefix = $acceptanceRoot.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]
 if ($evidenceDestination.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) {
     throw 'E_EVIDENCE_PATH: evidence must be outside the disposable working root'
 }
-New-Item -ItemType Directory -Path $acceptanceRoot -Force | Out-Null
 
 $inspectResult = Invoke-RecordedProcess -FilePath $PythonCommand `
-    -Arguments @($lifecycleTool, 'inspect', '--candidate-root', $candidate) `
+    -Arguments @($lifecycleTool, 'inspect-signed', '--candidate-root', $candidate,
+        '--signature', $SignaturePath, '--public-key', $PublicKeyPath,
+        '--trusted-pin', $TrustedPin, '--node', $NodeCommand) `
     -CurrentDirectory $repositoryRoot
 Assert-Success $inspectResult 'candidate inspect'
 $inspection = $inspectResult.stdout | ConvertFrom-Json
-if ($inspection.status -ne 'passed' -or $inspection.platform -ne 'windows' -or
+if ($inspection.status -ne 'passed' -or $inspection.signatureVerification -ne 'passed' -or
+    $inspection.platform -ne 'windows' -or
     $inspection.architecture -ne 'x64' -or $inspection.minimumWindowsBuild -ne 22000) {
     throw 'E_LIFECYCLE_CANDIDATE: candidate is not an audited Windows 11 x64 delivery'
 }
 if (-not (Test-Path -LiteralPath (Join-Path $candidate 'package-audit.json') -PathType Leaf)) {
     throw 'E_LIFECYCLE_CANDIDATE: package-audit.json is missing'
 }
+
+New-Item -ItemType Directory -Path $acceptanceRoot -Force | Out-Null
 
 $unpackedCandidate = Join-Path $candidate 'unpacked'
 $programRoot = Join-Path $acceptanceRoot 'portable app 中文'
@@ -196,6 +211,19 @@ $provenancePath = Join-Path $acceptanceRoot 'observed-package-provenance.json'
 $boundaryPath = Join-Path $acceptanceRoot 'observed-runtime-boundary.json'
 New-Item -ItemType Directory -Path $workspaceRoot, $dataRoot -Force | Out-Null
 Copy-Item -LiteralPath $unpackedCandidate -Destination $programRoot -Recurse
+# Verify the copied bytes before executing any candidate command, including
+# the platform/provenance gate. Signed source inspection alone is insufficient.
+$copiedFiles = @(Get-DirectoryManifest $programRoot)
+$expectedFiles = @($inspection.unpackedFiles | Sort-Object path)
+$observedFiles = @($copiedFiles | Sort-Object path)
+if ($expectedFiles.Count -ne $observedFiles.Count) { throw 'E_LIFECYCLE_COPY' }
+for ($index = 0; $index -lt $expectedFiles.Count; $index++) {
+    if ($expectedFiles[$index].path -cne $observedFiles[$index].path -or
+        $expectedFiles[$index].size -ne $observedFiles[$index].size -or
+        $expectedFiles[$index].sha256 -cne $observedFiles[$index].sha256) {
+        throw 'E_LIFECYCLE_COPY'
+    }
+}
 $app = Join-Path $programRoot 'ccode.exe'
 $manifest = $inspection.manifest
 
@@ -334,6 +362,8 @@ $evidence = [ordered]@{
     candidate = [ordered]@{
         archive = $inspection.archive
         archiveSha256 = $inspection.archiveSha256
+        signatureVerification = $inspection.signatureVerification
+        signedManifestSha256 = $inspection.signedManifestSha256
         audit = [ordered]@{ status = 'passed'; comparison = 'matched' }
         manifest = $manifest
         packageFilesBefore = $programBefore

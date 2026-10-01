@@ -69,6 +69,10 @@ pwsh ./scripts/ccode/accept-offline-windows11-x64.ps1 `
 ```powershell
 pwsh ./scripts/ccode/accept-enterprise-lifecycle-windows11-x64.ps1 `
   -CandidateRoot D:/ccode-candidate `
+  -SignaturePath D:/ccode-signatures/manifest.sig `
+  -PublicKeyPath D:/ccode-policy/approved-signer.der `
+  -TrustedPin <獨立核准的-SPKI-DER-SHA256> `
+  -NodeCommand D:/approved-tools/node.exe `
   -EvidencePath D:/ccode-evidence/enterprise-lifecycle-windows11-x64.json
 ```
 
@@ -84,3 +88,13 @@ A19 診斷驗收須對每個故障案例使用事前不存在的路徑，例如�
 ```
 
 每份 JSON 必須能以 UUID 解析 `operationId`，只含中性 `errorCode`／`category`／`exitCode` 及明確隱私旗標；不得含測試 token、prompt、使用者根、workspace/data 絕對路徑或 raw exception。以既有 sentinel 檔重跑時，sentinel bytes 必須不變、stderr 額外包含 `E_DIAGNOSTIC_WRITE`，主要 exit code 不變。2026-10-01 已完成產生器、純函式測試與 Windows 驗收腳本案例；尚未取得 Windows 11 x64 普通帳戶的實跑 JSON，亦未覆蓋 TLS、DNS、過期憑證、429、串流、資料損壞、政策拒絕全部案例，故 A19 不得標為通過。
+
+企業生命週期驗收入口現在強制使用 `inspect-signed`，要求外部 detached
+signature、canonical Ed25519 SPKI DER 及獨立核准的公鑰 SHA256 pin。
+簽署 bytes 為 UTF-8 `ccode-enterprise-manifest-v1`、單一 NUL byte、原始
+manifest bytes 的串接。不得從候選公鑰自行生成 pin 並冒稱核准信任。
+未通過簽章或候選 audit 不建立驗收工作目錄、不複製／執行候選；通過後
+仍在第一次執行前核對 copied files 的 path/size/SHA256。工程 Node
+runtime 必須事先備妥並由端點政策核准；CI 固定 22.23.3 不代表端點已
+具備或核准它。這不是 ccode.exe 內建啟動／更新 gate，A20 尚未完成；
+任意並行檔案替換防護、正式簽署批准及 Windows 11 實跑仍須取得證據。

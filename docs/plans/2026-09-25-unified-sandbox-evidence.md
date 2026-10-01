@@ -2294,3 +2294,18 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   本機 v22.22.0 通過；完整 Python 120（117 pass／3 skip）通過。
   尚未取得固定 22.23.3 的 hosted/Win11 執行結果，不能把本機較舊
   runtime 的成功當成新 CI 版本證據，也不代表所有其他依賴已固定。
+
+- Windows 11 企業生命週期驗收入口強制 signed inspect：新增 mandatory
+  SignaturePath／PublicKeyPath／TrustedPin 及工程 NodeCommand；未通過
+  signed candidate preflight 不建立 working root、不複製或執行候選。
+  第一次 platform/provenance 執行前，逐檔核對複製結果與已簽 manifest
+  所綁定的本次 audit path/size/SHA256；證據記錄 signatureVerification
+  與 signedManifestSha256。原檔案搬移/外置資料/repack gate 保留。
+- 結構 contract 先 RED（缺 mandatory signature/pre-execution check），
+  實作後 GREEN，workflow 15 項通過。新增 Windows-only 公開 PowerShell
+  拒絕測試：無效 signature/key 不得建立 working root／寫 evidence。
+  本機無 Windows／pwsh，該實跑測試跳過，不能冒稱其 GREEN。
+  完整 Python 122（118 pass／4 Windows-only skip）通過，diff-check 通過。
+  同步更新正式驗收命令，必須使用獨立核准 pin 及預備的工程 runtime。
+  此處只接入驗收 harness，未完成 ccode.exe 內建啟動/更新 gate、核准
+  signer 或任意並行替換防護；A20 與 Win11 全量驗收保持未完成。
