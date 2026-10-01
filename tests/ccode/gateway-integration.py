@@ -114,6 +114,19 @@ def check_unreachable(executable):
         print("PASS: actual engine unreachable gateway terminates with neutral error, no workspace writes or terminal secret disclosure")
 
 
+def tls_terminal_evidence(terminal):
+    """Expose only booleans for allowlisted product-rendered diagnostics."""
+    lines = set(terminal.splitlines())
+    return {
+        "tls": bool(lines & {"E_GATEWAY_TLS",
+            "[E_GATEWAY_TLS: certificate verification failed]"}),
+        "retry": "[E_GATEWAY_RETRY: automatic retry refused]" in lines,
+        "engine": bool(lines & {"[E_ENGINE: request failed]",
+            "[E_ENGINE: turn failed]",
+            "[E_ENGINE: incomplete turn; check gateway and configuration]"}),
+    }
+
+
 def tls_rejection_observed(endpoint, returncode, diagnostic):
     """A transport abort alone is not evidence of engine certificate rejection."""
     return (endpoint.handshake_failed.is_set() and endpoint.connections > 0
@@ -145,12 +158,13 @@ def check_tls_rejection(executable):
             except subprocess.TimeoutExpired:
                 raise AssertionError("Untrusted TLS gateway did not terminate within 60 seconds") from None
             assert tls_rejection_observed(endpoint, result.returncode,
-                "E_GATEWAY_TLS" if "E_GATEWAY_TLS" in result.stderr.splitlines() else None), (
+                "E_GATEWAY_TLS" if tls_terminal_evidence(result.stdout + result.stderr)["tls"] else None), (
                 "No failed TLS handshake observed from actual engine; " + json.dumps({
                     "connections": endpoint.connections,
                     "handshake_errors": endpoint.handshake_errors,
                     "http_requests": endpoint.http_requests,
                     "exit_code": result.returncode,
+                    "neutral_diagnostics": tls_terminal_evidence(result.stdout + result.stderr),
                 }))
             assert endpoint.http_requests == 0, "Engine bypassed TLS trust and sent an HTTP request"
         terminal = result.stdout + result.stderr

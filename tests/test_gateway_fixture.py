@@ -64,6 +64,14 @@ class GatewayFixtureTests(unittest.TestCase):
         failed.clear()
         self.assertFalse(fixture.tls_rejection_observed(endpoint, 1, 'E_GATEWAY_TLS'))
 
+    def test_tls_terminal_evidence_accepts_only_canonical_neutral_lines(self):
+        flags = fixture.tls_terminal_evidence(
+            '[E_GATEWAY_RETRY: automatic retry refused]\n'
+            'private E_GATEWAY_TLS token\n[E_ENGINE: turn failed]\n')
+        self.assertEqual(flags, {'tls': False, 'retry': True, 'engine': True})
+        self.assertTrue(fixture.tls_terminal_evidence(
+            '[E_GATEWAY_TLS: certificate verification failed]\n')['tls'])
+
     def test_complete_arguments_still_lack_block_and_message_termination(self):
         events = fixture.unfinished_tool_events("fixture-model", "target.txt", "marker", True)
         self.assertEqual([kind for kind, _ in events],
