@@ -21,6 +21,17 @@ class TlsProbeTests(unittest.TestCase):
             'assistant_api_error': True, 'assistant_authentication_failed': False,
             'retry_event': True, 'error_result': True, 'structured_tls_code': False})
 
+    def test_probe_refuses_wrong_size_or_non_windows_payload_metadata(self):
+        import hashlib
+        payload = b'MZ-fixture'
+        metadata = {'engineSha256': hashlib.sha256(payload).hexdigest(),
+                    'engineSize': len(payload), 'platform': 'windows', 'architecture': 'x64'}
+        probe.verify_payload(payload, metadata)
+        for field, value in [('engineSize', len(payload) + 1), ('platform', 'linux'),
+                             ('architecture', 'arm64'), ('engineSha256', '0' * 64)]:
+            with self.assertRaises(ValueError):
+                probe.verify_payload(payload, dict(metadata, **{field: value}))
+
     def test_probe_environment_isolates_storage_and_enforces_no_fallback(self):
         root = Path('isolated')
         env = probe.probe_environment({'SystemRoot': 'system', 'PATH': 'path',

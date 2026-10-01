@@ -33,6 +33,13 @@ def summarize_events(events):
     return evidence
 
 
+def verify_payload(payload, metadata):
+    if (metadata.get('platform') != 'windows' or metadata.get('architecture') != 'x64'
+            or metadata.get('engineSize') != len(payload)
+            or hashlib.sha256(payload).hexdigest() != metadata.get('engineSha256')):
+        raise ValueError('Probe payload integrity mismatch')
+
+
 def probe_environment(inherited, root):
     env = {key: value for key, value in inherited.items()
            if key.upper() in ('SYSTEMROOT', 'WINDIR', 'PATH')}
@@ -62,8 +69,7 @@ def probe(executable):
     gateway = load_fixture('probe_gateway', 'gateway-integration.py')
     payload, metadata_bytes = integrity.resources(executable)
     metadata = json.loads(metadata_bytes.decode('utf-8-sig'))
-    if hashlib.sha256(payload).hexdigest() != metadata['engineSha256']:
-        raise RuntimeError('Probe payload integrity mismatch')
+    verify_payload(payload, metadata)
     with tempfile.TemporaryDirectory(prefix='ccode-native-tls-probe-') as directory:
         root = Path(directory)
         engine = root / 'engine.exe'
