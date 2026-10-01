@@ -2309,3 +2309,21 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   同步更新正式驗收命令，必須使用獨立核准 pin 及預備的工程 runtime。
   此處只接入驗收 harness，未完成 ccode.exe 內建啟動/更新 gate、核准
   signer 或任意並行替換防護；A20 與 Win11 全量驗收保持未完成。
+
+- 2026-10-02 補充遠端實際證據（非 Win11 普通帳戶驗收）：
+  run 36925678448／commit 375f805 已完成且 failure。
+  兩個版本的 manifest signature contracts 與 Python contracts gate
+  均成功，提供固定 Node 22.23.3 工具鏈的 hosted 執行證據；不等同
+  內建 launcher signature gate 或 Windows 11 驗收通過。
+  舊版 job 110582295052 的 payload integrity gate 實際失敗診斷為
+  attempt=1、exit_code=64、request_count=0、startup_code=E_EXTRACT_ACCESS。
+  此碼來自 MoveFileExW activation 的 ERROR_ACCESS_DENIED 分類；
+  目前只證明 activation 遭拒，未證明殘留程序、防毒、ACL 或其他根因。
+  同 job TLS gate 記錄 connections=2、protocol_observations 為兩次
+  tls-record、handshake_errors=[]、http_requests=0、exit_code=1，
+  neutral diagnostics tls=false／retry=false／engine=true。
+  因此不能宣稱已取得憑證拒絕或正確 TLS 分類證據。
+  HEAD 29477d4 的 run 36926412194 在此次查詢時仍 in_progress，
+  job 110584728848 與 110584729218 均正在執行；沒有 rerun。
+  使用者提供的 run 36877451807 已成功執行編譯與多項測試，失敗
+  是測試／runtime 問題，不是該 run 被 billing quota 阻擋。
