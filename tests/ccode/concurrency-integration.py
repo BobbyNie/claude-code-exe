@@ -184,9 +184,18 @@ def assert_request_markers(requests, expected, forbidden=()):
 
 def parallel_failure_evidence(request_count, exit_codes, outputs):
     # Never print captured engine output: it may include prompts or credentials.
+    known_codes = {
+        "E_LOCAL", "E_PROFILE_BUSY", "E_SESSION_BUSY", "E_SESSION_LOCK_PATH",
+        "E_SESSION_DATA", "E_SESSION_ID", "E_NO_SESSION", "E_RUNTIME_BUSY",
+        "E_WORKSPACE_DATA", "E_WORKSPACE_PATH", "E_WORKSPACE_ID",
+        "E_CREDENTIAL", "E_GATEWAY", "E_PROCESS", "E_PROCESS_TREE",
+        "E_PROTOCOL", "E_ENGINE_RESULT", "E_ENGINE_API", "E_DATA_DIR",
+    }
+    codes = [sorted({line.strip() for line in stderr.splitlines()
+                     if line.strip() in known_codes}) for _, stderr in outputs]
     return (
         "Two different sessions did not both reach the API before either response was released; "
-        f"requests={request_count}; exit_codes={exit_codes}; "
+        f"requests={request_count}; exit_codes={exit_codes}; neutral_codes={codes}; "
         f"stdout_present={[bool(stdout) for stdout, _ in outputs]}; "
         f"stderr_present={[bool(stderr) for _, stderr in outputs]}"
     )

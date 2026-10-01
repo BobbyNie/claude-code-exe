@@ -16,5 +16,6 @@ class ConcurrencyFixtureTests(unittest.TestCase):
                         ('private path', 'E_PROFILE_BUSY\nsecret token')])
         self.assertIn('requests=1', message)
         self.assertIn('exit_codes=[0, 75]', message)
+        self.assertIn("neutral_codes=[[], ['E_PROFILE_BUSY']]", message)
         for private in ('private', 'prompt', 'secret', 'token', 'path'):
             self.assertNotIn(private, message)
