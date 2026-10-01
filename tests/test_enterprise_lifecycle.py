@@ -111,6 +111,45 @@ class EnterpriseLifecycleTests(unittest.TestCase):
         return subprocess.run([sys.executable, str(LIFECYCLE), *map(str, arguments)],
                               capture_output=True, text=True)
 
+    def test_signed_inspection_requires_real_signature_and_independent_pin(self):
+        candidate = self.root / "signed-candidate"
+        self.build(candidate)
+        signature = self.root / "manifest.sig"
+        key = self.root / "signer.der"
+        signer = subprocess.run(["node", "--input-type=module", "-e", """
+            import {generateKeyPairSync, sign, createHash} from 'node:crypto';
+            import {readFileSync, writeFileSync} from 'node:fs';
+            const [manifestPath, signaturePath, keyPath] = process.argv.slice(1);
+            const {publicKey, privateKey} = generateKeyPairSync('ed25519');
+            const der = publicKey.export({type:'spki', format:'der'});
+            writeFileSync(keyPath, der);
+            writeFileSync(signaturePath, sign(null, Buffer.concat([
+              Buffer.from('ccode-enterprise-manifest-v1\\0'), readFileSync(manifestPath)
+            ]), privateKey));
+            console.log(createHash('sha256').update(der).digest('hex'));
+        """, str(candidate / "unpacked/manifest.json"), str(signature), str(key)],
+            capture_output=True, text=True)
+        self.assertEqual(signer.returncode, 0, signer.stderr)
+        pin = signer.stdout.strip()
+        arguments = ("inspect-signed", "--candidate-root", candidate,
+                     "--signature", signature, "--public-key", key, "--trusted-pin")
+        completed = self.run_lifecycle(*arguments, pin)
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        self.assertEqual(json.loads(completed.stdout)["signatureVerification"], "passed")
+        rejected = self.run_lifecycle(*arguments, "0" * 64)
+        self.assertEqual(rejected.returncode, 2)
+        self.assertEqual(json.loads(rejected.stdout)["code"], "E_LIFECYCLE_SIGNATURE")
+        manifest_path = candidate / "unpacked/manifest.json"
+        changed = json.loads(manifest_path.read_text())
+        changed["provenance"]["packageVersion"] = "unsigned-change"
+        manifest_path.write_text(json.dumps(changed), encoding="utf-8")
+        self.refresh_candidate_audit(candidate)
+        unsigned = self.run_lifecycle("inspect", "--candidate-root", candidate)
+        self.assertEqual(unsigned.returncode, 0, unsigned.stdout + unsigned.stderr)
+        stale_signature = self.run_lifecycle(*arguments, pin)
+        self.assertEqual(stale_signature.returncode, 2)
+        self.assertEqual(json.loads(stale_signature.stdout)["code"], "E_LIFECYCLE_SIGNATURE")
+
     def test_inspect_recomputes_candidate_and_returns_repack_inputs(self):
         candidate = self.root / "candidate"
         self.build(candidate)

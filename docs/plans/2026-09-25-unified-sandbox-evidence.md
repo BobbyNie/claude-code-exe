@@ -2270,3 +2270,16 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   測試通過，含缺檔／directory／過大 signature／無效 pin／缺參數。
   尚未測到 Windows reparse/race 全矩陣，不宣稱抗任意並行替換；仍須
   固定 dependency、candidate inspect 整合、啟動 gate 及 Windows 11 證據。
+
+- A20 完整候選工程整合：enterprise_lifecycle.py 新增 inspect-signed，
+  要求外部 signature／SPKI DER／獨立 trust pin，先重算完整候選 audit，
+  再驗證 detached signature，並比對驗證出的原始 manifest SHA256 與
+  本次解包 audit 的 manifest entry。missing runtime／timeout／無效
+  signature／錯 pin／hash 不同均 E_LIFECYCLE_SIGNATURE，exit 2。
+  公開命令先 RED（command 不存在），實作後 GREEN；真實 Ed25519
+  簽章成功，錯 pin 拒絕，修改 manifest 並重算匹配 audit 後普通 inspect
+  成功但舊 signature 被拒絕。lifecycle 7、Node 6 項通過；完整 Python
+  119（116 pass／3 Windows-only skip）通過；diff-check 通過。
+  此命令需要工程端 Node（本機 v22.22.0），尚須固定/核准 Windows
+  驗證依賴；--node 可指定工程 runtime 路徑。未接入 launcher/update
+  gate，未保護任意並行 package 替換，沒有 Win11／核准信任根證據。

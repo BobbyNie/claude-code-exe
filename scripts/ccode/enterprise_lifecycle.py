@@ -5,6 +5,7 @@ import hashlib
 import json
 import re
 import stat
+import subprocess
 
 import package_audit
 from build_enterprise_package import BOUNDARY_DOCUMENT, _unique_json_object, _https
@@ -192,6 +193,27 @@ def inspect_candidate(path):
     }
 
 
+def inspect_signed_candidate(path, signature, public_key, trusted_pin, node="node"):
+    report = inspect_candidate(path)
+    verifier = Path(__file__).with_name("verify-manifest-signature.mjs")
+    try:
+        completed = subprocess.run([node, str(verifier),
+            str(Path(path) / "unpacked/manifest.json"), str(signature), str(public_key),
+            trusted_pin], capture_output=True, text=True, timeout=15)
+        evidence = json.loads(completed.stdout, object_pairs_hook=_unique_json_object)
+        manifest_entry = next(entry for entry in report["unpackedFiles"]
+                              if entry["path"] == "manifest.json")
+        expected = {"schema": 1, "status": "passed",
+                    "manifestSha256": manifest_entry["sha256"]}
+        if completed.returncode != 0 or completed.stderr or evidence != expected:
+            raise LifecycleError("E_LIFECYCLE_SIGNATURE")
+    except (OSError, ValueError, subprocess.TimeoutExpired, StopIteration):
+        raise LifecycleError("E_LIFECYCLE_SIGNATURE") from None
+    report["signatureVerification"] = "passed"
+    report["signedManifestSha256"] = manifest_entry["sha256"]
+    return report
+
+
 def compare_candidates(original, repacked):
     first = inspect_candidate(original)
     second = inspect_candidate(repacked)
@@ -216,13 +238,24 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     inspect = commands.add_parser("inspect")
     inspect.add_argument("--candidate-root", required=True)
+    signed = commands.add_parser("inspect-signed")
+    signed.add_argument("--candidate-root", required=True)
+    signed.add_argument("--signature", required=True)
+    signed.add_argument("--public-key", required=True)
+    signed.add_argument("--trusted-pin", required=True)
+    signed.add_argument("--node", default="node")
     compare = commands.add_parser("compare")
     compare.add_argument("--original", required=True)
     compare.add_argument("--repacked", required=True)
     options = parser.parse_args()
     try:
-        report = (inspect_candidate(options.candidate_root) if options.command == "inspect" else
-                  compare_candidates(options.original, options.repacked))
+        if options.command == "inspect-signed":
+            report = inspect_signed_candidate(options.candidate_root, options.signature,
+                options.public_key, options.trusted_pin, options.node)
+        elif options.command == "inspect":
+            report = inspect_candidate(options.candidate_root)
+        else:
+            report = compare_candidates(options.original, options.repacked)
     except LifecycleError as error:
         print(json.dumps({"schema": 1, "status": "error", "code": error.code}, sort_keys=True))
         return 2
