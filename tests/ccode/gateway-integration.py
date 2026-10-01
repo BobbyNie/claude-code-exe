@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
@@ -196,6 +197,24 @@ def unfinished_tool_events(model, target, marker, complete_arguments=False):
     ]
 
 
+def validate_failure_diagnostic(path, expected_code, exit_code):
+    """A19: accept exactly the neutral schema, not arbitrary extra private fields."""
+    try:
+        report = json.loads(path.read_text(encoding='utf-8'))
+        operation_id = report['operationId']
+        identifier = uuid.UUID(operation_id)
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        raise AssertionError('Missing or invalid neutral gateway failure report') from None
+    assert identifier.version == 4 and str(identifier) == operation_id.lower(), 'Invalid operation ID'
+    expected = {'schemaVersion': 1, 'product': 'ccode', 'platform': 'windows',
+                'architecture': 'x64', 'status': 'error', 'operationId': operation_id,
+                'errorCode': expected_code, 'category': 'network', 'exitCode': exit_code,
+                'privacy': dict.fromkeys(('argumentsCaptured', 'environmentValuesCaptured',
+                                         'promptOrContentCaptured', 'credentialsCaptured'), False)}
+    assert json.dumps(report, sort_keys=True) == json.dumps(expected, sort_keys=True), (
+        'Gateway failure report lost cause or violates neutral schema')
+
+
 def check_rejection(executable, status_code, error_type, diagnostic, stream_cut=False,
                     graceful_eof=False, complete_arguments=False):
     with tempfile.TemporaryDirectory(prefix="ccode-gateway-") as folder:
@@ -260,9 +279,11 @@ def check_rejection(executable, status_code, error_type, diagnostic, stream_cut=
         env.update(A_AUTH_TOKEN=token, A_BASE_URL=f"http://127.0.0.1:{server.server_port}")
         try:
             tool_options = ["--tools", "Write", "--allowedTools", "Write"] if stream_cut else ["--tools", ""]
+            report_path = root / "failure.json"
+            report_options = [] if stream_cut else ["--diagnostics", str(report_path)]
             try:
                 result = subprocess.run([str(app), "--data-dir", str(data), "--print",
-                                     *tool_options, "gateway rejection fixture"],
+                                     *report_options, *tool_options, "gateway rejection fixture"],
                                     cwd=workspace, env=env, input="", capture_output=True,
                                     text=True, encoding="utf-8", timeout=60)
             except subprocess.TimeoutExpired as error:
@@ -312,6 +333,8 @@ def check_rejection(executable, status_code, error_type, diagnostic, stream_cut=
             terminal = result.stdout + result.stderr
             assert private_marker not in terminal and token not in terminal, "Gateway details leaked to terminal"
             assert diagnostic in terminal, f"HTTP {status_code} needs its neutral diagnostic"
+            if not stream_cut:
+                validate_failure_diagnostic(report_path, diagnostic, result.returncode)
             assert not list(workspace.iterdir()), "Rejected request changed workspace"
             assert not list(program.rglob("*.jsonl")), "History leaked into program directory"
             scenario = ("complete tool JSON without block termination at clean HTTP EOF" if complete_arguments

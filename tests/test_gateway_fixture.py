@@ -7,6 +7,7 @@ from pathlib import Path
 import unittest
 from types import SimpleNamespace
 import threading
+import tempfile
 
 spec = importlib.util.spec_from_file_location(
     "gateway_fixture", Path(__file__).parent / "ccode/gateway-integration.py")
@@ -87,6 +88,27 @@ class GatewayFixtureTests(unittest.TestCase):
         self.assertEqual(flags, {'tls': False, 'retry': True, 'engine': True})
         self.assertTrue(fixture.tls_terminal_evidence(
             '[E_GATEWAY_TLS: certificate verification failed]\n')['tls'])
+
+    def test_gateway_failure_report_requires_exact_private_free_schema_and_cause(self):
+        report = {'schemaVersion': 1, 'product': 'ccode', 'platform': 'windows',
+                  'architecture': 'x64', 'status': 'error',
+                  'operationId': 'd425fe8e-13f4-42da-9ec0-1779df26c445',
+                  'errorCode': 'E_GATEWAY_AUTH', 'category': 'network', 'exitCode': 1,
+                  'privacy': dict.fromkeys(('argumentsCaptured', 'environmentValuesCaptured',
+                                           'promptOrContentCaptured', 'credentialsCaptured'), False)}
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'failure.json'
+            path.write_text(json.dumps(report), encoding='utf-8')
+            fixture.validate_failure_diagnostic(path, 'E_GATEWAY_AUTH', 1)
+            for replacement in (dict(report, errorCode='E_ENGINE'),
+                                dict(report, prompt='private'),
+                                dict(report, operationId='private'),
+                                dict(report, exitCode=0),
+                                dict(report, privacy={'credentialsCaptured': False}),
+                                dict(report, privacy=dict.fromkeys(report['privacy'], 0))):
+                path.write_text(json.dumps(replacement), encoding='utf-8')
+                with self.assertRaises(AssertionError):
+                    fixture.validate_failure_diagnostic(path, 'E_GATEWAY_AUTH', 1)
 
     def test_complete_arguments_still_lack_block_and_message_termination(self):
         events = fixture.unfinished_tool_events("fixture-model", "target.txt", "marker", True)

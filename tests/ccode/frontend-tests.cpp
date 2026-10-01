@@ -65,10 +65,15 @@ int main() {
             : "[E_ENGINE: request failed]\n";
         assert(rejected.Feed(errorEvent) == expected);
         assert(rejected.failed);
+        const auto expectedCode = std::string(code) == "authentication_failed"
+            ? "E_GATEWAY_AUTH" : std::string(code) == "rate_limit"
+            ? "E_GATEWAY_RATE_LIMIT" : "E_ENGINE";
+        assert(rejected.failureCode == expectedCode);
         // A contradictory success result must not erase an earlier error.
         rejected.Feed("{\"type\":\"result\",\"subtype\":\"success\"}\n");
         rejected.Finish();
         assert(rejected.failed);
+        assert(rejected.failureCode == expectedCode);
     }
     // A documented retry notification is a stop boundary, not progress chrome.
     // Reject every transport split without exposing untrusted retry details.

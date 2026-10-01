@@ -1802,3 +1802,23 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   引擎 TLS 分類，亦不能宣稱 fault matrix 完成。
 - 本機完整 Python 86 項（83 pass、3 Windows skip）、七個 C++ suites
   皆 exit 0；diff-check 通過。上述不替代 Windows 11 x64 普通帳戶實機。
+
+### A19 gateway failure-report cause propagation（Windows integration 待驗證）
+
+- 原實作 RunTurn 已輸出 E_GATEWAY_AUTH／E_GATEWAY_RATE_LIMIT，但 wmain
+  對非零 Main return 一律寫 E_ENGINE，JSON 丟失已確認的中性分類。
+- TDD：frontend 新增 failureCode 行為斷言先編譯 RED，再 GREEN；未知
+  assistant error 保持 E_ENGINE，後續 success result 不清除原分類。
+  RunTurn 將中性分類傳給 Main/wmain；協定錯誤及取消也保留其固定代碼。
+  不傳 raw engine error/body、token、prompt，不改退出碼或重試策略。
+- 401／429 actual gateway integration 現在使用事前不存在的 --diagnostics
+  路徑，要求 report exact schema、UUID v4、network category、相同 exit
+  code、四個明確 false 隱私欄位，以及相符的中性 gateway errorCode。
+  不多發模型請求。純 verifier 缺 helper 實際 RED，再 GREEN；數字 0
+  偽裝 privacy false 的案例也先實際 RED，再以嚴格 JSON 型別比對 GREEN。
+- 本機 Python 87 項（84 pass、3 Windows skip）、七個 C++ suites pass。
+  MinGW syntax check 的原生 SDK 缺 BCRYPT_SHA256_ALG_HANDLE；僅命令列
+  以 nullptr placeholder 作 syntax check 後通過，不修改產品常數，也不
+  宣稱其為加密／執行證據。MSVC build 與 401／429 JSON 實跑尚待 CI。
+- 這只擴充 A19 的認證／限流故障覆蓋；TLS、DNS、expired certificate、
+  其他故障矩陣及 Windows 11 x64 普通帳戶報告仍不得標記完成。

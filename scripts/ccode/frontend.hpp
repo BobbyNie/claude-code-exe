@@ -62,6 +62,8 @@ class EventReader {
             if (event.contains("error") && !event.at("error").is_null()) {
                 const auto error = event.at("error").get<std::string>();
                 failed = true;
+                if (failureCode.empty()) failureCode = error == "authentication_failed"
+                    ? "E_GATEWAY_AUTH" : error == "rate_limit" ? "E_GATEWAY_RATE_LIMIT" : "E_ENGINE";
                 return error == "authentication_failed"
                     ? "[E_GATEWAY_AUTH: authentication failed]\n"
                     : error == "rate_limit" ? "[E_GATEWAY_RATE_LIMIT: request rate limited]\n"
@@ -92,6 +94,7 @@ class EventReader {
             if (complete) throw ProtocolError("E_PROTOCOL");
             complete = true;
             failed = failed || event.value("is_error", false) || event.value("subtype", std::string()) != "success";
+            if (failed && failureCode.empty()) failureCode = "E_ENGINE";
             if (event.contains("permission_denials") && !event["permission_denials"].empty())
                 return "[Some tool requests were denied]\n";
             return failed ? "[E_ENGINE: turn failed]\n" : "";
@@ -103,6 +106,7 @@ class EventReader {
     }
 public:
     std::string session;
+    std::string failureCode;
     bool complete = false, failed = false;
     explicit EventReader(const std::string& expectedSession = "") : session(expectedSession) {}
     std::string Feed(const std::string& bytes) {

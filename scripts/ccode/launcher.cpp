@@ -431,7 +431,8 @@ std::vector<wchar_t> ChildEnvironment(const fs::path& profile, bool interactive)
 int RunTurn(const fs::path& module, const fs::path& payload, const fs::path& data,
             const fs::path& profile, const Options& options, bool interactive,
             const std::string& prompt, std::string& session, std::string* captured = nullptr,
-            const fs::path* workspace = nullptr) {
+            const fs::path* workspace = nullptr, std::string* failureCode = nullptr) {
+    if (failureCode) *failureCode = "E_ENGINE";
     if (!workspace) throw std::runtime_error("E_WORKSPACE_PATH");
     ccode::ValidateWorkspaceBoundary(*workspace);
     const auto turn = ccode::PlanSessionTurn(session);
@@ -517,18 +518,24 @@ int RunTurn(const fs::path& module, const fs::path& payload, const fs::path& dat
     activeJob.store(nullptr);
     DWORD code = 1; GetExitCodeProcess(process, &code);
     if (ccode::ValidSessionId(reader.session)) session = reader.session;
-    if (code == 130) { std::cerr << "[Cancelled]\n"; return 130; }
+    if (code == 130) {
+        if (failureCode) *failureCode = "E_CANCELLED";
+        std::cerr << "[Cancelled]\n"; return 130;
+    }
     if (!protocolError.empty()) {
+        if (failureCode) *failureCode = protocolError;
         std::cerr << "[" << protocolError << (protocolError == "E_GATEWAY_RETRY"
             ? ": automatic retry refused]\n" : ": invalid engine event]\n");
         return 65;
     }
     try { reader.Finish(); }
     catch (const ccode::ProtocolError& error) {
+        if (failureCode) *failureCode = error.what();
         std::cerr << "[" << error.what() << ": incomplete turn]\n";
         return code ? (int)code : 65;
     }
     catch (...) { std::cerr << "[E_ENGINE: incomplete turn; check gateway and configuration]\n"; return code ? (int)code : 65; }
+    if (failureCode && !reader.failureCode.empty()) *failureCode = reader.failureCode;
     return code ? (int)code : reader.failed ? 1 : 0;
 }
 void PrintSessions(const std::vector<ccode::Session>& sessions) {
@@ -557,7 +564,7 @@ void PickSession(const fs::path& profile, const fs::path& workspace, std::string
         std::cout << "Selected " << session << '\n';
     } catch (...) { std::cout << "Invalid selection.\n"; }
 }
-int Main(int argc, wchar_t** argv) {
+int Main(int argc, wchar_t** argv, std::string* failureCode) {
     SetConsoleOutputCP(CP_UTF8); SetConsoleCP(CP_UTF8);
     if (argc == 2 && std::wstring(argv[1]) == L"--ccode-permission-server") return PermissionServer();
     auto module = Module();
@@ -749,19 +756,19 @@ int Main(int argc, wchar_t** argv) {
             if (!piped.empty()) options.prompt = piped + (options.prompt.empty() ? "" : "\n" + options.prompt);
         }
         if (options.prompt.empty()) throw std::runtime_error("E_PROMPT");
-        return RunTurn(module, payload, options.data, profile, options, false, options.prompt, options.session, nullptr, &options.workspace);
+        return RunTurn(module, payload, options.data, profile, options, false, options.prompt, options.session, nullptr, &options.workspace, failureCode);
     }
     std::cout << "ccode - portable coding assistant\n/resume  /new  /exit\n";
     if (options.resumePicker) PickSession(profile, options.workspace, options.session);
     int code = 0;
-    if (!options.prompt.empty()) code = RunTurn(module, payload, options.data, profile, options, console, options.prompt, options.session, nullptr, &options.workspace);
+    if (!options.prompt.empty()) code = RunTurn(module, payload, options.data, profile, options, console, options.prompt, options.session, nullptr, &options.workspace, failureCode);
     std::string prompt;
     while (std::cout << "ccode> " << std::flush, std::getline(std::cin, prompt)) {
         if (prompt == "/exit" || prompt == "/quit") break;
         if (prompt == "/new") { options.session.clear(); continue; }
         if (prompt == "/resume") { PickSession(profile, options.workspace, options.session); continue; }
         if (prompt.empty()) continue;
-        code = RunTurn(module, payload, options.data, profile, options, console, prompt, options.session, nullptr, &options.workspace);
+        code = RunTurn(module, payload, options.data, profile, options, console, prompt, options.session, nullptr, &options.workspace, failureCode);
     }
     return code;
 }
@@ -807,9 +814,10 @@ int wmain(int argc, wchar_t** argv) {
     for (int i = 0; i < argc; ++i) arguments.emplace_back(argv[i]);
     const auto diagnostic = ccode::DiagnosticDestination(arguments);
     try {
-        const int code = Main(argc, argv);
+        std::string failureCode = "E_ENGINE";
+        const int code = Main(argc, argv, &failureCode);
         if (code != 0 && diagnostic) {
-            try { WriteFailureDiagnostic(*diagnostic, "E_ENGINE", code); }
+            try { WriteFailureDiagnostic(*diagnostic, failureCode, code); }
             catch (...) { std::cerr << "E_DIAGNOSTIC_WRITE\n"; }
         }
         return code;
