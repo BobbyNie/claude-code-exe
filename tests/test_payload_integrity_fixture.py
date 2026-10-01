@@ -8,6 +8,21 @@ import urllib.error
 
 
 class PayloadIntegrityFixtureTests(unittest.TestCase):
+    def test_failure_summary_is_exact_allowlisted_and_never_copies_private_output(self):
+        path = Path(__file__).parent / 'ccode/payload-integrity.py'
+        spec = importlib.util.spec_from_file_location('payload_integrity', path)
+        fixture = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture)
+        private = b'private-token E_GATEWAY_AUTH C:/private/workspace'
+        summary = fixture.failure_summary(1, 0, private + b'\n[E_ENGINE: turn failed]\n', 1)
+        self.assertEqual(summary, {'attempt': 1, 'exit_code': 1, 'request_count': 0,
+                                  'auth': False, 'engine': True, 'retry': False})
+        self.assertNotIn('private', str(summary))
+        self.assertTrue(fixture.failure_summary(1, 1,
+            b'[E_GATEWAY_AUTH: authentication failed]\n', 0)['auth'])
+        self.assertFalse(fixture.failure_summary(1, 1,
+            b'prefix [E_GATEWAY_AUTH: authentication failed] suffix\n', 0)['auth'])
+
     def test_only_a_verified_unique_payload_is_modified(self):
         path = Path(__file__).parent / 'ccode/payload-integrity.py'
         spec = importlib.util.spec_from_file_location('payload_integrity', path)

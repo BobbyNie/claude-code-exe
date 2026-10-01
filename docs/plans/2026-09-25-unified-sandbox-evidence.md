@@ -1923,3 +1923,15 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - Local verifier rejects wrong category and extra private fields. Final Python
   95 tests: 92 pass / 3 Windows skip; all seven C++ suites pass, diff-check pass.
   Windows actual diagnostic report remains pending; not A19 overall GREEN.
+
+### Payload 間歇失敗的隱私安全定位（2026-10-02）
+
+- `caa505e` / run `36897079778` / job `110486643415`：普通 hosted Windows
+  回歸中 active-profile 損壞案例及 exact data-category report 驗證通過；
+  payload fixture 仍失敗於 `Engine did not reach auth fixture`，TLS 仍未分類。
+  此證據不是 Windows 11 x64 普通帳戶放行。
+- payload fixture 新增精確中性 renderer line 白名單摘要：僅 attempt、exit code、
+  request count、auth/engine/retry 布林值，不保留原輸出、URL、token、prompt 或路徑。
+  同時保留非零退出、恰好一次模型請求、hash/bytes 一致及無 disclosure 的要求；
+  不重試引擎請求。新測試先因 helper 缺少而 RED，再 GREEN；96 項 Python
+  回歸成功（3 項 Windows-only skip）。這是定位證據改善，不是 payload 問題已修復。

@@ -41,6 +41,17 @@ def rejecting_gateway():
         worker.join(timeout=5)
 
 
+def failure_summary(exit_code, request_count, terminal, attempt):
+    """Only exact neutral renderer lines; never retain engine text or URLs."""
+    lines = set(terminal.splitlines())
+    return {"attempt": attempt, "exit_code": exit_code, "request_count": request_count,
+            "auth": b"[E_GATEWAY_AUTH: authentication failed]" in lines,
+            "engine": bool(lines & {b"[E_ENGINE: turn failed]",
+                b"[E_ENGINE: request failed]",
+                b"[E_ENGINE: incomplete turn; check gateway and configuration]"}),
+            "retry": b"[E_GATEWAY_RETRY: automatic retry refused]" in lines}
+
+
 def tamper_payload(image, payload, expected_sha256):
     if len(payload) < 3 or not payload.startswith(b'MZ'):
         raise ValueError('Invalid fixture payload')
@@ -177,10 +188,14 @@ def check(executable):
                                       env=environment, input=b'', capture_output=True, timeout=60)
                 assert turn.returncode != 0, 'Fixture authentication rejection unexpectedly succeeded'
                 terminal = turn.stderr + turn.stdout
-                assert b'E_GATEWAY_AUTH' in terminal, 'Engine did not reach auth fixture'
+                summary = failure_summary(turn.returncode, len(gateway.requests) - before,
+                                          terminal, attempt)
+                assert summary['auth'], ('Engine did not reach auth fixture; ' +
+                                         json.dumps(summary, sort_keys=True))
                 assert b'test-only-integrity-token' not in terminal, 'Fixture token disclosed'
                 assert b'integrity-test-only' not in terminal, 'Fixture prompt disclosed'
-                assert gateway.requests[before:] == ['/v1/messages'], 'Expected one actual engine request'
+                assert gateway.requests[before:] == ['/v1/messages'], ('Expected one actual engine request; ' +
+                    json.dumps(summary, sort_keys=True))
                 restored = extracted.read_bytes()
                 assert hashlib.sha256(restored).hexdigest() == metadata['engineSha256'], 'Extracted hash differs'
                 assert restored == payload, 'Extracted bytes differ from original embedded payload'
