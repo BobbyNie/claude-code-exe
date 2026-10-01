@@ -37,10 +37,16 @@ def summarize_events(events):
 def summarize_result_shape(events):
     """Report only fixed schema flags, never result errors or unknown subtype text."""
     flags = dict.fromkeys(('execution_error', 'max_turns_error', 'errors_array',
-                           'string_error_entry', 'object_error_entry'), False)
+                           'string_error_entry', 'object_error_entry', 'success_subtype',
+                           'error_subtype', 'result_text', 'error_text', 'error_object'), False)
     for event in events:
         if not isinstance(event, dict) or event.get('type') != 'result':
             continue
+        flags['success_subtype'] |= event.get('subtype') == 'success'
+        flags['error_subtype'] |= event.get('subtype') == 'error'
+        flags['result_text'] |= isinstance(event.get('result'), str)
+        flags['error_text'] |= isinstance(event.get('error'), str)
+        flags['error_object'] |= isinstance(event.get('error'), dict)
         flags['execution_error'] |= event.get('subtype') == 'error_during_execution'
         flags['max_turns_error'] |= event.get('subtype') == 'error_max_turns'
         errors = event.get('errors')

@@ -1822,3 +1822,19 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   宣稱其為加密／執行證據。MSVC build 與 401／429 JSON 實跑尚待 CI。
 - 這只擴充 A19 的認證／限流故障覆蓋；TLS、DNS、expired certificate、
   其他故障矩陣及 Windows 11 x64 普通帳戶報告仍不得標記完成。
+
+### Probe cleanup Windows GREEN 與下一步 TLS 取證
+
+- `a21ecc0` run `36891462354`，jobs `110467849644`（2.1.282）及
+  `110467850029`（2.1.221）：normal-parent-exit 與 timeout process-tree
+  測試日誌均明確 ok；不再把 macOS skip 當成 Windows GREEN。
+- 此 run 的 gateway TLS 仍失敗。原生 result 沒有已檢查的 execution-error
+  subtype／errors array／structured TLS code，不能憑 binary string table
+  含 SSL 字句就分類產品錯誤。追加固定欄位形狀旗標（success/error subtype、
+  result/error 字串或 error object），不輸出其值。反射的 CERT_HAS_EXPIRED
+  result 文字必須仍不能通過 structured TLS code 分類。
+- 新 shape 行為測試實際 RED（缺欄位），再 GREEN；Python 88 項，85 pass、
+  3 Windows skip；diff-check 通過。Windows 新旗標輸出待本提交 CI。
+- GitHub runners API 查核 repository self-hosted runners total_count=0。
+  Windows 11 x64 普通帳戶實機驗收環境仍未提供；hosted CI 與上述清理
+  GREEN 不替代完整 A01–A20 實機／企業及离線證據。

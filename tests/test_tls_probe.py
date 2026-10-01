@@ -28,9 +28,23 @@ class TlsProbeTests(unittest.TestCase):
                   {'type': 'result', 'subtype': 'private-subtype', 'errors': 'private-error'}]
         self.assertEqual(probe.summarize_result_shape(events), {
             'execution_error': True, 'max_turns_error': False,
-            'errors_array': True, 'string_error_entry': True, 'object_error_entry': True})
+            'errors_array': True, 'string_error_entry': True, 'object_error_entry': True,
+            'success_subtype': False, 'error_subtype': False,
+            'result_text': False, 'error_text': False, 'error_object': False})
         self.assertFalse(any(probe.summarize_result_shape([{
             'type': 'assistant', 'errors': ['error_during_execution']}]).values()))
+
+    def test_result_text_shape_does_not_turn_reflected_certificate_text_into_tls_code(self):
+        event = {'type': 'result', 'is_error': True, 'subtype': 'success',
+                 'result': 'private-token CERT_HAS_EXPIRED', 'error': 'private-error'}
+        flags = probe.summarize_result_shape([event])
+        self.assertTrue(flags['success_subtype'])
+        self.assertTrue(flags['result_text'])
+        self.assertTrue(flags['error_text'])
+        self.assertFalse(flags['error_object'])
+        self.assertFalse(flags['error_subtype'])
+        self.assertFalse(probe.summarize_events([event])['structured_tls_code'])
+        self.assertNotIn('private', str(flags))
 
     def test_probe_refuses_wrong_size_or_non_windows_payload_metadata(self):
         import hashlib
