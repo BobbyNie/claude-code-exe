@@ -2202,3 +2202,10 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   純分類測試先 RED（header 缺少）再 GREEN；fixture 六種新 exact startup
   code 先 RED（None）再 GREEN；七組 C++、Python 115（112 pass／3 skip）
   通過。僅增加可信故障定位，不代表間歇 E_EXTRACT 原因已修復。
+
+- 企業組裝不可信 JSON 消歧：boundary／provenance 重複 schemaVersion
+  （先 999、後合法值）公開命令先 RED：last-key-wins 仍組裝成功。
+  新增每個 object scope 的 duplicate-key 拒絕解析，包含 nested objects，
+  邊界／來源分別降為 E_BOUNDARY／E_PROVENANCE，輸出不存在（GREEN）。
+  企業 12 項、完整 Python 116 項（113 pass／3 Windows-only skip）通過；
+  diff-check 通過。此項不提供 A20 信任根或簽署批准；其仍需外部核准。

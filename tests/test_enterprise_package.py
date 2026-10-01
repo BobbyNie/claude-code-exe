@@ -226,6 +226,19 @@ class EnterprisePackageTests(unittest.TestCase):
         self.assertEqual(failed.returncode, 2)
         self.assertEqual(json.loads(failed.stdout)["code"], "E_INPUT_TYPE")
 
+    def test_rejects_ambiguous_duplicate_manifest_keys_before_assembly(self):
+        for label, source, code in (("boundary", self.boundary, "E_BOUNDARY"),
+                                    ("provenance", self.provenance, "E_PROVENANCE")):
+            with self.subTest(label=label):
+                raw = source.read_text(encoding="utf-8")
+                invalid = self.root / (label + "-duplicate.json")
+                invalid.write_text('{"schemaVersion":999,' + raw[1:], encoding="utf-8")
+                output = self.root / (label + "-duplicate-output")
+                result = self.run_builder(output, **{label: invalid})
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(code, result.stdout + result.stderr)
+                self.assertFalse(output.exists())
+
     def test_boundary_rejects_boolean_numeric_substitution_without_output(self):
         for label, change in (
             ("schema-bool", lambda doc: doc.update(schemaVersion=True)),

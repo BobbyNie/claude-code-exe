@@ -107,11 +107,20 @@ def _https(value):
             parsed.username is None and parsed.password is None and not parsed.fragment)
 
 
+def _unique_json_object(pairs):
+    document = {}
+    for key, value in pairs:
+        if key in document:
+            raise ValueError("Duplicate JSON key")
+        document[key] = value
+    return document
+
+
 def _validated_provenance(path):
     try:
         raw = _regular_bytes(path)
-        document = json.loads(raw.decode("utf-8-sig"))
-    except (UnicodeError, json.JSONDecodeError):
+        document = json.loads(raw.decode("utf-8-sig"), object_pairs_hook=_unique_json_object)
+    except (UnicodeError, ValueError):
         raise PackageBuildError("E_PROVENANCE") from None
     required = {
         "schemaVersion", "packageName", "packageVersion", "platform", "architecture",
@@ -152,8 +161,8 @@ def _validated_provenance(path):
 def _validated_boundary(path):
     try:
         raw = _regular_bytes(path)
-        document = json.loads(raw.decode("utf-8-sig"))
-    except (UnicodeError, json.JSONDecodeError):
+        document = json.loads(raw.decode("utf-8-sig"), object_pairs_hook=_unique_json_object)
+    except (UnicodeError, ValueError):
         raise PackageBuildError("E_BOUNDARY") from None
     # Canonical JSON distinguishes booleans, integers and floats; Python
     # container equality incorrectly accepts True == 1 and False == 0.
