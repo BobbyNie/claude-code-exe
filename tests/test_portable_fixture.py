@@ -5,6 +5,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import Mock
+from types import SimpleNamespace
 
 spec = importlib.util.spec_from_file_location(
     'portable_fixture', Path(__file__).parent / 'ccode/portable-integration.py')
@@ -28,6 +29,30 @@ class PortableFixtureTests(unittest.TestCase):
                 path.write_text(json.dumps(dict(report, **change)), encoding='utf-8')
                 with self.assertRaises(AssertionError):
                     fixture.validate_data_failure_report(path, 'E_ACTIVE_PROFILE', 64)
+
+    def test_data_failure_command_requires_fresh_exact_report_and_neutral_terminal(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            def run(*args):
+                self.assertIn('--diagnostics', args)
+                path = Path(args[args.index('--diagnostics') + 1])
+                self.assertFalse(path.exists())
+                report = {'schemaVersion': 1, 'product': 'ccode', 'platform': 'windows',
+                    'architecture': 'x64', 'status': 'error',
+                    'operationId': 'a2345678-1234-4234-8234-123456789abc',
+                    'errorCode': 'E_SESSION_DATA', 'category': 'data', 'exitCode': 64,
+                    'privacy': dict.fromkeys(('argumentsCaptured', 'environmentValuesCaptured',
+                        'promptOrContentCaptured', 'credentialsCaptured'), False)}
+                path.write_text(json.dumps(report), encoding='utf-8')
+                return SimpleNamespace(returncode=64, stdout='', stderr='E_SESSION_DATA\n')
+            fixture.run_data_failure(run, root, 'E_SESSION_DATA', '--sessions')
+            fixture.run_data_failure(run, root, 'E_SESSION_DATA', '--sessions')
+            self.assertEqual(len(list(root.glob('*.json'))), 2)
+            for output in (SimpleNamespace(returncode=64, stdout='', stderr='E_SESSION_DATA\n'),
+                           SimpleNamespace(returncode=0, stdout='', stderr=''),
+                           SimpleNamespace(returncode=64, stdout='private', stderr='E_SESSION_DATA')):
+                with self.assertRaises(AssertionError):
+                    fixture.run_data_failure(lambda *args: output, root, 'E_SESSION_DATA', '--sessions')
 
     def test_interruption_requires_live_unpublished_snapshot_and_reaps_launcher(self):
         with tempfile.TemporaryDirectory() as folder:

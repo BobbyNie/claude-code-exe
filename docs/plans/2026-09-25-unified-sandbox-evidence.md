@@ -2057,3 +2057,16 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   `110512693091`（2.1.221）TLS 都觀察兩次 tls-record、HTTP 0、exit 1，仍無
   E_GATEWAY_TLS 或可信 structured cause。2.1.282 transport errno 10054；2.1.221
   assertion 時 handshake_errors 為空。TLS gate 維持 fail，不作憑證拒絕推定。
+
+### A19 workspace／history 損壞的真實診斷報告 gate
+
+- 在既有 portable engine 驗收的真實損壞 workspaces.json／四種 history metadata
+  案例中加入 --diagnostics，每次 UUID 新路徑，要求 exit 64、stdout 空、stderr
+  只有預期中性 code，再逐欄驗證固定 schema、UUID、data category 與 privacy=false。
+  保留原本 registry／transcript bytes 不變斷言，不能以報告存在替代資料保全。
+- helper 測試先 missing function RED；GREEN 後兩次呼叫必須產生不同報告路徑，
+  缺報告、成功退出、私有 stdout 均拒絕。完整 Python 107 tests：104 pass／3
+  Windows-only skip，diff-check pass。新實際 Windows report gate 尚待 CI；
+  A19 全故障矩陣及 Win11 普通帳戶實跑仍未完成。
+- run `36904848916` 已完成：兩個 workspace-boundary 與 cross-version job 均 success；
+  兩個主 test job 唯一失敗 step 是 gateway rejection。此結果不替代 Win11 證據。

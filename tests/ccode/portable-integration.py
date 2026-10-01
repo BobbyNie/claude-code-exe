@@ -19,6 +19,17 @@ def validate_data_failure_report(path, code, exit_code):
     verifier.validate_failure_diagnostic(path, code, exit_code, category='data')
 
 
+def run_data_failure(run, root, code, *options):
+    """Require actual startup rejection and a new privacy-safe A19 report."""
+    report_path = root / ("data-failure-" + str(uuid.uuid4()) + ".json")
+    assert not report_path.exists(), "Diagnostic fixture path already exists"
+    result = run(*options, "--diagnostics", str(report_path))
+    assert result.returncode == 64 and result.stdout == "" and result.stderr.strip() == code, (
+        "Data failure lost its neutral startup classification")
+    validate_data_failure_report(report_path, code, result.returncode)
+    return result
+
+
 def profile_bytes(profile):
     return {path.relative_to(profile).as_posix(): path.read_bytes()
             for path in profile.rglob("*") if path.is_file() and
@@ -264,8 +275,8 @@ def check(executable):
         assert run("--data-dir", str(data), "--workspace-id").stdout.strip() == workspace_id
         print("PASS: interrupted workspace registry update is preserved; committed identity remains readable and explicit archive permits retry")
         registry.write_text('{"schema":999,"workspaces":{}}')
-        rejected = run("--data-dir", str(data), "--workspace-id")
-        assert rejected.returncode != 0 and "E_WORKSPACE_DATA" in rejected.stderr, rejected
+        rejected = run_data_failure(run, root, "E_WORKSPACE_DATA",
+                                    "--data-dir", str(data), "--workspace-id")
         assert registry.read_text() == '{"schema":999,"workspaces":{}}'
         print("PASS: persistent workspace UUID survives frontend relocation; corrupt registry fails without replacement")
         history_data = root / "history data"
@@ -279,8 +290,8 @@ def check(executable):
             event[field] = 42
             saved = (json.dumps(event) + "\n").encode("utf-8")
             transcript.write_bytes(saved)
-            result = run("--data-dir", str(history_data), "--sessions")
-            assert result.returncode == 64 and result.stderr.strip() == "E_SESSION_DATA", result
+            result = run_data_failure(run, root, "E_SESSION_DATA",
+                                      "--data-dir", str(history_data), "--sessions")
             assert "private-history-marker" not in result.stdout + result.stderr
             assert transcript.read_bytes() == saved
         print("PASS: corrupt history metadata is classified without disclosure or transcript changes")
