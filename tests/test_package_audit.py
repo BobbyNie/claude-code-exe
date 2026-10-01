@@ -141,7 +141,15 @@ class PackageAuditTests(unittest.TestCase):
             with zipfile.ZipFile(archive, 'w') as bundle:
                 for name in ('../outside.txt', '/absolute.txt', 'drive:stream', 'folder\\escape.txt',
                              'docs/usage.md', 'docs/USAGE.md'):
-                    bundle.writestr(name, 'neutral')
+                    # ZipInfo normalizes backslashes on Windows at construction.
+                    # Assign the raw member spelling afterwards so the hostile
+                    # archive is identical on every host.
+                    entry = zipfile.ZipInfo('placeholder')
+                    entry.filename = name
+                    bundle.writestr(entry, 'neutral')
+                self.assertEqual(bundle.namelist(),
+                                 ['../outside.txt', '/absolute.txt', 'drive:stream',
+                                  'folder\\escape.txt', 'docs/usage.md', 'docs/USAGE.md'])
                 link = zipfile.ZipInfo('linked.txt')
                 link.create_system = 3
                 link.external_attr = (stat.S_IFLNK | 0o777) << 16

@@ -1,12 +1,26 @@
 """Guard independent acceptance gates without adding CI Python dependencies."""
 from pathlib import Path
 import unittest
+import ast
 
 
 class AcceptanceWorkflowTests(unittest.TestCase):
+    def test_source_reads_explicitly_use_utf8_on_windows(self):
+        source = Path(__file__).read_text(encoding='utf-8')
+        reads = [node for node in ast.walk(ast.parse(source))
+                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                 and node.func.attr == 'read_text']
+        self.assertTrue(reads)
+        for node in reads:
+            self.assertTrue(any(keyword.arg == 'encoding' and
+                                isinstance(keyword.value, ast.Constant) and
+                                keyword.value.value == 'utf-8'
+                                for keyword in node.keywords),
+                            f'Source read at line {node.lineno} relies on Windows locale')
+
     def test_portable_failure_does_not_hide_tool_lifecycle_acceptance(self):
         workflow = (Path(__file__).resolve().parents[1] /
-                    '.github/workflows/test-ccode.yml').read_text()
+                    '.github/workflows/test-ccode.yml').read_text(encoding='utf-8')
         step = workflow.split('      - name: Exercise actual engine tools through the frontend', 1)[1].split('      - ', 1)[0]
         self.assertIn("if: ${{ !cancelled() && steps.build.outcome == 'success' }}", step)
         self.assertIn('python tests/ccode/tools-integration.py ./ccode.exe', step)
@@ -14,7 +28,7 @@ class AcceptanceWorkflowTests(unittest.TestCase):
 
     def test_workspace_alias_acceptance_is_independent_and_required(self):
         workflow = (Path(__file__).resolve().parents[1] /
-                    '.github/workflows/test-ccode.yml').read_text()
+                    '.github/workflows/test-ccode.yml').read_text(encoding='utf-8')
         step = workflow.split('      - name: Verify workspace aliases', 1)[1].split('      - ', 1)[0]
         self.assertIn("if: ${{ !cancelled() && steps.build.outcome == 'success' }}", step)
         self.assertIn('python tests/ccode/tools-integration.py ./ccode.exe --workspace-aliases-only', step)
@@ -22,7 +36,7 @@ class AcceptanceWorkflowTests(unittest.TestCase):
 
     def test_workspace_boundary_acceptance_is_independent_and_required(self):
         workflow = (Path(__file__).resolve().parents[1] /
-                    '.github/workflows/test-ccode.yml').read_text()
+                    '.github/workflows/test-ccode.yml').read_text(encoding='utf-8')
         job = workflow.split('\n  workspace-boundary:\n', 1)[1].split('\n  cross-version:', 1)[0]
         step = job.split('      - name: Verify explicit workspace cwd boundaries', 1)[1].split('      - ', 1)[0]
         self.assertIn('python tests/ccode/tools-integration.py ./workspace-boundary-bin/ccode.exe --workspace-boundary-only', step)
@@ -30,7 +44,7 @@ class AcceptanceWorkflowTests(unittest.TestCase):
 
     def test_payload_integrity_acceptance_is_independent_and_required(self):
         workflow = (Path(__file__).resolve().parents[1] /
-                    '.github/workflows/test-ccode.yml').read_text()
+                    '.github/workflows/test-ccode.yml').read_text(encoding='utf-8')
         step = workflow.split('      - name: Reject tampered embedded payload', 1)[1].split('      - ', 1)[0]
         self.assertIn("if: ${{ !cancelled() && steps.build.outcome == 'success' }}", step)
         self.assertIn('python tests/ccode/payload-integrity.py ./ccode.exe', step)
@@ -38,7 +52,7 @@ class AcceptanceWorkflowTests(unittest.TestCase):
 
     def test_session_writer_concurrency_is_independent_and_required(self):
         workflow = (Path(__file__).resolve().parents[1] /
-                    '.github/workflows/test-ccode.yml').read_text()
+                    '.github/workflows/test-ccode.yml').read_text(encoding='utf-8')
         test_job = workflow.split('jobs:\n  test:\n', 1)[1].split('\n  workspace-boundary:', 1)[0]
         self.assertIn("version: ['2.1.221', '2.1.282']", test_job)
         step = test_job.split('      - name: Verify session writer concurrency', 1)[1].split('      - ', 1)[0]
@@ -51,7 +65,7 @@ class AcceptanceWorkflowTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         workflow_path = root / '.github/workflows/test-ccode-windows11-x64.yml'
         self.assertTrue(workflow_path.is_file())
-        workflow = workflow_path.read_text()
+        workflow = workflow_path.read_text(encoding='utf-8')
         self.assertIn('workflow_dispatch:', workflow)
         self.assertIn('runs-on: [self-hosted, Windows, X64, windows-11]', workflow)
         self.assertIn("version: ['2.1.221', '2.1.282']", workflow)
@@ -74,7 +88,7 @@ class AcceptanceWorkflowTests(unittest.TestCase):
         self.assertNotIn('continue-on-error:', workflow)
         platform_script = root / 'scripts/ccode/assert-windows11-x64.ps1'
         self.assertTrue(platform_script.is_file())
-        platform = platform_script.read_text()
+        platform = platform_script.read_text(encoding='utf-8')
         for requirement in (
             'RuntimeInformation]::OSArchitecture',
             'Architecture]::X64',
@@ -94,7 +108,7 @@ class AcceptanceWorkflowTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         verifier_path = root / 'scripts/ccode/accept-offline-windows11-x64.ps1'
         self.assertTrue(verifier_path.is_file())
-        verifier = verifier_path.read_text()
+        verifier = verifier_path.read_text(encoding='utf-8')
         for requirement in (
             'assert-windows11-x64.ps1',
             'Get-NetRoute',
@@ -121,19 +135,19 @@ class AcceptanceWorkflowTests(unittest.TestCase):
         # A connected GitHub runner cannot prove that a machine was physically
         # disconnected from all external networks. This verifier is intentionally
         # copied to, and run on, the standalone acceptance endpoint instead.
-        tools_fixture = (root / 'tests/ccode/tools-integration.py').read_text()
+        tools_fixture = (root / 'tests/ccode/tools-integration.py').read_text(encoding='utf-8')
         self.assertIn('--acceptance-root', tools_fixture)
         self.assertIn('root_override', tools_fixture)
 
         for workflow_name in ('test-ccode.yml', 'test-ccode-windows11-x64.yml'):
-            workflow = (root / '.github/workflows' / workflow_name).read_text()
+            workflow = (root / '.github/workflows' / workflow_name).read_text(encoding='utf-8')
             self.assertNotIn('accept-offline-windows11-x64.ps1', workflow)
 
     def test_enterprise_lifecycle_acceptance_uses_complete_candidate_and_external_data(self):
         root = Path(__file__).resolve().parents[1]
         verifier_path = root / 'scripts/ccode/accept-enterprise-lifecycle-windows11-x64.ps1'
         self.assertTrue(verifier_path.is_file())
-        verifier = verifier_path.read_text()
+        verifier = verifier_path.read_text(encoding='utf-8')
         for requirement in (
             '[string]$CandidateRoot',
             '[string]$EvidencePath',
@@ -160,20 +174,20 @@ class AcceptanceWorkflowTests(unittest.TestCase):
         ):
             self.assertIn(requirement, verifier)
         self.assertNotIn('accept-enterprise-lifecycle-windows11-x64.ps1',
-                         (root / '.github/workflows/test-ccode.yml').read_text())
+                         (root / '.github/workflows/test-ccode.yml').read_text(encoding='utf-8'))
 
         resume = (root / 'tests/ccode/lifecycle-resume.py')
         self.assertTrue(resume.is_file())
-        resume_text = resume.read_text()
+        resume_text = resume.read_text(encoding='utf-8')
         self.assertIn('--continue', resume_text)
         self.assertIn('original_prompt_marker', resume_text)
         self.assertIn('not a live model or enterprise gateway', resume_text)
 
     def test_failure_diagnostics_are_built_and_exercised_without_sensitive_values(self):
         root = Path(__file__).resolve().parents[1]
-        build = (root / 'scripts/ccode/build.ps1').read_text()
+        build = (root / 'scripts/ccode/build.ps1').read_text(encoding='utf-8')
         self.assertIn('"diagnostic"', build)
-        windows_test = (root / 'scripts/ccode/test-windows.ps1').read_text()
+        windows_test = (root / 'scripts/ccode/test-windows.ps1').read_text(encoding='utf-8')
         for requirement in (
             '--diagnostics',
             'diagnostic-super-secret',
@@ -189,7 +203,7 @@ class AcceptanceWorkflowTests(unittest.TestCase):
 
     def test_failed_gateway_does_not_hide_independent_acceptance(self):
         workflow = (Path(__file__).resolve().parents[1] /
-                    '.github/workflows/test-ccode.yml').read_text()
+                    '.github/workflows/test-ccode.yml').read_text(encoding='utf-8')
         upload = workflow.split('      - uses: actions/upload-artifact@v4', 1)[1].split('\n  workspace-boundary:', 1)[0]
         self.assertIn("if: ${{ !cancelled() && steps.build.outcome == 'success' }}", upload)
         self.assertIn('name: ccode-windows-built-${{ matrix.version }}', upload)
