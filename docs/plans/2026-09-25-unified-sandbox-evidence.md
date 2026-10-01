@@ -2419,3 +2419,17 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   這只固定 action 原始碼，不宣稱 hosted image、MSVC/SDK、Python、
   action 內部所有下載或 Windows 11 工程 runtime 已完整固定。
   實際兩 workflow 執行與核准完整工具鏈仍待驗證。
+
+- TLS 精確訊息假設實測：run 36929606191／3754b7c，新版
+  job 110595336469 已完成 failure；完整 job log 的 native probe
+  回報 canonical_certificate_message_hint_not_tls_evidence=unmatched。
+  certificate_text=true、connection_error_text=false、error_result=true、
+  structured_tls_code=false、result_text=true、success_subtype=true；
+  exit=1、connections=2、HTTP=0、invalid_json_lines=0、stderr_present=false。
+  Gateway gate 實際失敗：兩次 tls-record，兩次 transport errno=10054，
+  neutral diagnostics tls=false／retry=false／engine=true。
+  因此固定完整訊息 inventory 尚未匹配已觀察結果，不得提升為原生
+  engine 契約或正式 TLS 分類器；也不能將 reset 或 certificate 詞彙
+  當成憑證拒絕證據。此 job 的其他測試及證據上傳通過不放行 TLS gate，
+  不代表 Windows 11 普通帳戶驗收。此記錄僅更新實測證據，未改程式、
+  未重跑工作流、未放寬 acceptance。
