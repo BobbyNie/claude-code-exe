@@ -2003,3 +2003,15 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   必須由指定版本實際執行驗證，不冒稱已經文件核實或第三方批准。
 - run `36902300245` 的兩個 tools step 已呈 failure；完整 job logs 尚待可讀，
   不推定原因或以 static GREEN 覆蓋實際 failure。
+
+### A17 MCP fixture params metadata 相容修正
+
+- `f8709eb` / run `36902300245` / job `110504168347` 完整日誌：六工具 PASS，
+  MCP discovery 與 model tool_result 已抵達 verifier，但 tool_result is_error。
+  尚無實際呼叫 params／錯誤原因證據，不推定此修正必然解決 CI。
+- fixture 原本整個 params dict 完全相等比較會拒絕 `_meta`，新增含合成
+  progressToken 的實際 stdio subprocess test 先 KeyError(result) RED，修正後 GREEN。
+  現只允許 name／arguments／可選 object `_meta`；name、完整 arguments 仍須精確
+  等於固定 probe／固定 marker，metadata 不記錄、不影響權限或結果。
+- 完整 Python 102 tests：99 pass／3 Windows skip；diff-check pass。
+  actual-engine MCP 成功／拒絕及 Skill 仍待實跑，A17 不標通過。

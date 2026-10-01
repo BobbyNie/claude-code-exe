@@ -11,6 +11,7 @@ def serve(evidence):
             continue
         response = {'jsonrpc': '2.0', 'id': request['id']}
         method = request.get('method')
+        params = request.get('params', {})
         if method == 'initialize':
             response['result'] = {'protocolVersion': '2024-11-05',
                 'capabilities': {'tools': {}},
@@ -23,8 +24,11 @@ def serve(evidence):
                 'inputSchema': {'type': 'object', 'properties': {
                     'marker': {'type': 'string', 'enum': ['mcp-fixture-only']}},
                     'required': ['marker'], 'additionalProperties': False}}]}
-        elif (method == 'tools/call' and request.get('params') ==
-              {'name': 'probe', 'arguments': {'marker': 'mcp-fixture-only'}}):
+        elif (method == 'tools/call' and isinstance(params, dict)
+              and set(params) <= {'name', 'arguments', '_meta'}
+              and isinstance(params.get('_meta', {}), dict)
+              and params.get('name') == 'probe'
+              and params.get('arguments') == {'marker': 'mcp-fixture-only'}):
             with evidence.open('a', encoding='utf-8') as output:
                 output.write('{"tool":"probe","marker":"mcp-fixture-only"}\n')
             response['result'] = {'content': [{'type': 'text', 'text': 'mcp-fixture-only'}]}

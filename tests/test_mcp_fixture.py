@@ -16,7 +16,8 @@ class McpFixtureTests(unittest.TestCase):
                 {'jsonrpc': '2.0', 'method': 'notifications/initialized'},
                 {'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list'},
                 {'jsonrpc': '2.0', 'id': 3, 'method': 'tools/call',
-                 'params': {'name': 'probe', 'arguments': {'marker': 'mcp-fixture-only'}}},
+                 'params': {'name': 'probe', 'arguments': {'marker': 'mcp-fixture-only'},
+                            '_meta': {'progressToken': 'synthetic-only'}}},
                 {'jsonrpc': '2.0', 'id': 4, 'method': 'tools/call',
                  'params': {'name': 'unknown', 'arguments': {}}},
             ]
