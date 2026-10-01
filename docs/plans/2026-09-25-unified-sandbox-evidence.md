@@ -2070,3 +2070,12 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   A19 全故障矩陣及 Win11 普通帳戶實跑仍未完成。
 - run `36904848916` 已完成：兩個 workspace-boundary 與 cross-version job 均 success；
   兩個主 test job 唯一失敗 step 是 gateway rejection。此結果不替代 Win11 證據。
+
+### A17 subagent 結果來源與順序加固
+
+- verifier 原只用全域收集的 received；只有 child request + 預置 received 就可能
+  通過，未證明父模型真的收到子結果。新增這個反例先 AssertionError not raised
+  RED，再要求最後 child request 之後的非 child system request 內，實際存在
+  acceptance_0、無 is_error、含 child marker 的 tool_result；child echo 不算父結果。
+- 完整 Python 107 tests：104 pass／3 Windows-only skip；diff-check pass。
+  不將這項 verifier 加固當作實際 subagent 成功證據，仍須 CI 與 Win11 實跑。

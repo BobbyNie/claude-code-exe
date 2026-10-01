@@ -32,6 +32,20 @@ def verify_subagent_execution(requests, received, tool_name):
     assert "child-context-only-acceptance" not in json.dumps(requests[0]), "Child context preloaded"
     assert any("child-context-only-acceptance" in json.dumps(request.get("system", []))
         for request in requests[1:]), "No independent child system context"
+    child_indices = [index for index, request in enumerate(requests)
+        if "child-context-only-acceptance" in json.dumps(request.get("system", []))]
+    parent_results = []
+    for request in requests[max(child_indices) + 1:]:
+        if "child-context-only-acceptance" in json.dumps(request.get("system", [])):
+            continue
+        for message in request.get("messages", []):
+            content = message.get("content", [])
+            if isinstance(content, list):
+                parent_results.extend(block for block in content if isinstance(block, dict)
+                    and block.get("type") == "tool_result"
+                    and block.get("tool_use_id") == "acceptance_0")
+    assert any(not result.get("is_error") and "child-result-only-acceptance" in
+        json.dumps(result.get("content")) for result in parent_results), "No post-child parent result request"
     assert set(received) == {"acceptance_0"}, "Missing or unexpected subagent result"
     result = received["acceptance_0"]
     assert not result.get("is_error"), "Actual subagent failed"

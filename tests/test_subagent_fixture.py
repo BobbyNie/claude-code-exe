@@ -15,7 +15,15 @@ class SubagentFixtureTests(unittest.TestCase):
                   'messages': [{'content': 'Use acceptance-probe'}]}
         child = {'system': 'child-context-only-acceptance', 'messages': []}
         received = {'acceptance_0': {'content': 'child-result-only-acceptance'}}
-        fixture.verify_subagent_execution([parent, child], received, 'Agent')
+        returned = {'system': 'parent-only', 'messages': [{'content': [
+            {'type': 'tool_result', 'tool_use_id': 'acceptance_0',
+             'content': 'child-result-only-acceptance'}]}]}
+        fixture.verify_subagent_execution([parent, child, returned], received, 'Agent')
+        with self.assertRaises(AssertionError):
+            fixture.verify_subagent_execution([parent, child], received, 'Agent')
+        with self.assertRaises(AssertionError):
+            fixture.verify_subagent_execution([parent, dict(child, messages=returned['messages'])],
+                                             received, 'Agent')
         cases = [([parent], received), ([child, child], received),
                  ([parent, child], {}),
                  ([parent, child], {'acceptance_0': {'is_error': True,
