@@ -84,7 +84,7 @@ inline std::string DiagnosticCategory(const std::string& errorCode) {
     if (HasPrefix(errorCode, "E_CREDENTIAL") || HasPrefix(errorCode, "E_ARGUMENT") ||
         HasPrefix(errorCode, "E_UNSUPPORTED_OPTION") || HasPrefix(errorCode, "E_PERMISSION_MODE") ||
         HasPrefix(errorCode, "E_API_ONLY") || HasPrefix(errorCode, "E_PROMPT")) return "configuration";
-    if (HasPrefix(errorCode, "E_PACKAGE") || HasPrefix(errorCode, "E_RESOURCE") ||
+    if (errorCode == "E_CHECKSUM" || HasPrefix(errorCode, "E_PACKAGE") || HasPrefix(errorCode, "E_RESOURCE") ||
         HasPrefix(errorCode, "E_HASH") || HasPrefix(errorCode, "E_RUNTIME") ||
         HasPrefix(errorCode, "E_CANDIDATE") || HasPrefix(errorCode, "E_SNAPSHOT") ||
         HasPrefix(errorCode, "E_ACTIVATION") || HasPrefix(errorCode, "E_ROLLBACK")) return "integrity";

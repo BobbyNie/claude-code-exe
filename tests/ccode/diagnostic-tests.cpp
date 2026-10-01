@@ -46,6 +46,13 @@ int main() {
             {"credentialsCaptured", false}
         }}
     }));
+    const auto checksum = FailureDiagnostic(
+        "E_CHECKSUM: private payload path and token", 64, operation);
+    assert(checksum["errorCode"] == "E_CHECKSUM");
+    assert(checksum["category"] == "integrity");
+    assert(checksum["exitCode"] == 64);
+    assert(checksum["operationId"] == operation);
+    assert(checksum.dump().find("private") == std::string::npos);
     const auto unknown = FailureDiagnostic("E_PRIVATE_TOKEN_12345", 64, operation);
     assert(unknown["errorCode"] == "E_LOCAL");
     assert(unknown["category"] == "local");

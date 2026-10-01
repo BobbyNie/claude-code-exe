@@ -2343,3 +2343,15 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   Python 共 122、skipped=1。這是 hosted Windows 證據，非 Win11
   普通帳戶實機證據。TLS 兩次 tls-record／transport errno10054、
   HTTP=0、exit=1、tls=false／engine=true；不推斷憑證拒絕。
+
+- A19 checksum 分類修正：公開 FailureDiagnostic 對 E_CHECKSUM
+  原先保留 errorCode 但錯分 local；新增完整 JSON 結果測試先 RED，
+  修正後 GREEN，category=integrity，operationId/exitCode 保留，
+  原始 payload 路徑與 token 不進報告。只作 exact code 分類，不增加
+  原始字串洩漏或更改主要 exit code；Win11 實跑證據仍待取得。
+- run 36926412194 已全部 completed/failure；兩個版本 job 都只在
+  actual engine gateway rejection gate 失敗。cross-version 與兩個
+  workspace-boundary job 均成功。舊版 job 110584729218 的 TLS
+  handshake_errors=[]、兩次 tls-record、HTTP=0、exit=1，仍不能
+  當成憑證拒絕證據。新版 payload 成功不消除先前間歇 activation
+  access-denied 失敗，TLS 與 A15 未放行。
