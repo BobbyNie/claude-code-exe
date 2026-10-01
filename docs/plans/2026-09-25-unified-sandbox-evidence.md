@@ -2079,3 +2079,14 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   acceptance_0、無 is_error、含 child marker 的 tool_result；child echo 不算父結果。
 - 完整 Python 107 tests：104 pass／3 Windows-only skip；diff-check pass。
   不將這項 verifier 加固當作實際 subagent 成功證據，仍須 CI 與 Win11 實跑。
+
+- `fcf7b3b` / run `36908228201`，Windows job `110524065191`（2.1.282）：
+  校驗過的未修改原生引擎子代理診斷 exit 0、invalid_lines 0；固定旗標為
+  init_task=true、init_agent=false、emitted_agent=true、emitted_task=false、
+  emitted_unregistered=true。獨立 frontend 子代理案例仍以 E_TOOL_UNKNOWN 失敗。
+  依此實際證據加入 Task 宣告→Agent 事件的單向相容映射；未宣告 Task/Agent 時
+  Agent 仍拒絕，其他未知工具不放寬。新增 C++ 測試先 RED（E_TOOL_UNKNOWN）後 GREEN；
+  七組 C++ suite 通過，Python 108 項中 105 通過／3 Windows-only skip。
+  尚須後續 Windows 真實 frontend 子代理成功證據；原生診斷不替代 A17 驗收。
+  同一 job 的 gateway TLS 仍失敗：兩次 tls-record、transport errno 10054、HTTP 0，
+  不足以證明憑證拒絕；A18 不標記通過。

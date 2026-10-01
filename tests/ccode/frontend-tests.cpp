@@ -160,6 +160,14 @@ int main() {
         invalidTool.Feed(init);
         ExpectError(invalidTool, test.first, test.second);
     }
+    // Native 2.1.282 declares Task but emits Agent for a successful subagent.
+    ccode::EventReader subagentAlias;
+    subagentAlias.Feed(ccode::Json{{"type", "system"}, {"subtype", "init"},
+        {"tools", {"Task"}}}.dump() + "\n");
+    assert(subagentAlias.Feed(tool("Agent", "child1", {{"prompt", "probe"}})) == "[Tool request]\n");
+    ccode::EventReader undeclaredSubagent;
+    undeclaredSubagent.Feed(init);
+    ExpectError(undeclaredSubagent, tool("Agent", "child1", ccode::Json::object()), "E_TOOL_UNKNOWN");
     ccode::EventReader duplicate;
     duplicate.Feed(init);
     const auto read = tool("Read", "t1", {{"file_path", "user/claude-original.txt"}});

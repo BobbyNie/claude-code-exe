@@ -53,6 +53,10 @@ class EventReader {
                 if (name.empty()) throw ProtocolError("E_TOOL_NAME");
                 if (!registeredTools.insert(name).second) throw ProtocolError("E_TOOL_DUPLICATE_NAME");
             }
+            // Observed native 2.1.282 protocol: init lists Task, while the
+            // successful subagent event uses Agent. This is a one-way alias,
+            // not permission to accept tools absent from the declared registry.
+            if (registeredTools.count("Task")) registeredTools.insert("Agent");
             toolRegistryReceived = true;
             return "";
         }
