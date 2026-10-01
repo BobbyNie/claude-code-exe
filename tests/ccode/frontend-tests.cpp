@@ -75,6 +75,21 @@ int main() {
         assert(rejected.failed);
         assert(rejected.failureCode == expectedCode);
     }
+    // Only allowlisted engine error codes classify TLS; never render details.
+    for (const auto& kind : {"assistant", "system", "result"}) {
+        for (const auto& code : {"CERT_HAS_EXPIRED", "DEPTH_ZERO_SELF_SIGNED_CERT",
+                "SELF_SIGNED_CERT_IN_CHAIN", "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+                "UNABLE_TO_GET_ISSUER_CERT_LOCALLY", "ERR_TLS_CERT_ALTNAME_INVALID"}) {
+            ccode::EventReader tls;
+            const auto event = ccode::Json{{"type", kind}, {"error", {{"code", code},
+                {"message", "private-token private-host"}}}}.dump() + "\n";
+            ExpectError(tls, event, "E_GATEWAY_TLS");
+            ExpectError(tls, wire, "E_PROTOCOL_FAILED");
+        }
+    }
+    ccode::EventReader tlsText;
+    assert(tlsText.Feed("{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"CERT_HAS_EXPIRED\"}]}}\n") == "CERT_HAS_EXPIRED\n");
+    assert(!tlsText.failed && tlsText.failureCode.empty());
     // A documented retry notification is a stop boundary, not progress chrome.
     // Reject every transport split without exposing untrusted retry details.
     const auto retry = ccode::Json{{"type", "system"}, {"subtype", "api_retry"},

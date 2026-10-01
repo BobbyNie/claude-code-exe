@@ -36,6 +36,19 @@ class EventReader {
         if (!event.is_object()) throw ProtocolError("E_PROTOCOL");
         const auto type = event.value("type", std::string());
         if (complete && (type == "assistant" || type == "result")) throw ProtocolError("E_PROTOCOL_ORDER");
+        // Only structured engine codes are diagnostic evidence. Model text,
+        // arbitrary error messages and transport resets cannot establish TLS trust failure.
+        if ((type == "assistant" || type == "system" || type == "result") &&
+            event.contains("error") && event.at("error").is_object()) {
+            const auto& error = event.at("error");
+            if (error.contains("code") && error.at("code").is_string()) {
+                const auto code = error.at("code").get<std::string>();
+                if (code == "CERT_HAS_EXPIRED" || code == "DEPTH_ZERO_SELF_SIGNED_CERT" ||
+                    code == "SELF_SIGNED_CERT_IN_CHAIN" || code == "UNABLE_TO_VERIFY_LEAF_SIGNATURE" ||
+                    code == "UNABLE_TO_GET_ISSUER_CERT_LOCALLY" || code == "ERR_TLS_CERT_ALTNAME_INVALID")
+                    throw ProtocolError("E_GATEWAY_TLS");
+            }
+        }
         // The engine can have cause-specific retry budgets outside MAX_RETRIES.
         // Stop on its documented pre-retry event; RunTurn terminates the Job Object.
         // Do not render error fields or rely on a particular delay/category.

@@ -2156,3 +2156,14 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   兩版本 TLS gate 仍失敗（tls-record 兩次／HTTP 0／E_ENGINE），不得分類為
   憑證拒絕。新增 task ID 同 stream 不可重用負例先 RED 再 GREEN，防止已消費
   task 完成授權被重用；七組 C++、Python 113（110 pass／3 skip）通過。
+
+- 結構化 TLS 分類補齊：frontend 僅在 assistant／system／result 的
+  `error.code` 精確匹配六個 allowlisted 憑證驗證錯誤碼時停止並回報
+  `E_GATEWAY_TLS`；不輸出 error.message，不從模型文字、errno 10054 或
+  HTTP 0 推論憑證拒絕。18 個事件／錯誤碼組合先 RED（ExpectError 未拒絕）
+  再 GREEN；模型文字包含 CERT_HAS_EXPIRED 不觸發分類。七組 C++ 通過；
+  Python 113 項（110 pass／3 Windows-only skip）在允許 loopback socket
+  後通過；初次 sandbox 執行的六個 socket PermissionError 不算產品失敗。
+  此修改僅證明分類器能消費結構化證據；當前兩版原生引擎尚未觀察到該欄位，
+  不代表 TLS gateway gate 或 Windows 11 x64 正式驗收通過。GitHub runner
+  inventory 本次核對仍為 0 個 self-hosted runner。
