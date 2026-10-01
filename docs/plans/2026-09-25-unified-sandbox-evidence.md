@@ -2574,3 +2574,29 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   local Python 135 tests / 5 Windows-only skips; diff-check passed.
 - This closes the public-text allocation gap, not all adversarial archive
   resource limits or package source/notices approval; A02/A04 remain unverified.
+
+### A20 native Ed25519 verification foundation (not startup acceptance)
+
+- Added a native verification-only adapter with strict 32-byte public-key and
+  64-byte signature lengths. It links Monocypher core and optional Ed25519 C
+  sources, not Node, and exposes no product signing/key-generation interface.
+- Upstream source fixed at LoupVaillant/Monocypher 4.0.2 commit
+  0d85f98c9d9b0227e42cf795cb527dff372b40a4, retrieved via GitHub contents API;
+  original per-file notices and LICENCE.md retained, BSD-2-Clause chosen.
+  PROVENANCE.json records exact downloaded source/notice SHA256 values.
+  Vendoring does not constitute independent cryptographic or legal approval.
+- TDD native RFC8032 empty-message known-answer test failed on missing adapter
+  (RED), passed after implementation (GREEN), alongside changed message/key,
+  changed/truncated/missing signature and missing key rejection. Native C99/C++17
+  local compilation passed; full Python 135 tests / 5 Windows-only skips.
+  Windows build now compiles/runs this native suite; MSVC result remains pending.
+- No launcher signature gate or approved pin is claimed yet. Domain-separated
+  manifest/SPKI/pin validation, immutable candidate handling, startup/update
+  integration and approved signer remain required before A20 acceptance.
+- Actual native TLS1.2 probe in 86ad2f0 run 36940414782: old engine completes
+  two TLS1.2 handshakes as well as two default TLS1.3 handshakes; new engine
+  completes zero in both modes. HTTP zero and exit1 throughout; structured TLS
+  code false and exact-message inventory unmatched. TLS1.3 timing alone does
+  not explain the old-engine result. Gates remain failed, not weakened.
+- GitHub self-hosted runners API still returns total_count=0. Actual Win11 x64
+  ordinary-account acceptance remains unavailable and is not marked passed.

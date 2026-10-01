@@ -96,6 +96,21 @@ try {
         Invoke-Checked $testExe
     }
 
+    # Native verifier engineering tests. No Node runtime is linked into ccode.
+    # Production startup/update integration and approved trust policy remain pending.
+    $cryptoObjects = @()
+    foreach ($unit in @("monocypher", "monocypher-ed25519")) {
+        $object = Join-Path $work "$unit.obj"
+        Invoke-Checked cl.exe /nologo /O2 /MT /c /TC `
+            (Join-Path $PSScriptRoot "vendor\monocypher\$unit.c") "/Fo:$object"
+        $cryptoObjects += $object
+    }
+    $signatureTest = Join-Path $work "ccode-signature-tests.exe"
+    Invoke-Checked cl.exe /nologo /std:c++17 /O2 /EHsc /MT /utf-8 `
+        (Join-Path $PSScriptRoot "..\..\tests\ccode\signature-tests.cpp") `
+        @cryptoObjects "/Fe:$signatureTest"
+    Invoke-Checked $signatureTest
+
     $info = Get-Item $output
     if ($info.Length -le (Get-Item $payload).Length) {
         throw "ccode.exe is unexpectedly small; embedded resources may be missing"
