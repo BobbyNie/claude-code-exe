@@ -2209,3 +2209,10 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   邊界／來源分別降為 E_BOUNDARY／E_PROVENANCE，輸出不存在（GREEN）。
   企業 12 項、完整 Python 116 項（113 pass／3 Windows-only skip）通過；
   diff-check 通過。此項不提供 A20 信任根或簽署批准；其仍需外部核准。
+
+- 生命週期驗收 JSON 消歧：公開 inspect 命令對 saved audit 中重複 status
+  （failed 後 passed）先 RED：退出 0；改用組裝端相同的逐 object
+  duplicate-key 拒絕解析，降為呼叫端指定的 E_LIFECYCLE_AUDIT（GREEN）。
+  此解析也覆蓋 manifest，不能用 last-key-wins 掩蓋歧義。
+  lifecycle 5 項通過；完整 Python 117 項（114 pass／3 Windows-only skip）
+  通過；diff-check 通過。仍不構成 A20 簽署或 Windows 11 實機證據。

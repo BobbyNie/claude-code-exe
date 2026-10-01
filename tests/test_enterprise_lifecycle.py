@@ -159,6 +159,16 @@ class EnterpriseLifecycleTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 2)
         self.assertEqual(json.loads(completed.stdout)["code"], "E_LIFECYCLE_MANIFEST")
 
+    def test_inspect_rejects_duplicate_saved_audit_keys(self):
+        candidate = self.root / "duplicate-audit"
+        self.build(candidate)
+        audit = candidate / "package-audit.json"
+        raw = audit.read_text(encoding="utf-8")
+        audit.write_text('{"status":"failed",' + raw.lstrip()[1:], encoding="utf-8")
+        completed = self.run_lifecycle("inspect", "--candidate-root", candidate)
+        self.assertEqual(completed.returncode, 2)
+        self.assertEqual(json.loads(completed.stdout)["code"], "E_LIFECYCLE_AUDIT")
+
     def test_compare_requires_identical_unpacked_delivery_but_records_archive_digests(self):
         original = self.root / "original"
         repacked = self.root / "repacked"

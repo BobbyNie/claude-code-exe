@@ -7,7 +7,7 @@ import re
 import stat
 
 import package_audit
-from build_enterprise_package import BOUNDARY_DOCUMENT
+from build_enterprise_package import BOUNDARY_DOCUMENT, _unique_json_object
 
 
 HEX_64 = re.compile(r"^[0-9a-f]{64}$")
@@ -36,10 +36,11 @@ def _json(path, code="E_LIFECYCLE_FORMAT"):
         status = Path(path).lstat()
         if stat.S_ISLNK(status.st_mode) or not stat.S_ISREG(status.st_mode):
             raise LifecycleError(code)
-        return json.loads(Path(path).read_text(encoding="utf-8-sig"))
+        return json.loads(Path(path).read_text(encoding="utf-8-sig"),
+                          object_pairs_hook=_unique_json_object)
     except LifecycleError:
         raise
-    except (OSError, UnicodeError, json.JSONDecodeError):
+    except (OSError, UnicodeError, ValueError):
         raise LifecycleError(code) from None
 
 
