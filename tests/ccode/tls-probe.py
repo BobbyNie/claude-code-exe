@@ -34,6 +34,23 @@ def summarize_events(events):
     return evidence
 
 
+def summarize_result_shape(events):
+    """Report only fixed schema flags, never result errors or unknown subtype text."""
+    flags = dict.fromkeys(('execution_error', 'max_turns_error', 'errors_array',
+                           'string_error_entry', 'object_error_entry'), False)
+    for event in events:
+        if not isinstance(event, dict) or event.get('type') != 'result':
+            continue
+        flags['execution_error'] |= event.get('subtype') == 'error_during_execution'
+        flags['max_turns_error'] |= event.get('subtype') == 'error_max_turns'
+        errors = event.get('errors')
+        if isinstance(errors, list):
+            flags['errors_array'] = True
+            flags['string_error_entry'] |= any(isinstance(error, str) for error in errors)
+            flags['object_error_entry'] |= any(isinstance(error, dict) for error in errors)
+    return flags
+
+
 def verify_payload(payload, metadata):
     if (metadata.get('platform') != 'windows' or metadata.get('architecture') != 'x64'
             or metadata.get('engineSize') != len(payload)
@@ -235,6 +252,7 @@ def probe(executable):
                 except json.JSONDecodeError:
                     invalid_lines += 1
             print(json.dumps({'native_tls_probe': summarize_events(events),
+                'result_shape': summarize_result_shape(events),
                 'engine_version': metadata['engineVersion'], 'exit_code': result.returncode,
                 'connections': endpoint.connections, 'http_requests': endpoint.http_requests,
                 'invalid_json_lines': invalid_lines, 'stderr_present': bool(result.stderr)}))

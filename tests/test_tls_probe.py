@@ -21,6 +21,17 @@ class TlsProbeTests(unittest.TestCase):
             'assistant_api_error': True, 'assistant_authentication_failed': False,
             'retry_event': True, 'error_result': True, 'structured_tls_code': False})
 
+    def test_result_shape_summary_distinguishes_execution_failure_without_publishing_errors(self):
+        events = [{'type': 'result', 'subtype': 'error_during_execution',
+                   'errors': ['private-token private-prompt', {'code': 'private-code'}]},
+                  {'type': 'assistant', 'subtype': 'error_max_turns'},
+                  {'type': 'result', 'subtype': 'private-subtype', 'errors': 'private-error'}]
+        self.assertEqual(probe.summarize_result_shape(events), {
+            'execution_error': True, 'max_turns_error': False,
+            'errors_array': True, 'string_error_entry': True, 'object_error_entry': True})
+        self.assertFalse(any(probe.summarize_result_shape([{
+            'type': 'assistant', 'errors': ['error_during_execution']}]).values()))
+
     def test_probe_refuses_wrong_size_or_non_windows_payload_metadata(self):
         import hashlib
         payload = b'MZ-fixture'
