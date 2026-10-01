@@ -46,6 +46,20 @@ class TlsProbeTests(unittest.TestCase):
         self.assertFalse(probe.summarize_events([event])['structured_tls_code'])
         self.assertNotIn('private', str(flags))
 
+    def test_failure_text_probe_is_fixed_flags_not_certificate_evidence(self):
+        events = [{"type": "result", "is_error": True,
+                   "result": "private-token Certificate verify failed: Connection error."},
+                  {"type": "assistant", "message": {"content": [
+                      {"type": "text", "text": "CERT_HAS_EXPIRED"}]}}]
+        flags = probe.summarize_failure_text(events)
+        self.assertEqual(flags, {"certificate_text": True, "connection_error_text": True})
+        self.assertNotIn("private", str(flags))
+        self.assertFalse(probe.summarize_events(events)["structured_tls_code"])
+        for kind in ("assistant", "system", "result"):
+            self.assertEqual(probe.summarize_failure_text([{
+                "type": kind, "is_error": False, "result": "certificate connection error"}]),
+                {"certificate_text": False, "connection_error_text": False})
+
     def test_probe_refuses_wrong_size_or_non_windows_payload_metadata(self):
         import hashlib
         payload = b'MZ-fixture'

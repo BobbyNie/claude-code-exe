@@ -57,6 +57,27 @@ def summarize_result_shape(events):
     return flags
 
 
+def summarize_failure_text(events):
+    """Investigation hints only; reflected text never proves TLS rejection."""
+    flags = {"certificate_text": False, "connection_error_text": False}
+    for event in events:
+        if (not isinstance(event, dict) or event.get("type") != "result" or
+                event.get("is_error") is not True):
+            continue
+        texts = [event.get("result"), event.get("error")]
+        errors = event.get("errors")
+        if isinstance(errors, list):
+            texts.extend(errors)
+        for text in texts:
+            if not isinstance(text, str):
+                continue
+            normalized = text.lower()
+            flags["certificate_text"] |= ("certificate" in normalized or
+                "cert_has_expired" in normalized or "self_signed_cert" in normalized)
+            flags["connection_error_text"] |= "connection error" in normalized
+    return flags
+
+
 def verify_payload(payload, metadata):
     if (metadata.get('platform') != 'windows' or metadata.get('architecture') != 'x64'
             or metadata.get('engineSize') != len(payload)
@@ -308,6 +329,7 @@ def probe(executable):
                     invalid_lines += 1
             print(json.dumps({'native_tls_probe': summarize_events(events),
                 'result_shape': summarize_result_shape(events),
+                'failure_text_hints_not_tls_evidence': summarize_failure_text(events),
                 'engine_version': metadata['engineVersion'], 'exit_code': result.returncode,
                 'connections': endpoint.connections, 'http_requests': endpoint.http_requests,
                 'invalid_json_lines': invalid_lines, 'stderr_present': bool(result.stderr)}))

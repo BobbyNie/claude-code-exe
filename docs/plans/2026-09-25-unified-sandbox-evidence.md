@@ -2365,3 +2365,12 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   完整 Python 123（119 pass／4 Windows skip），diff-check 通過。
   這不聲稱解決任意 symlink/reparse/concurrent replacement race，
   不代表內建 launcher/update 簽章 gate 或 Windows 11 全量验收完成。
+
+- TLS 根因調查 probe 補充：只對 type=result 且 is_error=true 的
+  result/error/errors 字串計算固定 certificate_text／connection_error_text
+  布林旗標；不輸出原文、路徑、token 或任意字串。欄位明確命名為
+  failure_text_hints_not_tls_evidence，反射文字不能當憑證拒絕證據。
+  未更改 gateway acceptance 或 frontend 分類，未放寬 TLS gate。
+  測試先 RED（缺 summarizer），實作後 probe 七項 GREEN；完整
+  Python 124（120 pass／4 Windows skip），diff-check 通過。
+  真實 engine 旗標結果需等待此版本 hosted CI；此處不預測旗標值。
