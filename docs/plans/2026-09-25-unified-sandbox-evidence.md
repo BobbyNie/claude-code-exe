@@ -1871,3 +1871,13 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   is_error=true, no structured TLS code. Certificate fixture receives two
   transport resets (10054), HTTP zero; portable code still E_ENGINE. Therefore
   TLS remains RED; result text is not promoted to trusted TLS classification.
+
+### A19 TLS report gate (not TLS classification GREEN)
+
+- Fixture-level test first failed because TLS invocation lacked --diagnostics.
+  It now requests a fresh report and, only after the existing strict certificate
+  rejection/zero-HTTP gate, requires exact E_GATEWAY_TLS/network report schema
+  with actual exit code. Existing no-write, privacy and TLS assertions remain.
+- Mock unit test does not prove real engine TLS classification; its PASS output
+  is suppressed. Local Python 91 tests: 88 pass, 3 Windows skip; diff-check pass.
+  Actual TLS remains unresolved and must still fail if only E_ENGINE is emitted.

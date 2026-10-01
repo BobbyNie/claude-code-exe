@@ -43,6 +43,26 @@ class GatewayFixtureTests(unittest.TestCase):
                 self.assertEqual(validate.call_args.args[1:], ('E_ENGINE', 1))
                 self.assertEqual(validate.call_args.kwargs, {'category': 'local'})
 
+    def test_tls_turn_requires_fresh_exact_tls_failure_report(self):
+        with tempfile.TemporaryDirectory() as folder:
+            executable = Path(folder) / 'ccode.exe'
+            executable.write_bytes(b'fixture')
+            endpoint = SimpleNamespace(server_port=12345, http_requests=0)
+            def run(args, **kwargs):
+                self.assertIn('--diagnostics', args)
+                report = Path(args[args.index('--diagnostics') + 1])
+                self.assertFalse(report.exists())
+                return SimpleNamespace(returncode=1,
+                    stdout='[E_GATEWAY_TLS: certificate verification failed]\n', stderr='')
+            with patch.object(fixture, 'untrusted_tls_endpoint') as context, patch.object(
+                    fixture.subprocess, 'run', side_effect=run), patch.object(
+                    fixture, 'tls_rejection_observed', return_value=True), patch.object(
+                    fixture, 'validate_failure_diagnostic') as validate, patch('builtins.print'):
+                context.return_value.__enter__.return_value = endpoint
+                fixture.check_tls_rejection(executable)
+                validate.assert_called_once()
+                self.assertEqual(validate.call_args.args[1:], ('E_GATEWAY_TLS', 1))
+
     def test_tls_endpoint_rejects_untrusted_certificate_but_accepts_explicit_trust(self):
         with fixture.untrusted_tls_endpoint() as endpoint:
             with socket.create_connection(endpoint.address, timeout=2) as connection:

@@ -152,12 +152,13 @@ def check_tls_rejection(executable):
                if not key.startswith(("A_", "C_", "ANTHROPIC_", "CLAUDE_", "CCODE_"))
                and key not in ("NODE_TLS_REJECT_UNAUTHORIZED", "NODE_EXTRA_CA_CERTS",
                                "SSL_CERT_FILE", "SSL_CERT_DIR")}
+        report_path = root / "failure.json"
         with untrusted_tls_endpoint() as endpoint:
             env.update(A_AUTH_TOKEN=token,
                        A_BASE_URL=f"https://127.0.0.1:{endpoint.server_port}")
             try:
                 result = subprocess.run([str(app), "--data-dir", str(data), "--print",
-                    "--tools", "", prompt], cwd=workspace, env=env, input="",
+                    "--diagnostics", str(report_path), "--tools", "", prompt], cwd=workspace, env=env, input="",
                     capture_output=True, text=True, encoding="utf-8", timeout=60)
             except subprocess.TimeoutExpired:
                 raise AssertionError("Untrusted TLS gateway did not terminate within 60 seconds") from None
@@ -175,6 +176,7 @@ def check_tls_rejection(executable):
         terminal = result.stdout + result.stderr
         assert result.returncode != 0, "Untrusted TLS gateway turn incorrectly succeeded"
         assert token not in terminal and prompt not in terminal, "Private TLS fixture data leaked"
+        validate_failure_diagnostic(report_path, "E_GATEWAY_TLS", result.returncode)
         assert not list(workspace.iterdir()), "Failed TLS changed workspace"
         assert not list(program.rglob("*.jsonl")), "History leaked into program directory"
         classifications = {code: code in terminal for code in
