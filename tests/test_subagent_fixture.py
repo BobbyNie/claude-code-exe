@@ -43,6 +43,16 @@ class SubagentFixtureTests(unittest.TestCase):
             'emitted_task': False, 'emitted_unregistered': True})
         self.assertNotIn('private', str(fixture.summarize_subagent_registry(events)))
 
+    def test_background_requires_post_child_parent_notification_not_launch_metadata(self):
+        parent = {'tools': [{'name': 'Agent'}], 'system': 'parent'}
+        child = {'system': 'child-context-only-acceptance'}
+        launch = {'acceptance_0': {'content': 'Async agent launched successfully.'}}
+        returned = {'system': 'parent', 'messages': [{'role': 'user', 'content':
+            '<task-notification>child-result-only-acceptance</task-notification>'}]}
+        fixture.verify_subagent_execution([parent, child, returned], launch, 'Agent', background=True)
+        with self.assertRaises(AssertionError):
+            fixture.verify_subagent_execution([parent, child], launch, 'Agent', background=True)
+
     def test_lifecycle_sequence_preserves_order_without_raw_names(self):
         events = [{'type': 'system', 'subtype': 'init'},
                   {'type': 'assistant', 'parent_tool_use_id': 'private'},

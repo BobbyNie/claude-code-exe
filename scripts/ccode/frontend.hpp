@@ -30,6 +30,7 @@ class EventReader {
     std::set<std::string> subagentToolIds;
     std::map<std::string, std::string> backgroundTasks;
     bool interimResult = false;
+    size_t queuedParentTurns = 0;
     std::string Event(const Json& event) {
         if (!event.is_object()) throw ProtocolError("E_PROTOCOL");
         const auto type = event.value("type", std::string());
@@ -42,7 +43,18 @@ class EventReader {
         // Initialization fixes the registry for this turn. Reject a replacement
         // before it can mutate the session identity or registered tool names.
         if (type == "system" && event.value("subtype", std::string()) == "init" &&
-            (toolRegistryReceived || complete)) throw ProtocolError("E_PROTOCOL_ORDER");
+            (toolRegistryReceived || complete)) {
+            // Native background completion queues a fresh parent turn: result,
+            // init, assistant, result. Only a matched completed task can grant
+            // this boundary, never an arbitrary duplicate initialization.
+            if (!complete || !queuedParentTurns || !backgroundTasks.empty())
+                throw ProtocolError("E_PROTOCOL_ORDER");
+            --queuedParentTurns;
+            complete = false;
+            interimResult = false;
+            toolIds.clear();
+            subagentToolIds.clear();
+        }
         if (event.contains("session_id")) {
             const auto eventSession = event.at("session_id").get<std::string>();
             if (!session.empty() && eventSession != session) throw ProtocolError("E_SESSION_MISMATCH");
@@ -78,6 +90,7 @@ class EventReader {
                 (status != "completed" && status != "failed" && status != "stopped"))
                 throw ProtocolError("E_PROTOCOL_ORDER");
             backgroundTasks.erase(task);
+            if (status == "completed" && !interimResult) ++queuedParentTurns;
             if (status != "completed") { failed = true; failureCode = "E_ENGINE"; }
             // Completion notification authorizes a subsequent parent model turn;
             // a second result without this boundary is still invalid.

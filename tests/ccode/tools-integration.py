@@ -108,7 +108,7 @@ def select_subagent_tool(tools):
     raise AssertionError("Actual engine did not advertise a supported subagent schema")
 
 
-def verify_subagent_execution(requests, received, tool_name):
+def verify_subagent_execution(requests, received, tool_name, *, background=False):
     assert requests and any(tool.get("name") == tool_name
         for tool in requests[0].get("tools", [])), "Subagent tool not discovered"
     assert "child-context-only-acceptance" not in json.dumps(requests[0]), "Child context preloaded"
@@ -126,6 +126,19 @@ def verify_subagent_execution(requests, received, tool_name):
                 parent_results.extend(block for block in content if isinstance(block, dict)
                     and block.get("type") == "tool_result"
                     and block.get("tool_use_id") == "acceptance_0")
+    if background:
+        assert set(received) == {"acceptance_0"}, "Missing or unexpected subagent launch result"
+        assert not received['acceptance_0'].get('is_error'), "Subagent launch failed"
+        notifications = []
+        for request in requests[max(child_indices) + 1:]:
+            if "child-context-only-acceptance" in json.dumps(request.get('system', [])):
+                continue
+            for message in request.get('messages', []):
+                if message.get('role') == 'user':
+                    notifications.append(json.dumps(message.get('content', '')))
+        assert any('<task-notification>' in content and 'child-result-only-acceptance' in content
+                   for content in notifications), "No post-child parent completion notification"
+        return
     assert any(not result.get("is_error") and "child-result-only-acceptance" in
         json.dumps(result.get("content")) for result in parent_results), "No post-child parent result request"
     assert set(received) == {"acceptance_0"}, "Missing or unexpected subagent result"
@@ -597,7 +610,7 @@ def check(executable, short_path=False, lifecycle=None, permission=None, workspa
             assert "tools-acceptance-complete" in result.stdout, result.stdout
             assert len(received) == len(plan), received
             if subagent:
-                verify_subagent_execution(requests, received, plan[0][0])
+                verify_subagent_execution(requests, received, plan[0][0], background=not subagent_foreground)
                 assert agent_path.read_bytes() == agent_bytes, "Subagent source modified"
                 assert not list(app_dir.rglob("*.jsonl")), "Subagent history leaked into program"
                 assert list(data.rglob("*.jsonl")), "No authoritative subagent session"

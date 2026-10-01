@@ -2136,3 +2136,14 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   新增固定 allowlist 事件順序投影，只輸出 init／task_started／task_notification／
   parent_assistant／child_assistant／result；不輸出事件內容或未知類型。
   TDD RED→GREEN；Python 112 項 109 pass／3 Windows-only skip。
+
+- `83d1983` / `36917417609`，job `110554697675` 的實際原生順序：
+  init→parent_assistant→task_started→child_assistant→task_notification→
+  parent_assistant→result→init→parent_assistant→result（exit 0）。完成通知在
+  第一個 result 之前，因此前一 pending-only 修復未涵蓋此序列。
+  新增 matched completed task 授權的一次 parent-turn init 邊界，保留同 session
+  校驗；任意 duplicate init／無授權重啟仍拒絕。C++ 新案例先 RED 後 GREEN。
+  背景 verifier 獨立要求 child 後的 parent model request 含 user completion
+  notification 與 child result marker，不接受只有 async launch metadata；Python
+  新案例 RED→GREEN。七組 C++、113 Python（110 pass／3 skip）通過。
+  該通知格式仍須 Windows integration 核實，不把本機 GREEN 當 A17 全量通過。

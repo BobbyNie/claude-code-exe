@@ -185,6 +185,23 @@ int main() {
     backgroundAgent.Feed(successResult);
     backgroundAgent.Finish();
     assert(backgroundAgent.complete && !backgroundAgent.failed);
+    // Actual native background sequence completes the task before result, then
+    // starts a new parent turn with init in the same stream/session.
+    ccode::EventReader queuedParent;
+    const auto agentInit = ccode::Json{{"type", "system"}, {"subtype", "init"},
+        {"session_id", "same"}, {"tools", {"Task"}}}.dump() + "\n";
+    queuedParent.Feed(agentInit);
+    queuedParent.Feed(tool("Agent", "bg2", ccode::Json::object()));
+    queuedParent.Feed(ccode::Json{{"type", "system"}, {"subtype", "task_started"},
+        {"task_id", "task2"}, {"tool_use_id", "bg2"}}.dump() + "\n");
+    queuedParent.Feed(ccode::Json{{"type", "system"}, {"subtype", "task_notification"},
+        {"task_id", "task2"}, {"status", "completed"}}.dump() + "\n");
+    queuedParent.Feed(successResult);
+    queuedParent.Feed(agentInit);
+    queuedParent.Feed(successResult);
+    queuedParent.Finish();
+    assert(queuedParent.complete && queuedParent.session == "same");
+    ExpectError(queuedParent, agentInit, "E_PROTOCOL_ORDER");
     // A notification without a registered task cannot reopen a completed turn.
     ccode::EventReader unsolicitedTask;
     unsolicitedTask.Feed(init);
