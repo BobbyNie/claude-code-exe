@@ -43,3 +43,43 @@ test('rejects trailing DER bytes even when their hash is pinned', () => {
   assert.equal(verifyManifestSignature({manifest, signature, publicKeyDer: key,
     trustedPin: createHash('sha256').update(key).digest('hex')}), false);
 });
+
+import {mkdtempSync, writeFileSync, rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {spawnSync} from 'node:child_process';
+
+test('public CLI verifies real files and emits only neutral evidence', () => {
+  const root = mkdtempSync(join(tmpdir(), 'ccode-signature-'));
+  try {
+    const paths = ['manifest.json', 'manifest.sig', 'signer.der'].map(p => join(root, p));
+    [manifest, signature, publicKeyDer].forEach((bytes, i) => writeFileSync(paths[i], bytes));
+    const cli = fileURLToPath(new URL('../../scripts/ccode/verify-manifest-signature.mjs', import.meta.url));
+    const result = spawnSync(process.execPath, [cli, ...paths, trustedPin], {encoding: 'utf8'});
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout), {schema: 1, status: 'passed',
+      manifestSha256: createHash('sha256').update(manifest).digest('hex')});
+  } finally { rmSync(root, {recursive: true, force: true}); }
+});
+
+test('public CLI fails closed without raw paths, contents or errors', () => {
+  const root = mkdtempSync(join(tmpdir(), 'private-signature-path-'));
+  try {
+    const paths = ['manifest.json', 'manifest.sig', 'signer.der'].map(p => join(root, p));
+    [manifest, signature, publicKeyDer].forEach((bytes, i) => writeFileSync(paths[i], bytes));
+    const cli = fileURLToPath(new URL('../../scripts/ccode/verify-manifest-signature.mjs', import.meta.url));
+    const calls = [[...paths, '0'.repeat(64)], [root, paths[1], paths[2], trustedPin],
+                   [join(root, 'missing'), paths[1], paths[2], trustedPin], []];
+    writeFileSync(paths[1], Buffer.alloc(65));
+    calls.push([...paths, trustedPin]);
+    for (const args of calls) {
+      const result = spawnSync(process.execPath, [cli, ...args], {encoding: 'utf8'});
+      assert.equal(result.status, 2);
+      assert.equal(result.stderr, '');
+      assert.deepEqual(JSON.parse(result.stdout),
+        {schema: 1, status: 'error', code: 'E_MANIFEST_SIGNATURE'});
+      assert.equal(result.stdout.includes(root), false);
+    }
+  } finally { rmSync(root, {recursive: true, force: true}); }
+});

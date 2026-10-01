@@ -2260,3 +2260,13 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   launcher/update fail-closed gate、固定 Windows 驗證依賴及實機證據。
   不給 ccode.exe 新增 Node 執行需求，不宣稱 A20 已通過；下一步須
   接入完整候選重驗及簽章拒絕／回退矩陣，不能以函式測試代替放行。
+
+- A20 工程 CLI：verify-manifest-signature.mjs 接收 manifest／detached sig／
+  canonical SPKI DER／獨立 trust pin 四個參數。成功只輸出已驗證 bytes
+  的 manifestSha256；拒絕只輸出 E_MANIFEST_SIGNATURE，exit 2，不洩漏
+  path／raw crypto errors。regular-file checks、開啟後 identity check 及
+  maximum+1 bounded read 拒絕 link／directory／oversize，不改寫輸入。
+  公開命令真實檔案測試先 RED（CLI 缺少），實作後 GREEN；六組 Node
+  測試通過，含缺檔／directory／過大 signature／無效 pin／缺參數。
+  尚未測到 Windows reparse/race 全矩陣，不宣稱抗任意並行替換；仍須
+  固定 dependency、candidate inspect 整合、啟動 gate 及 Windows 11 證據。
