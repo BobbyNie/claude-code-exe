@@ -60,6 +60,19 @@ class TlsProbeTests(unittest.TestCase):
                 "type": kind, "is_error": False, "result": "certificate connection error"}]),
                 {"certificate_text": False, "connection_error_text": False})
 
+    def test_canonical_certificate_probe_requires_exact_failed_result(self):
+        message = "API Error: unable to verify the first certificate"
+        event = {"type": "result", "is_error": True, "result": message}
+        self.assertEqual(probe.canonical_certificate_result([event]),
+                         "UNABLE_TO_VERIFY_LEAF_SIGNATURE")
+        for change in ({"type": "assistant"}, {"is_error": False},
+                       {"is_error": 1}, {"result": message + " private-token"},
+                       {"result": "model says " + message}):
+            self.assertEqual(probe.canonical_certificate_result([dict(event, **change)]),
+                             "unmatched")
+        self.assertEqual(probe.canonical_certificate_result([None, event, event]),
+                         "UNABLE_TO_VERIFY_LEAF_SIGNATURE")
+
     def test_probe_refuses_wrong_size_or_non_windows_payload_metadata(self):
         import hashlib
         payload = b'MZ-fixture'

@@ -2395,3 +2395,16 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   這只證明前端產生的環境 block 不包含該已知降級，不證明原生 engine
   全部 TLS 路徑採用 Node 語義，也不修復 TLS error 分類或替代 Win11
   實機不信任／過期憑證與企業 CA 矩陣。未更改核准 CA 或 proxy 設定。
+
+- TLS 調查新證據：run 36928402551／7164749，新版 job
+  110591327747 的 native probe 實際回報 certificate_text=true、
+  connection_error_text=false、structured_tls_code=false、error_result=true、
+  result_text=true、success_subtype=true，HTTP=0、exit=1。只證明
+  失敗結果文字含憑證詞彙，不證明精確錯誤碼或憑證拒絕。
+- 下一步診斷 inventory 採固定完整訊息精確匹配，僅對 result 且
+  is_error 為布林 true 生效，輸出固定 code 或 unmatched；文字前後
+  插入 prompt/token、模型事件、成功結果與數字 1 不接受。欄位標示
+  canonical_certificate_message_hint_not_tls_evidence，不接入正式
+  frontend/gateway 分類。inventory 為調查假設，尚非已觀察原生契約。
+  測試先 RED（缺函式）後 GREEN；probe 八項，完整 Python 126
+  （122 pass／4 Windows skip），diff-check 通過。待遠端確認精確匹配。

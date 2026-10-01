@@ -78,6 +78,28 @@ def summarize_failure_text(events):
     return flags
 
 
+def canonical_certificate_result(events):
+    """Exact-message investigation inventory, not a production classifier."""
+    inventory = {
+        "API Error: unable to verify the first certificate": "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+        "API Error: unable to get local issuer certificate": "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
+        "API Error: self signed certificate": "DEPTH_ZERO_SELF_SIGNED_CERT",
+        "API Error: self-signed certificate": "DEPTH_ZERO_SELF_SIGNED_CERT",
+        "API Error: self signed certificate in certificate chain": "SELF_SIGNED_CERT_IN_CHAIN",
+        "API Error: self-signed certificate in certificate chain": "SELF_SIGNED_CERT_IN_CHAIN",
+        "API Error: certificate has expired": "CERT_HAS_EXPIRED",
+        "API Error: certificate verification failed": "CERTIFICATE_VERIFY_FAILED",
+    }
+    matches = set()
+    for event in events:
+        if (isinstance(event, dict) and event.get("type") == "result" and
+                event.get("is_error") is True and isinstance(event.get("result"), str)):
+            code = inventory.get(event["result"])
+            if code:
+                matches.add(code)
+    return next(iter(matches)) if len(matches) == 1 else "unmatched"
+
+
 def verify_payload(payload, metadata):
     if (metadata.get('platform') != 'windows' or metadata.get('architecture') != 'x64'
             or metadata.get('engineSize') != len(payload)
@@ -330,6 +352,7 @@ def probe(executable):
             print(json.dumps({'native_tls_probe': summarize_events(events),
                 'result_shape': summarize_result_shape(events),
                 'failure_text_hints_not_tls_evidence': summarize_failure_text(events),
+                'canonical_certificate_message_hint_not_tls_evidence': canonical_certificate_result(events),
                 'engine_version': metadata['engineVersion'], 'exit_code': result.returncode,
                 'connections': endpoint.connections, 'http_requests': endpoint.http_requests,
                 'invalid_json_lines': invalid_lines, 'stderr_present': bool(result.stderr)}))
