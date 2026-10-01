@@ -13,6 +13,12 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
+def profile_bytes(folder):
+    return {path.relative_to(folder).as_posix(): path.read_bytes()
+            for path in folder.rglob("*") if path.is_file() and
+            path.relative_to(folder).as_posix() not in ("frontend.lock", "metadata.lock")}
+
+
 @contextmanager
 def deny_pointer_replacement(pointer):
     """Real Windows sharing violation: allow reads/writes, forbid delete/rename."""
@@ -236,10 +242,6 @@ def verify(executable, previous_executable=None):
         assert has_history(continued, ["legacy-resume-marker-7391", first, second]), "Continue lost saved turns"
         assert all(path.read_bytes() == saved for path, saved in originals.items()), "Legacy source changed"
         print("PASS: restart and continue load both saved turns without modifying legacy source")
-        def profile_bytes(folder):
-            return {path.relative_to(folder).as_posix(): path.read_bytes()
-                    for path in folder.rglob("*") if path.is_file() and path.name != "frontend.lock"}
-
         active_before = profile_bytes(profile)
         backup = subprocess.run([str(executable), "--snapshot-profile"], cwd=executable.parent,
                                 env=env, capture_output=True, text=True, encoding="utf-8", timeout=30)

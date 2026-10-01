@@ -10,6 +10,20 @@ spec.loader.exec_module(resume)
 
 
 class PreparationFixtureTests(unittest.TestCase):
+    def test_snapshot_comparison_excludes_only_root_operational_locks(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'history').mkdir()
+            for name in ('frontend.lock', 'metadata.lock', 'history/frontend.lock',
+                         'history/metadata.lock', 'history/session.jsonl'):
+                (root / name).write_bytes(b'preserve-exact-bytes')
+            self.assertEqual(resume.profile_bytes(root), {
+                'history/frontend.lock': b'preserve-exact-bytes',
+                'history/metadata.lock': b'preserve-exact-bytes',
+                'history/session.jsonl': b'preserve-exact-bytes',
+            })
+
     def test_standalone_preparation_includes_invalid_history_for_preflight(self):
         import tempfile
         with tempfile.TemporaryDirectory() as directory:
