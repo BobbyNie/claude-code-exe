@@ -2184,3 +2184,11 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   （GREEN）；未以 saved audit 或 hash 一致取代語義驗證。企業 11 項通過，
   完整 Python 115 項（112 pass／3 Windows-only skip）通過，diff-check 通過。
   不把 synthetic 候選重驗成功當成簽名、合法通知或 Win11 實機驗收證據。
+
+- A19 診斷代碼隱私加固：先 RED 證明格式合法但未知的
+  E_PRIVATE_TOKEN_12345 被直接輸出。NeutralErrorCode 改為固定產品代碼
+  白名單，未知代碼與帶私密 suffix 的已知代碼均降為 E_LOCAL；已知代碼仍
+  去除 colon 後詳細內容。FailureDiagnostic 負例確認 errorCode／category
+  降級且序列化不含 PRIVATE_TOKEN。七組 C++ 通過；Python 115 項
+  （112 pass／3 Windows-only skip）通過，diff-check 通過。
+  此項只補強產生器，不能取代正式 Windows 11 x64 故障矩陣的實跑 JSON。

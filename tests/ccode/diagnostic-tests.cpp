@@ -9,6 +9,8 @@ int main() {
     assert(NeutralErrorCode("E_SESSION_BUSY") == "E_SESSION_BUSY");
     assert(NeutralErrorCode("private C:\\Users\\person\\secret.txt") == "E_LOCAL");
     assert(NeutralErrorCode("E_bad: secret") == "E_LOCAL");
+    assert(NeutralErrorCode("E_PRIVATE_TOKEN_12345: hidden") == "E_LOCAL");
+    assert(NeutralErrorCode("E_GATEWAY_TLS_PRIVATE_HOST: hidden") == "E_LOCAL");
     assert(DiagnosticCategory("E_GATEWAY_TLS") == "network");
     assert(DiagnosticCategory("E_PROTOCOL_JSON") == "protocol");
     assert(DiagnosticCategory("E_MISSING_RESULT") == "protocol");
@@ -42,6 +44,10 @@ int main() {
             {"credentialsCaptured", false}
         }}
     }));
+    const auto unknown = FailureDiagnostic("E_PRIVATE_TOKEN_12345", 64, operation);
+    assert(unknown["errorCode"] == "E_LOCAL");
+    assert(unknown["category"] == "local");
+    assert(unknown.dump().find("PRIVATE_TOKEN") == std::string::npos);
     const auto encoded = report.dump();
     for (const auto* forbidden : {"do-not-record", "private", "Users", "token="})
         assert(encoded.find(forbidden) == std::string::npos);
