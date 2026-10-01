@@ -1657,3 +1657,38 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - schema 1 僅記錄 `product=ccode`、Windows/x64、status、隨機 UUID v4 operation ID、中性 `E_*`、category、exit code，並把 arguments/environment values/prompt or content/credentials 四項 captured flag 固定為 false。`NeutralErrorCode` 不保存冒號後訊息；非核准格式降級為 `E_LOCAL`，因此 token、prompt、使用者路徑及 raw exception 不進報告。
 - `scripts/ccode/test-windows.ps1` 以假 token、敏感 prompt 與私有 test root 觸發缺 gateway 設定，要求 exit 64、`E_GATEWAY`／network、可解析 operation ID、所有 privacy flag 為 false且三類敏感字串不存在；再以既有 sentinel 驗證不覆寫及主要 exit code 不被診斷寫入錯誤遮蔽。
 - 本輪本地回歸為 Python 66 項（65 通過、1 項 Windows process/thread API 專用跳過）及七組 C++17 native/profile/environment/frontend/session/permission/diagnostic 全通過；MinGW 在補入其缺少的既有 MSVC `BCRYPT_SHA256_ALG_HANDLE` pseudo-handle define 後可編譯 `launcher.cpp`，只作語法補充證據。Windows 11 x64 實機尚未執行，GitHub Actions 最新 run 仍因 account payment／spending limit 在 0 steps 前被阻擋，因此 A19 仍為部分，不是放行。
+
+## 2026-10-01：Actions 恢復執行與 Windows fixture 修正
+
+- 舊 run `36209274280` 的 payment／spending-limit 阻擋屬歷史證據。
+  run `36877451807`（`7e641402da2a092f6902250c1092f1277cab8ba1`）
+  已實際執行兩引擎建置及測試，不能再把目前失敗歸因於額度。
+  這只證明 runner 能執行，不宣稱已核實帳戶 billing 餘額或未来可用額度。
+- `4e31750` 固定 workflow 測試 UTF-8 並保留 ZIP 原始惡意路徑。
+  `36880031652` 已不見原 CP1252 解碼錯誤，但仍有 ZIP `3 != 4`；
+  因此該切片不能視為 ZIP 安全驗收完成。
+- `12aa402` 進一步修正 ZIP 讀取端：審核 `ZipInfo.orig_filename`，
+  不使用 Windows 已正規化的 `filename`。新增模擬讀取端正規化的
+  RED→GREEN 回歸，惡意反斜線必須拒絕、不得開啟內容；完整本機
+  Python 70 項（69 通過、1 Windows API 跳過）。仍待該 SHA 的 Windows 結果。
+- run `36880680854`（`83b11dbfdfcd59c1c41f78d24f037e58ee7d17fa`）
+  已完成且整體失敗。兩引擎的建置、actual engine tools、workspace aliases、
+  `Reject tampered embedded payload` 步驟成功；兩 workspace-boundary jobs 成功。
+  這確認 `83b11db` endpoint 計數修正後該完整性步驟能通過，不代表 A20 全量通過。
+- 同一 run 的 gateway 日誌：unreachable、401、429、截斷及語義 EOF 案例通過，
+  但 TLS 未觀察到失敗 handshake；native Python 測試另有一個 TLS fixture
+  失敗及 ZIP 路徑失敗。不得略過 TLS、關閉憑證驗證或以非零退出代替握手證據。
+- 同一 run 的 concurrency：新 session identity 與同 session 第二寫入者
+  提前拒絕通過；不同 session 同時到達 API 仍失敗。`25ca92a` 增加
+  請求數、收尾後退出碼及 stdout／stderr 存在性證據，不打印原始內容，
+  不放寬「任何回應釋放前兩個 session 都已到達」條件；本機 RED→GREEN，
+  Python 71 項（70 通過、1 跳過）。Windows 結果尚未確認。
+- 同一 run 的 cross-version 已通過候選精確拷貝、真實引擎候選續接及
+  active／backup bytes 保全，後於來源變動拒絕的 candidate bytes 比較失敗。
+  launcher 在來源驗證前建立 `candidate/profile/frontend.lock`；
+  `4f9ed73` 對整個 candidate 使用精確的 `profile/frontend.lock`／
+  `profile/metadata.lock` 排除，仍比較 candidate.json 及其他全部 bytes，
+  其他位置同名檔不得排除。新增 RED→GREEN 回歸；Python 72 項
+  （71 通過、1 跳過）。仍待 Windows 確認，不能宣稱跨版本全量成功。
+- 上述證據均非乾淨 Windows 11 x64 普通帳戶實機證據；A01–A20 的外部
+  gateway、端點政策、核准通知／簽署者、斷網及試運行門檻仍保留，未放行。
