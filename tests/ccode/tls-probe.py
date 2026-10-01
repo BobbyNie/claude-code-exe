@@ -3,6 +3,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import ssl
 from pathlib import Path
 import subprocess
 import sys
@@ -318,7 +319,7 @@ def run_contained(args, *, cwd, env, input, timeout):
             kernel.CloseHandle(job)
 
 
-def probe(executable):
+def probe(executable, *, tls12_only=False):
     if sys.platform != 'win32':
         raise RuntimeError('Windows native diagnostic probe required')
     integrity = load_fixture('probe_integrity', 'payload-integrity.py')
@@ -337,14 +338,15 @@ def probe(executable):
         for storage in ('roaming', 'local', 'temp'):
             (root / storage).mkdir()
         env = probe_environment(os.environ, root)
-        with gateway.untrusted_tls_endpoint() as endpoint:
+        with gateway.untrusted_tls_endpoint(
+                maximum_version=ssl.TLSVersion.TLSv1_2 if tls12_only else None) as endpoint:
             env['ANTHROPIC_BASE_URL'] = f'https://127.0.0.1:{endpoint.server_port}'
             try:
                 result = run_contained([str(engine), '--print', '--output-format', 'stream-json',
                     '--verbose', '--tools', '', '--max-turns', '1', '--no-session-persistence'],
                     input='fixture-native-tls-probe', cwd=workspace, env=env, timeout=30)
             except subprocess.TimeoutExpired:
-                print(json.dumps({'native_tls_probe': 'timeout'}))
+                print(json.dumps({'native_tls_probe': 'timeout', 'tls12_only': tls12_only}))
                 return
             events = []
             invalid_lines = 0
@@ -353,7 +355,7 @@ def probe(executable):
                     events.append(json.loads(line))
                 except json.JSONDecodeError:
                     invalid_lines += 1
-            print(json.dumps({'native_tls_probe': summarize_events(events),
+            print(json.dumps({'native_tls_probe': summarize_events(events), 'tls12_only': tls12_only,
                 'result_shape': summarize_result_shape(events),
                 'failure_text_hints_not_tls_evidence': summarize_failure_text(events),
                 'canonical_certificate_message_hint_not_tls_evidence': canonical_certificate_result(events),
@@ -366,3 +368,4 @@ def probe(executable):
 
 if __name__ == '__main__':
     probe(Path(sys.argv[1]).resolve())
+    probe(Path(sys.argv[1]).resolve(), tls12_only=True)

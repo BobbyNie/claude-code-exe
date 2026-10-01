@@ -2546,3 +2546,19 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   Full local Python: 133 tests, 5 Windows-only skips. Added Windows-only test
   against the actual executing Python image; its execution remains pending CI.
   Real failing frontend occupancy evidence and Win11 acceptance remain pending.
+
+### Separate TLS 1.2 native probe; original gate unchanged
+
+- 29c359e / run 36939129641 completed/failure: both Python jobs passed
+  133 tests with one skip, including the actual Windows Restart Manager test.
+  Portable contracts passed without reproducing sharing failure; no occupancy
+  failure snapshot was obtained. Both main jobs still failed the TLS gate;
+  cross-version and workspace-boundary succeeded.
+- Added a separate native TLS probe capped at TLS 1.2, alongside the original
+  default negotiation probe, to investigate handshake timing without changing
+  the acceptance gate or production error classifier. Results identify the
+  fixed tls12_only boolean; neither resets nor handshake completion prove trust.
+- TDD: new real SSL client test failed on missing maximum_version option, then
+  passed: untrusted client rejected and explicitly trusted client negotiated
+  TLS 1.2. Full local Python 134 tests / 5 Windows-only skips; diff-check passed.
+  Actual Windows engine comparison remains pending; A19 remains incomplete.

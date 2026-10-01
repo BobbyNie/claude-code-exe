@@ -24,12 +24,14 @@ def classify_tls_prefix(prefix):
 
 
 @contextmanager
-def untrusted_tls_endpoint():
+def untrusted_tls_endpoint(*, maximum_version=None):
     """Loopback-only TLS fixture; the checked-in key is public test data, never trusted by the engine."""
     fixtures = Path(__file__).parent / "fixtures"
     certificate = fixtures / "untrusted-test-cert.pem"
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(certificate, fixtures / "untrusted-test-key.pem")
+    if maximum_version is not None:
+        context.maximum_version = maximum_version
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *_):

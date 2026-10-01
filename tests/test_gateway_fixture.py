@@ -17,6 +17,20 @@ spec.loader.exec_module(fixture)
 
 
 class GatewayFixtureTests(unittest.TestCase):
+    def test_tls12_probe_endpoint_rejects_untrusted_client_and_negotiates_only_tls12(self):
+        with fixture.untrusted_tls_endpoint(maximum_version=ssl.TLSVersion.TLSv1_2) as endpoint:
+            with socket.create_connection(endpoint.address, timeout=2) as connection:
+                with self.assertRaises(ssl.SSLCertVerificationError):
+                    ssl.create_default_context().wrap_socket(connection, server_hostname='127.0.0.1')
+            self.assertTrue(endpoint.handshake_failed.wait(2))
+            trusted = ssl.create_default_context(cafile=str(endpoint.certificate))
+            with socket.create_connection(endpoint.address, timeout=2) as connection:
+                with trusted.wrap_socket(connection, server_hostname='127.0.0.1') as secure:
+                    self.assertEqual(secure.version(), 'TLSv1.2')
+                    secure.sendall(b'GET / HTTP/1.0\r\nHost: localhost\r\n\r\n')
+                    self.assertIn(b'503', secure.recv(4096))
+            self.assertEqual(endpoint.tls_versions, {'TLSv1.2': 1, 'TLSv1.3': 0, 'other': 0})
+
     def test_unreachable_endpoint_reserves_port_without_accepting_connections(self):
         with fixture.unreachable_endpoint() as address:
             self.assertEqual(address[0], "127.0.0.1")
