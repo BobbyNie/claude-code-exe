@@ -43,6 +43,12 @@ class SubagentFixtureTests(unittest.TestCase):
             'emitted_task': False, 'emitted_unregistered': True})
         self.assertNotIn('private', str(fixture.summarize_subagent_registry(events)))
 
+    def test_native_order_summary_does_not_expose_event_content(self):
+        events = [{'type': 'assistant', 'message': {'content': 'private'}},
+                  {'type': 'result'}, {'type': 'assistant'}, {'type': 'result'}]
+        self.assertEqual(fixture.summarize_subagent_order(events),
+                         {'result_count': 2, 'assistant_after_result': True})
+
     def test_select_subagent_tool_requires_actual_schema_not_name_only(self):
         for name in ('Agent', 'Task'):
             tools = [{'name': name, 'input_schema': {'properties': {

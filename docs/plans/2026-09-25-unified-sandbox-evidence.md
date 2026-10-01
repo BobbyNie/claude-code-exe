@@ -2090,3 +2090,12 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   尚須後續 Windows 真實 frontend 子代理成功證據；原生診斷不替代 A17 驗收。
   同一 job 的 gateway TLS 仍失敗：兩次 tls-record、transport errno 10054、HTTP 0，
   不足以證明憑證拒絕；A18 不標記通過。
+
+- `73b1d9c` / `36909430035` 已完成但失敗：2.1.282 job `110528094167`
+  的子代理已不報 E_TOOL_UNKNOWN，仍以 E_PROTOCOL_ORDER 退出 65；收到的原生
+  tool_result 是背景代理啟動 metadata，不是子代理結果，因此不得將啟動等同完成。
+  兩版本子代理 gate 均失敗。新增唯讀、固定欄位的原生事件順序摘要（result_count、
+  assistant_after_result），用於確認背景事件／result 的實際順序，不放寬 frontend
+  complete 後拒絕事件的規則，也不把背景啟動 metadata 當成功結果。
+  該 run cross-version 與兩個 workspace-boundary job 成功；2.1.221 payload gate
+  另有失敗，尚需獨立定位；TLS gate 仍失敗。整體不放行。

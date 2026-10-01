@@ -16,6 +16,20 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
+def summarize_subagent_order(events):
+    """Observe native lifecycle ordering without publishing message content."""
+    result_count = 0
+    assistant_after_result = False
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        if event.get('type') == 'result':
+            result_count += 1
+        elif event.get('type') == 'assistant' and result_count:
+            assistant_after_result = True
+    return {'result_count': result_count, 'assistant_after_result': assistant_after_result}
+
+
 def summarize_subagent_registry(events):
     """Fixed schema flags only: never expose prompts or unknown tool names."""
     registered = set()
@@ -514,6 +528,7 @@ def check(executable, short_path=False, lifecycle=None, permission=None, workspa
                     except json.JSONDecodeError:
                         invalid_lines += 1
                 print(json.dumps({'native_subagent_registry': summarize_subagent_registry(events),
+                    'native_subagent_order': summarize_subagent_order(events),
                     'exit_code': result.returncode, 'invalid_lines': invalid_lines}))
                 assert not handler_errors, 'Native subagent fixture handler failed'
                 return  # Diagnostic only; independent frontend acceptance follows.
