@@ -19,6 +19,14 @@ def profile_bytes(folder):
             path.relative_to(folder).as_posix() not in ("frontend.lock", "metadata.lock")}
 
 
+def profile_baseline(snapshot, relative):
+    """Scope a whole-data snapshot using the profile root operational-lock policy."""
+    prefix = relative.as_posix() + "/"
+    return {name[len(prefix):]: content for name, content in snapshot.items()
+            if name.startswith(prefix) and name[len(prefix):] not in
+            ("frontend.lock", "metadata.lock")}
+
+
 def candidate_bytes(folder):
     """Compare the whole candidate, excluding only its profile's operational locks."""
     return {path.relative_to(folder).as_posix(): path.read_bytes()
@@ -868,9 +876,7 @@ def verify(executable, previous_executable=None):
             assert profile_bytes(relocated_directory) == program_before
             for preserved in (next_profile, cross_preserved, old_data / "profile", cross_source):
                 relative = preserved.relative_to(old_data)
-                expected = {name[len(relative.as_posix()) + 1:]: content
-                    for name, content in data_before_move.items()
-                    if name.startswith(relative.as_posix() + "/")}
+                expected = profile_baseline(data_before_move, relative)
                 assert profile_bytes(cross_data / relative) == expected
             assert json.loads((cross_data / "active-profile.json").read_text(encoding="utf-8")) == final_pointer
             print("PASS: relocated external data root preserves workspace identity, actual resumed history, backups and program separation")

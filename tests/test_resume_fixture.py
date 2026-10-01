@@ -37,6 +37,15 @@ class PreparationFixtureTests(unittest.TestCase):
                 'profile/history/frontend.lock': b'exact',
             })
 
+    def test_relocated_profile_baseline_uses_same_root_lock_policy(self):
+        snapshot = {'saved/profile/frontend.lock': b'lock',
+                    'saved/profile/metadata.lock': b'lock',
+                    'saved/profile/history/frontend.lock': b'history',
+                    'saved/profile/session.jsonl': b'bytes',
+                    'other/session.jsonl': b'other'}
+        self.assertEqual(resume.profile_baseline(snapshot, Path('saved/profile')), {
+            'history/frontend.lock': b'history', 'session.jsonl': b'bytes'})
+
     def test_standalone_preparation_includes_invalid_history_for_preflight(self):
         import tempfile
         with tempfile.TemporaryDirectory() as directory:
