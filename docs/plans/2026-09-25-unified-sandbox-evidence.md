@@ -2382,3 +2382,16 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   lifecycle 10（9 pass／1 Windows skip），完整 Python 125
   （121 pass／4 Windows skip），diff-check 通過。
   此為格式拒絕契約，不構成 signer 核准、內建 gate 或 Win11 放行。
+
+- A18 繼承環境不得削弱憑證驗證：官方 nodejs/node 的 doc/api/cli.md
+  經 GitHub API 實讀，NODE_TLS_REJECT_UNAUTHORIZED=0 明確會停用
+  TLS certificate validation。BuildEnvironment 現在於繼承及 alias
+  展開後固定該值為 1，大小寫變體不能保留 0。BoundaryManifest 與
+  企業組裝器 canonical boundary 同步公開這項固定值；沒有隱藏原始
+  runtime 設定，也沒有改寫官方負載。
+  真實 BuildEnvironment 測試先 RED（繼承 lowercase=0），實作後
+  GREEN，同時核對公開 boundary；企業測試 18（17 pass／1 skip），
+  完整 Python 125（121 pass／4 Windows skip），diff-check 通過。
+  這只證明前端產生的環境 block 不包含該已知降級，不證明原生 engine
+  全部 TLS 路徑採用 Node 語義，也不修復 TLS error 分類或替代 Win11
+  實機不信任／過期憑證與企業 CA 矩陣。未更改核准 CA 或 proxy 設定。

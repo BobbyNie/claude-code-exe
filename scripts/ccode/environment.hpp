@@ -36,6 +36,8 @@ inline std::vector<std::wstring> BuildEnvironment(const std::vector<std::wstring
     put(L"TMP", (profile / L"temp").wstring());
     put(L"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", L"1");
     put(L"DISABLE_AUTOUPDATER", L"1");
+    // Inherited process settings must not disable HTTPS certificate validation.
+    put(L"NODE_TLS_REJECT_UNAUTHORIZED", L"1");
     // A failed request must return control, not replay work behind the frontend.
     // Apply after aliases so inherited settings cannot weaken this contract.
     put(L"CLAUDE_CODE_MAX_RETRIES", L"0");

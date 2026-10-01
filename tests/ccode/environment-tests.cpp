@@ -9,7 +9,7 @@ int main() {
         L"ANTHROPIC_AUTH_TOKEN=stale", L"C_SUBAGENT_MODEL=small",
         L"CLAUDE_CONFIG_DIR=C:\\wrong", L"=C:=C:\\project",
         L"C_MAX_RETRIES=10", L"C_RETRY_WATCHDOG=1",
-        L"C_DISABLE_NONSTREAMING_FALLBACK=0"
+        L"C_DISABLE_NONSTREAMING_FALLBACK=0", L"node_tls_reject_unauthorized=0"
     }, L"D:\\profile");
     auto has = [&](const std::wstring& value) {
         return std::find(env.begin(), env.end(), value) != env.end();
@@ -26,6 +26,8 @@ int main() {
     assert(has(L"CLAUDE_CODE_MAX_RETRIES=0"));
     assert(has(L"CLAUDE_CODE_RETRY_WATCHDOG=0"));
     assert(has(L"CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK=1"));
+    assert(has(L"NODE_TLS_REJECT_UNAUTHORIZED=1"));
+    assert(!has(L"node_tls_reject_unauthorized=0"));
 
     const auto boundary = ccode::BoundaryManifest();
     assert(boundary.at("schemaVersion") == 1);
@@ -45,6 +47,8 @@ int main() {
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC") == "1");
     assert(boundary.at("childRuntimeEnvironment").at("fixedValues").at(
         "CLAUDE_CODE_MAX_RETRIES") == "0");
+    assert(boundary.at("childRuntimeEnvironment").at("fixedValues").at(
+        "NODE_TLS_REJECT_UNAUTHORIZED") == "1");
     assert(boundary.at("childRuntimeEnvironment").at("originalRuntimeNamesPresent") == true);
     assert(boundary.at("childRuntimeEnvironment").at("processTreeNameFree") == false);
     assert(boundary.at("binaryMetadata").at("peResources").at(0).at("id") == 101);

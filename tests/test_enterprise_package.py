@@ -71,6 +71,7 @@ class EnterprisePackageTests(unittest.TestCase):
                     "CLAUDE_CODE_MAX_RETRIES": "0",
                     "CLAUDE_CODE_RETRY_WATCHDOG": "0",
                     "DISABLE_AUTOUPDATER": "1",
+                    "NODE_TLS_REJECT_UNAUTHORIZED": "1",
                 },
                 "originalRuntimeNamesPresent": True,
                 "processTreeNameFree": False,
