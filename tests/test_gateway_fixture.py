@@ -89,6 +89,14 @@ class GatewayFixtureTests(unittest.TestCase):
             self.assertTrue(error['errno'] is None or isinstance(error['errno'], int))
             self.assertEqual(set(error), {'kind', 'errno'})
 
+    def test_tls_prefix_classification_never_returns_received_content(self):
+        cases = [(b"\x16\x03\x01", "tls-record"),
+                 (b"\x16\x03\x03", "tls-record"),
+                 (b"GET /secret", "other"), (b"", "closed"),
+                 (b"\x16", "other"), (b"\x16\x02\x01", "other")]
+        for prefix, expected in cases:
+            self.assertEqual(fixture.classify_tls_prefix(prefix), expected)
+
     def test_transport_reset_requires_engine_tls_classification(self):
         failed = threading.Event()
         failed.set()

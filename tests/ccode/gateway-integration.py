@@ -14,6 +14,15 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
+def classify_tls_prefix(prefix):
+    """Coarse record-header observation only; never return peer bytes."""
+    if not prefix:
+        return "closed"
+    if len(prefix) >= 3 and prefix[0] == 22 and prefix[1] == 3 and prefix[2] <= 4:
+        return "tls-record"
+    return "other"
+
+
 @contextmanager
 def untrusted_tls_endpoint():
     """Loopback-only TLS fixture; the checked-in key is public test data, never trusted by the engine."""
@@ -40,6 +49,9 @@ def untrusted_tls_endpoint():
             self.connections += 1
             connection.settimeout(2)
             try:
+                # Peek without consuming bytes or retaining private peer content.
+                self.protocol_observations.append(
+                    classify_tls_prefix(connection.recv(3, socket.MSG_PEEK)))
                 return context.wrap_socket(connection, server_side=True), address
             except ssl.SSLError as error:
                 self.handshake_errors.append({"kind": "tls", "errno": error.errno})
@@ -60,6 +72,7 @@ def untrusted_tls_endpoint():
     server.handshake_failed = threading.Event()
     server.connections = 0
     server.handshake_errors = []
+    server.protocol_observations = []
     server.http_requests = 0
     worker = threading.Thread(target=server.serve_forever, daemon=True)
     worker.start()
@@ -168,6 +181,7 @@ def check_tls_rejection(executable):
                 "No failed TLS handshake observed from actual engine; " + json.dumps({
                     "connections": endpoint.connections,
                     "handshake_errors": endpoint.handshake_errors,
+                    "protocol_observations": endpoint.protocol_observations,
                     "http_requests": endpoint.http_requests,
                     "exit_code": result.returncode,
                     "neutral_diagnostics": tls_terminal_evidence(result.stdout + result.stderr),

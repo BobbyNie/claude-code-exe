@@ -2025,3 +2025,17 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   前一測試成功，不加 continue-on-error、不修改放行条件，Skill 不再被 MCP failure 隱藏。
 - workflow contract 先四個 missing gate RED，再 GREEN。完整 Python 103 tests：
   100 pass／3 Windows skip；diff-check pass。新 gate 的實際執行尚待 CI，仍不是 A17 通過。
+
+### 實跑 A17 證據與 TLS 協定觀測（2026-10-02）
+
+- run `36903350745` / SHA `27cc6d8` / job `110507652789`（2.1.282）完整日誌
+  已明確 PASS：MCP discovery／一次 invocation、未批准 MCP 零 invocation、Skill
+  正文後續請求載入、六工具、8.3、取消／崩潰清理、互動權限、payload 修復與
+  session writer 互斥。這是 hosted runner 的合成案例，不代替 Win11 普通帳戶、
+  subagents 或已批准第三方矩陣，不將 A17 整體標通過。
+- 同 job gateway TLS 仍 fail：兩次 transport errno 10054、HTTP 0，無可信 TLS
+  cause。新增 fixture 的三 byte MSG_PEEK 粗分類，只輸出 tls-record／other／closed，
+  不消耗或輸出原始 peer bytes、不改 engine 信任、代理或錯誤分類。短 prefix 的
+  other 不能證明非 TLS；tls-record 亦不證明憑證拒絕。驗收門檻保持不變。
+- 分類測試先 missing helper AttributeError RED；實作後完整 Python 104 tests：
+  101 pass／3 Windows-only skip。實際 Windows 協定觀測仍待推送後結果。
