@@ -2128,3 +2128,11 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   保留失敗。新增前後 result 案例先 RED（過早 complete）再 GREEN；未綁定 task
   與未知 notification 負例通過。七組 C++、Python 111 項（108 pass／3 skip）通過。
   尚須 Windows 實際 schema／背景 parent result 證據；不能以狀態機單元測試放行 A17。
+
+- `dd08f71` / `36915876558`，2.1.282 job `110549587640`：明示前景
+  PASS，預設背景仍 E_PROTOCOL_ORDER，退出 65。原生 lifecycle 計數仍顯示
+  一次啟動／完成通知與兩個 result，但計數不能證明通知相對 result 的順序。
+  現有 pending-task 狀態機尚未通過實際背景流程，不得記為已修復。
+  新增固定 allowlist 事件順序投影，只輸出 init／task_started／task_notification／
+  parent_assistant／child_assistant／result；不輸出事件內容或未知類型。
+  TDD RED→GREEN；Python 112 項 109 pass／3 Windows-only skip。

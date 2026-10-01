@@ -16,6 +16,22 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
+def subagent_lifecycle_sequence(events):
+    sequence = []
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        kind = event.get('type')
+        if kind == 'system' and event.get('subtype') in ('init', 'task_started', 'task_notification'):
+            sequence.append(event['subtype'])
+        elif kind == 'assistant':
+            sequence.append('child_assistant' if isinstance(event.get('parent_tool_use_id'), str)
+                            else 'parent_assistant')
+        elif kind == 'result':
+            sequence.append('result')
+    return sequence
+
+
 def summarize_subagent_lifecycle(events):
     counts = dict.fromkeys(('task_started', 'task_notification', 'completed_notification',
                             'failed_notification', 'child_assistant'), 0)
@@ -561,6 +577,7 @@ def check(executable, short_path=False, lifecycle=None, permission=None, workspa
                 print(json.dumps({'native_subagent_registry': summarize_subagent_registry(events),
                     'native_subagent_order': summarize_subagent_order(events),
                     'native_subagent_lifecycle': summarize_subagent_lifecycle(events),
+                    'native_subagent_sequence': subagent_lifecycle_sequence(events),
                     'exit_code': result.returncode, 'invalid_lines': invalid_lines}))
                 assert not handler_errors, 'Native subagent fixture handler failed'
                 return  # Diagnostic only; independent frontend acceptance follows.

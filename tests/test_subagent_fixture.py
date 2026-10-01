@@ -43,6 +43,15 @@ class SubagentFixtureTests(unittest.TestCase):
             'emitted_task': False, 'emitted_unregistered': True})
         self.assertNotIn('private', str(fixture.summarize_subagent_registry(events)))
 
+    def test_lifecycle_sequence_preserves_order_without_raw_names(self):
+        events = [{'type': 'system', 'subtype': 'init'},
+                  {'type': 'assistant', 'parent_tool_use_id': 'private'},
+                  {'type': 'result', 'result': 'private'},
+                  {'type': 'system', 'subtype': 'task_notification'},
+                  {'type': 'private-event'}]
+        self.assertEqual(fixture.subagent_lifecycle_sequence(events),
+                         ['init', 'child_assistant', 'result', 'task_notification'])
+
     def test_native_task_lifecycle_reports_only_allowlisted_event_shapes(self):
         events = [{'type': 'system', 'subtype': 'task_started', 'task_id': 'private-id'},
                   {'type': 'system', 'subtype': 'task_notification', 'status': 'completed',
