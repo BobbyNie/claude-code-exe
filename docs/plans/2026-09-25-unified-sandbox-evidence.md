@@ -3155,3 +3155,15 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   131073-byte payload, checking resulting exact bytes through a locked reader.
   Portable native GREEN, MinGW syntax and diff-check pass; Windows fixture and
   real-engine GREEN remain pending. No change to sharing or final verification.
+
+### 2026-10-02 — bounded native fixture exception reporting
+
+- Run36974883708 atb035cf2 completed failure: both native test executables
+  exited -1073740791 without a checkpoint/code. Terminator fix effectiveness
+  is not proven. The new long Unicode fixture is still unverified.
+- Native suite now has a top-level exception boundary. Only bounded80-character
+  E_ codes containing uppercase letters/digits/underscore are printed; all other
+  exception messages become E_TEST_NATIVE_EXCEPTION (unknown exceptions a fixed
+  UNKNOWN code). No raw filesystem exception/path is logged and tests still fail.
+- Local native suite and diff-check pass. This is diagnostic progress against
+  actual CI RED, not recovery or any acceptance completion claim.

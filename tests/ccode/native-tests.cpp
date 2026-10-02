@@ -12,7 +12,7 @@
 #include <cassert>
 #include <iostream>
 
-int main() {
+int RunNativeTests() {
     using namespace ccode;
     assert(std::string(RuntimePayloadOpenError(2)) == "E_RUNTIME_MISSING");
     assert(std::string(RuntimePayloadOpenError(3)) == "E_RUNTIME_PATH");
@@ -354,4 +354,19 @@ int main() {
 
     std::cout << "ccode native isolation tests passed\n";
     return 0;
+}
+
+int main() {
+    try { return RunNativeTests(); }
+    catch (const std::exception& error) {
+        const std::string code = error.what();
+        // Only fixed neutral library codes may escape; filesystem exceptions
+        // and other raw diagnostics can contain private fixture paths.
+        if (code.size() <= 80 && code.rfind("E_", 0) == 0 &&
+            code.find_first_not_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789") == std::string::npos)
+            std::cerr << code << std::endl;
+        else std::cerr << "E_TEST_NATIVE_EXCEPTION" << std::endl;
+        return 1;
+    }
+    catch (...) { std::cerr << "E_TEST_NATIVE_UNKNOWN" << std::endl; return 1; }
 }
