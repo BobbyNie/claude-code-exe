@@ -55,6 +55,24 @@ public:
         if (!ManifestFileMatchesObservation(entry, Size(), Sha256()))
             throw std::runtime_error("E_MANIFEST_FILE_MISMATCH");
     }
+    std::string ReadRange(uint64_t offset, size_t count) {
+        if (count > 4096 || offset > size_ || count > size_ - offset ||
+            offset > uint64_t(INT64_MAX))
+            throw std::runtime_error("E_MANIFEST_FILE_LIMIT");
+        LARGE_INTEGER position{};
+        position.QuadPart = static_cast<LONGLONG>(offset);
+        if (!SetFilePointerEx(handle_, position, nullptr, FILE_BEGIN))
+            throw std::runtime_error("E_MANIFEST_FILE");
+        std::string bytes(count, '\0');
+        size_t consumed = 0;
+        while (consumed < count) {
+            DWORD read = 0;
+            if (!ReadFile(handle_, &bytes[consumed], static_cast<DWORD>(count - consumed), &read, nullptr) || !read)
+                throw std::runtime_error("E_MANIFEST_FILE");
+            consumed += read;
+        }
+        return bytes;
+    }
     std::string ReadBounded(size_t maximum) {
         if (size_ > maximum) throw std::runtime_error("E_MANIFEST_FILE_LIMIT");
         LARGE_INTEGER start{};

@@ -2,6 +2,7 @@
 #include "locked-candidate-directories.hpp"
 #include "locked-candidate-file.hpp"
 #include "authenticated-candidate-files.hpp"
+#include "pe-image-contract.hpp"
 #ifdef _WIN32
 #include <set>
 
@@ -15,6 +16,7 @@ class LockedCandidatePackage {
     nlohmann::json manifest_;
     std::vector<std::unique_ptr<LockedCandidateDirectories>> staticDirectories_;
     std::unique_ptr<AuthenticatedCandidateFiles<LockedCandidateFile>> files_;
+    LockedCandidateFile* executable_ = nullptr; // Owned by files_, never reopened for header reads.
     void CheckInventory() const {
         std::set<std::filesystem::path> expected{
             std::filesystem::path(L"manifest.json"), std::filesystem::path(L"docs"),
@@ -49,7 +51,9 @@ public:
         files_ = std::make_unique<AuthenticatedCandidateFiles<LockedCandidateFile>>(
             bytes, signature, publicKeyDer, compiledTrustedPin,
             [&](const std::string& relative) {
-                return std::make_unique<LockedCandidateFile>(root_ / std::filesystem::u8path(relative));
+                auto file = std::make_unique<LockedCandidateFile>(root_ / std::filesystem::u8path(relative));
+                if (relative == "ccode.exe") executable_ = file.get();
+                return file;
             });
         CheckInventory();
         VerifyEmbeddedResources();
@@ -57,6 +61,10 @@ public:
     LockedCandidatePackage(const LockedCandidatePackage&) = delete;
     LockedCandidatePackage& operator=(const LockedCandidatePackage&) = delete;
     void VerifyEmbeddedResources() const {
+        if (!executable_) throw std::runtime_error("E_MANIFEST_PE");
+        RequireAmd64PeImage(executable_->Size(), [&](uint64_t offset, size_t count) {
+            return executable_->ReadRange(offset, count);
+        });
         struct Image {
             HMODULE handle;
             ~Image() { if (handle) FreeLibrary(handle); }

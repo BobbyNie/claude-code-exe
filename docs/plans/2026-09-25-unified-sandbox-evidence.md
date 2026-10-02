@@ -2880,3 +2880,23 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   Approved compiled signer policy, PE machine/header validation and final Win11
   ordinary-account acceptance remain open. Snapshot enumeration still does not
   prevent extra-child insertion after enumeration.
+
+### Bounded AMD64 executable header gate
+
+- Missing PE-contract header RED -> portable native GREEN. Header gate requires
+  MZ/PE signatures, bounded nonnegative e_lfanew, AMD64 machine, PE32+ optional
+  magic, executable/non-DLL characteristics and bounded optional/section headers.
+  Rejects ARM64, PE32, DLL, truncated header, missing optional header and section
+  table beyond EOF. It is not a full PE parser; OS data-only loading remains.
+- Added retained-handle ReadRange (maximum 4096 bytes, overflow-safe recorded-size
+  bounds, exact reads). Windows-target missing-method RED observed; runtime range
+  assertions await CI. Candidate now checks headers on the already-held executable
+  handle before loading resources; it does not reopen a path for these reads.
+- Added signed ARM64 fixture with matching executable hash/inventory: candidate
+  must reject with E_MANIFEST_PE before resource loading. Windows behavior pending.
+  Local native/Python135 (5 Windows-only skips)/diff-check pass.
+- Prior real-resource run 36967369111 reports both build steps success; these
+  execute actual built-PE candidate/resource/provenance rejection tests. Whole
+  workflow remains in progress; this is Windows Server supplemental evidence,
+  not Windows 11 ordinary-account acceptance. Startup/update enforcement and
+  approved signer policy remain incomplete.

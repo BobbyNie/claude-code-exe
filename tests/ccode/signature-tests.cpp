@@ -3,6 +3,7 @@
 #include "../../scripts/ccode/locked-candidate-file.hpp"
 #include "../../scripts/ccode/authenticated-candidate-files.hpp"
 #include <memory>
+#include "../../scripts/ccode/pe-image-contract.hpp"
 #include "../../scripts/ccode/locked-candidate-package.hpp"
 #include "../../scripts/ccode/locked-candidate-directories.hpp"
 #include <filesystem>
@@ -19,6 +20,35 @@ std::vector<unsigned char> Hex(const std::string& text) {
     return bytes;
 }
 int main(int argc, char** argv) {
+    std::string peFixture(512, '\0');
+    auto put16 = [&](size_t offset, unsigned value) {
+        peFixture[offset] = static_cast<char>(value);
+        peFixture[offset + 1] = static_cast<char>(value >> 8);
+    };
+    auto put32 = [&](size_t offset, unsigned value) {
+        for (size_t i = 0; i < 4; ++i) peFixture[offset + i] = static_cast<char>(value >> (8 * i));
+    };
+    put16(0, 0x5a4d); put32(60, 64); put32(64, 0x4550);
+    put16(68, 0x8664); put16(70, 1); put16(84, 240); put16(86, 2); put16(88, 0x20b);
+    auto peReader = [&](uint64_t offset, size_t size) { return peFixture.substr(static_cast<size_t>(offset), size); };
+    ccode::RequireAmd64PeImage(peFixture.size(), peReader);
+    for (int mutation = 0; mutation < 7; ++mutation) {
+        const auto saved = peFixture;
+        if (mutation == 0) put16(68, 0xaa64);
+        if (mutation == 1) put16(88, 0x10b);
+        if (mutation == 2) put16(86, 0x2002);
+        if (mutation == 3) put32(60, 500);
+        if (mutation == 4) put16(70, 96);
+        if (mutation == 5) put16(84, 0);
+        if (mutation == 6) peFixture.resize(63);
+        bool invalidPeRejected = false;
+        try { ccode::RequireAmd64PeImage(peFixture.size(), peReader); }
+        catch (const std::runtime_error& error) {
+            invalidPeRejected = std::string(error.what()) == "E_MANIFEST_PE";
+        }
+        assert(invalidPeRejected);
+        peFixture = saved;
+    }
     // RFC 8032 test 1 proves the native primitive independently of our domain.
     const auto key = Hex("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a");
     auto signature = Hex("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555f"
@@ -329,6 +359,30 @@ int main(int argc, char** argv) {
     }
     assert(resourceMismatchRejected);
     { std::ofstream file(packageFixture / L"manifest.json", std::ios::binary); file << packageBytes; }
+    auto wrongMachineDocument = packageDocument;
+    auto wrongMachineBytes = peFixture;
+    wrongMachineBytes[68] = '\x64'; wrongMachineBytes[69] = '\xaa';
+    { std::ofstream file(packageFixture / L"ccode.exe", std::ios::binary);
+      file.write(wrongMachineBytes.data(), wrongMachineBytes.size()); }
+    {
+        ccode::LockedCandidateFile executable(packageFixture / L"ccode.exe");
+        for (auto& entry : wrongMachineDocument["files"]) if (entry["path"] == "ccode.exe") {
+            entry["size"] = executable.Size(); entry["sha256"] = executable.Sha256();
+            wrongMachineDocument["executable"] = entry;
+        }
+    }
+    const auto wrongMachineManifestBytes = wrongMachineDocument.dump();
+    { std::ofstream file(packageFixture / L"manifest.json", std::ios::binary); file << wrongMachineManifestBytes; }
+    bool packageMachineRejected = false;
+    try {
+        ccode::LockedCandidatePackage package(packageFixture, signDocument(wrongMachineManifestBytes), validDer, pin);
+    } catch (const std::runtime_error& error) {
+        packageMachineRejected = std::string(error.what()) == "E_MANIFEST_PE";
+    }
+    assert(packageMachineRejected);
+    std::filesystem::copy_file(std::filesystem::path(argv[1]), packageFixture / L"ccode.exe",
+        std::filesystem::copy_options::overwrite_existing);
+    { std::ofstream file(packageFixture / L"manifest.json", std::ios::binary); file << packageBytes; }
     { std::ofstream file(packageFixture / L"extra.txt"); file << "extra"; }
     bool extraFileRejected = false;
     try { ccode::LockedCandidatePackage package(packageFixture, packageSignature, validDer, pin); }
@@ -384,6 +438,13 @@ int main(int argc, char** argv) {
             mismatchRejected = std::string(error.what()) == "E_MANIFEST_FILE_MISMATCH";
         }
         assert(mismatchRejected);
+        assert(locked.ReadRange(1, 3) == "ixt");
+        bool rangeRejected = false;
+        try { locked.ReadRange(7, 1); }
+        catch (const std::runtime_error& error) {
+            rangeRejected = std::string(error.what()) == "E_MANIFEST_FILE_LIMIT";
+        }
+        assert(rangeRejected);
         assert(locked.ReadBounded(7) == "fixture");
         assert(locked.Sha256() == "f16d05ec6b29248d2c61adb1e9263f78e4f7bace1b955014a2d17872cfe4064d");
         assert(locked.ReadBounded(7) == "fixture");
