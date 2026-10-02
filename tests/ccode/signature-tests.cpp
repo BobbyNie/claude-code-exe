@@ -102,5 +102,30 @@ int main() {
     fileEntry["sha256"] = std::string(64, 'a');
     fileEntry["extra"] = 1;
     assert(!ccode::ValidManifestFileEntry(fileEntry));
+    auto executableEntry = nlohmann::json{{"path", "ccode.exe"}, {"size", 1}, {"sha256", std::string(64, 'a')}};
+    auto usageEntry = executableEntry; usageEntry["path"] = "docs/usage.md";
+    auto noticeEntry = executableEntry; noticeEntry["path"] = "notices/LICENSE.txt";
+    auto inventory = nlohmann::json{{"executable", executableEntry},
+        {"files", nlohmann::json::array({executableEntry, usageEntry, noticeEntry})},
+        {"notices", nlohmann::json::array({noticeEntry})}};
+    assert(ccode::ValidManifestInventory(inventory));
+    auto duplicatedInventory = inventory;
+    duplicatedInventory["files"].push_back(noticeEntry);
+    assert(!ccode::ValidManifestInventory(duplicatedInventory));
+    auto aliasInventory = inventory;
+    auto aliasEntry = noticeEntry; aliasEntry["path"] = "notices/license.txt";
+    aliasInventory["files"].push_back(aliasEntry);
+    aliasInventory["notices"].push_back(aliasEntry);
+    assert(!ccode::ValidManifestInventory(aliasInventory));
+    for (int mutation = 0; mutation < 6; ++mutation) {
+        auto invalidInventory = inventory;
+        if (mutation == 0) invalidInventory["files"].erase(0);
+        if (mutation == 1) invalidInventory["notices"] = nlohmann::json::array();
+        if (mutation == 2) invalidInventory["executable"]["size"] = 1.0;
+        if (mutation == 3) invalidInventory["notices"][0]["sha256"] = std::string(64, 'b');
+        if (mutation == 4) std::swap(invalidInventory["files"][0], invalidInventory["files"][1]);
+        if (mutation == 5) invalidInventory["notices"].push_back(noticeEntry);
+        assert(!ccode::ValidManifestInventory(invalidInventory));
+    }
     std::cout << "native signature tests passed\n";
 }

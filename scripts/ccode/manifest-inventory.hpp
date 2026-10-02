@@ -59,4 +59,47 @@ inline bool ValidManifestFileEntry(const nlohmann::json& entry) {
     return true;
 }
 
+// Validate the complete static file set before opening candidate paths.
+// Other root fields and filesystem identities are separate required checks.
+inline bool ValidManifestInventory(const nlohmann::json& manifest) {
+    if (!manifest.is_object() || !manifest.contains("files") ||
+        !manifest.contains("notices") || !manifest.contains("executable") ||
+        !manifest["files"].is_array() || !manifest["notices"].is_array() ||
+        manifest["notices"].empty()) return false;
+    std::set<std::string> paths;
+    std::set<std::string> foldedPaths;
+    std::string previous;
+    const auto& files = manifest["files"];
+    for (const auto& entry : files) {
+        if (!ValidManifestFileEntry(entry)) return false;
+        const auto path = entry["path"].get<std::string>();
+        if (!previous.empty() && previous >= path) return false;
+        previous = path;
+        if (!paths.insert(path).second) return false;
+        auto folded = path;
+        std::transform(folded.begin(), folded.end(), folded.begin(), [](unsigned char c) {
+            return c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c;
+        });
+        if (!foldedPaths.insert(folded).second) return false;
+    }
+    if (!paths.count("ccode.exe") || !paths.count("docs/usage.md") ||
+        files.size() != manifest["notices"].size() + 2) return false;
+    previous.clear();
+    for (const auto& notice : manifest["notices"]) {
+        if (!ValidManifestFileEntry(notice)) return false;
+        const auto path = notice["path"].get<std::string>();
+        if (path.compare(0, 8, "notices/") != 0 ||
+            (!previous.empty() && previous >= path)) return false;
+        previous = path;
+        auto entry = std::find_if(files.begin(), files.end(), [&](const auto& candidate) {
+            return candidate["path"] == path;
+        });
+        if (entry == files.end() || entry->dump() != notice.dump()) return false;
+    }
+    auto executable = std::find_if(files.begin(), files.end(), [](const auto& entry) {
+        return entry["path"] == "ccode.exe";
+    });
+    return executable != files.end() && executable->dump() == manifest["executable"].dump();
+}
+
 }

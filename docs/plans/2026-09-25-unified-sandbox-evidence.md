@@ -2672,3 +2672,17 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   complete required file set, provenance/boundary matching, filesystem handles,
   startup/update integration and formal signer approval remain outstanding.
   MSVC verification pending; no Win11 acceptance claim.
+
+### Native complete static inventory consistency
+
+- TDD missing inventory validator RED -> native suite GREEN; separate ASCII
+  case-alias regression failed at runtime RED -> folded-path rejection GREEN.
+- Enforces sorted unique file/notice paths, required executable and usage,
+  nonempty notices, exact file count, notice-to-file byte-schema equivalence and
+  executable-to-file equivalence (canonical dumps preserve integer/float types).
+  Missing files, mismatched notices, reordered/duplicate entries and executable
+  float substitution regressions pass. Local native suite/diff-check pass.
+- Unicode Windows path identity still requires platform-aware handling; ASCII
+  folding is not claimed to solve all Windows filename aliases. Root schema,
+  provenance/runtime boundary, locked filesystem checks and actual launcher
+  enforcement remain open. No A20 or Win11 acceptance claim; MSVC pending.
