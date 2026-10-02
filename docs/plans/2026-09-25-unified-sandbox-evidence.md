@@ -3706,3 +3706,23 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   handshake, zero HTTP, nonzero exit, E_GATEWAY_TLS, strict neutral JSON and privacy;
   this new branch is pending Windows CI, not yet A18/A19 or Win11 acceptance.
   Original DNS/legacy TLS failures remain open; production engine unchanged.
+
+### 2026-10-02 — expired certificate actual-engine failure evidence
+
+- Run37023798103 /a8b7622 completed/failure. New2.1.282 job110893224399
+  expiration-only case: two TLS-record connections, zero completed handshakes,
+  two transport resets10054, zero HTTP, exit1, E_ENGINE rather than E_GATEWAY_TLS.
+  Transport resets are not promoted to certificate-verification evidence.
+- Old2.1.221 job110893224851 expiration-only case: two completed TLS1.3
+  handshakes, zero HTTP, exit1, E_ENGINE. The strict expiry gate fails, just as
+  its original untrusted-issuer gate does. No acceptance assertion was relaxed.
+- Rechecked official2.1.282 source payload SHA256
+  fc0e3af017705624b9e1bce913f72761864ff994804514da1f5e41380fca4484.
+  Its fixed IPo typed-apiError set contains only issuer-chain errors, not
+  CERT_HAS_EXPIRED. The generic adapter therefore lacks a typed expiry route,
+  like the previously observed DNS route. Static cause is not proof of every
+  runtime variant and does not authorize arbitrary message-text classification,
+  changing official bytes or substituting a frontend preflight for engine evidence.
+- Both DNS gates still fail. Other test steps, both workspace-boundary jobs and
+  cross-version succeed. Annotations are exit1 and Node deprecation, not billing.
+  Actual Windows11 endpoint, formal signer and full matrix remain incomplete.
