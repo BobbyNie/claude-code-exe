@@ -3511,3 +3511,26 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   GREEN: native frontend suite and12 probe tests pass; launcher uses the tested
   renderer. Gateway acceptance assertions are unchanged. Native CI confirmation
   and actual Windows11 ordinary-account acceptance remain pending.
+
+### 2026-10-02 — canonical TLS fix confirmed; legacy provenance investigation
+
+- Run36992634723 at67846db completed:2.1.282 full test job passes, including
+  actual engine gateway rejection; cross-version and both workspace-boundary
+  jobs pass.2.1.221 still fails gateway rejection. This is hosted Windows
+  supplemental evidence, not Windows11 ordinary-account acceptance.
+- Legacy untrusted fixture:2 completed TLS1.3 handshakes,0 HTTP requests,
+  exit1, generic E_ENGINE. TLS1.2-only probe has the same no-HTTP outcome;
+  explicit fixture-trust control reaches1 HTTP request. Typed TLS cause false.
+  This trust differential is not alone sufficient for production cause attribution.
+- Local integrity-verified2.1.221 serializer contains the strictly true
+  isApiErrorMessage -> is_api_error_message wrapper field. The old probe's
+  assistant_api_error only checks error="api_error", so its false flag does not
+  establish absence of the native wrapper. Add a separate fixed boolean for
+  native wrapper provenance; do not change the existing flag's semantics.
+- Source audit also shows pfr can fall back to exception message content, and
+  the outer formatter handles several error classes. A marker or exact text
+  alone must not be promoted into a structured certificate cause. No production
+  classifier or gateway acceptance assertion is changed by this probe.
+- TDD RED: new probe test fails with missing function. GREEN:13 probe tests pass
+  including boolean/type/top-level constraints and non-TLS marked API error.
+  Native emission of the legacy wrapper remains to be measured in the next run.

@@ -11,6 +11,12 @@ import tempfile
 import time
 
 
+def native_api_error_wrapper(events):
+    """Wrapper provenance only: API errors include non-TLS failures too."""
+    return any(isinstance(event, dict) and event.get('type') == 'assistant' and
+               event.get('is_api_error_message') is True for event in events)
+
+
 def typed_tls_cause(events):
     """Fixed boolean for the native typed wrapper; never capture message text."""
     return any(isinstance(event, dict) and event.get('type') == 'assistant' and
@@ -392,6 +398,7 @@ def probe(executable, *, tls12_only=False, trusted_control=False):
                 except json.JSONDecodeError:
                     invalid_lines += 1
             print(json.dumps({'native_tls_probe': summarize_events(events),
+                'native_api_error_wrapper': native_api_error_wrapper(events),
                 'native_typed_tls_cause': typed_tls_cause(events), 'tls12_only': tls12_only,
                 'explicit_fixture_trust_control': trusted_control,
                 'result_shape': summarize_result_shape(events),

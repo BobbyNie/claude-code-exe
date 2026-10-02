@@ -9,6 +9,20 @@ spec.loader.exec_module(probe)
 
 
 class TlsProbeTests(unittest.TestCase):
+    def test_native_api_error_marker_is_strict_and_not_a_tls_cause(self):
+        event = {'type': 'assistant', 'is_api_error_message': True,
+                 'error': 'server_error',
+                 'message': {'content': [{'type': 'text', 'text': 'private certificate'}]}}
+        self.assertTrue(probe.native_api_error_wrapper([event]))
+        self.assertFalse(probe.typed_tls_cause([event]))
+        for marker in (False, None, 1, 'true'):
+            self.assertFalse(probe.native_api_error_wrapper([
+                dict(event, is_api_error_message=marker)]))
+        for kind in ('result', 'system', 'private-kind'):
+            self.assertFalse(probe.native_api_error_wrapper([dict(event, type=kind)]))
+        self.assertFalse(probe.native_api_error_wrapper([None, {
+            'type': 'assistant', 'message': {'is_api_error_message': True}}]))
+
     def test_typed_tls_cause_requires_native_wrapper_fields_not_model_text(self):
         event = {'type': 'assistant', 'is_api_error_message': True,
                  'api_error': 'tls_untrusted_ca',
