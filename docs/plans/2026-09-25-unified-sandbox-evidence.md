@@ -2900,3 +2900,18 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   workflow remains in progress; this is Windows Server supplemental evidence,
   not Windows 11 ordinary-account acceptance. Startup/update enforcement and
   approved signer policy remain incomplete.
+
+### Native compiled signer-policy generation foundation
+
+- Missing generator RED -> matching explicit pin produces deterministic C++17
+  public SPKI/pin constants. Canonical Ed25519 DER only, exact 44 bytes; compares
+  SHA256 against the explicitly supplied lowercase 64-hex pin. No automatic
+  pin derivation, environment fallback, private-key input or runtime override.
+- Negative fixtures reject mismatched/uppercase pins, noncanonical/oversized DER,
+  hardlinked input and existing output; sentinel remains unchanged. Generated
+  header byte round-trip and native compile/run smoke test pass. Full Python
+  suite 139 tests, 5 Windows-only skips; diff-check passes.
+- Consistency verification cannot establish organizational approval. RFC8032
+  public fixture remains engineering-only. This generator is not yet wired into
+  build.ps1/launcher: approved real signer material and mandatory enterprise
+  startup/update gate still remain open. No A20 release claim.
