@@ -225,6 +225,17 @@ int main() {
     { std::ofstream fixture(fixturePath, std::ios::binary); fixture << "fixture"; }
     {
         ccode::LockedCandidateFile locked(fixturePath);
+        auto lockedEntry = executableEntry;
+        lockedEntry["size"] = 7;
+        lockedEntry["sha256"] = "f16d05ec6b29248d2c61adb1e9263f78e4f7bace1b955014a2d17872cfe4064d";
+        locked.Verify(lockedEntry);
+        lockedEntry["size"] = 8;
+        bool mismatchRejected = false;
+        try { locked.Verify(lockedEntry); }
+        catch (const std::runtime_error& error) {
+            mismatchRejected = std::string(error.what()) == "E_MANIFEST_FILE_MISMATCH";
+        }
+        assert(mismatchRejected);
         assert(locked.ReadBounded(7) == "fixture");
         assert(locked.Sha256() == "f16d05ec6b29248d2c61adb1e9263f78e4f7bace1b955014a2d17872cfe4064d");
         assert(locked.ReadBounded(7) == "fixture");
@@ -296,5 +307,13 @@ int main() {
         oversizeChunkRejected = std::string(error.what()) == "E_MANIFEST_HASH";
     }
     assert(oversizeChunkRejected);
+    auto observedEntry = executableEntry;
+    observedEntry["size"] = 7;
+    observedEntry["sha256"] = "f16d05ec6b29248d2c61adb1e9263f78e4f7bace1b955014a2d17872cfe4064d";
+    assert(ccode::ManifestFileMatchesObservation(observedEntry, 7,
+        "f16d05ec6b29248d2c61adb1e9263f78e4f7bace1b955014a2d17872cfe4064d"));
+    assert(!ccode::ManifestFileMatchesObservation(observedEntry, 8,
+        "f16d05ec6b29248d2c61adb1e9263f78e4f7bace1b955014a2d17872cfe4064d"));
+    assert(!ccode::ManifestFileMatchesObservation(observedEntry, 7, std::string(64, '0')));
     std::cout << "native signature tests passed\n";
 }

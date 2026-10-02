@@ -2775,3 +2775,18 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   log API was temporarily 404 while jobs running; no complete run claim.
 - Hash generation alone does not authenticate expected hashes or lock parents;
   complete candidate verification and launcher integration remain required.
+
+### Retained-handle manifest size/hash comparison
+
+- Continued the existing missing-API RED test: matching observed size/hash is
+  accepted, wrong size or digest rejected. Implemented schema-validated exact
+  comparison; local native suite is GREEN and diff-check passes.
+- LockedCandidateFile.Verify checks size before hashing, then compares the
+  streaming digest from the retained handle. Mismatch uses a fixed neutral error.
+  Added conditional Windows fixture assertions for success and size mismatch;
+  these new Win32 assertions have not run locally and await MSVC CI. No Windows
+  behavioral RED/GREEN or Windows 11 acceptance is claimed.
+- Restarted run 36942361219 is completed/failure; current runs 36965632548,
+  36965446929 and 36965235632 remain in progress at this check. No rerun requested.
+- Parent-directory identity, complete candidate locking, embedded resource
+  authentication and mandatory launcher enforcement remain outstanding.

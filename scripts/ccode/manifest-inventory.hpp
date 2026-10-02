@@ -61,6 +61,14 @@ inline bool ValidManifestFileEntry(const nlohmann::json& entry) {
     return true;
 }
 
+// Compare observations obtained through the retained file handle, not a reopened path.
+inline bool ManifestFileMatchesObservation(const nlohmann::json& entry,
+                                          uint64_t size, const std::string& sha256) {
+    return ValidManifestFileEntry(entry) &&
+           entry["size"].get<uint64_t>() == size &&
+           entry["sha256"].get<std::string>() == sha256;
+}
+
 // Validate the complete static file set before opening candidate paths.
 // Other root fields and filesystem identities are separate required checks.
 inline bool ValidManifestInventory(const nlohmann::json& manifest) {

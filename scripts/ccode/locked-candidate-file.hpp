@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <algorithm>
 #include "stream-sha256.hpp"
+#include "manifest-inventory.hpp"
 #ifdef _WIN32
 #include <windows.h>
 
@@ -47,6 +48,12 @@ public:
             remaining -= read;
             return read;
         });
+    }
+    void Verify(const nlohmann::json& entry) {
+        if (!ValidManifestFileEntry(entry) || entry["size"].get<uint64_t>() != Size())
+            throw std::runtime_error("E_MANIFEST_FILE_MISMATCH");
+        if (!ManifestFileMatchesObservation(entry, Size(), Sha256()))
+            throw std::runtime_error("E_MANIFEST_FILE_MISMATCH");
     }
     std::string ReadBounded(size_t maximum) {
         if (size_ > maximum) throw std::runtime_error("E_MANIFEST_FILE_LIMIT");
