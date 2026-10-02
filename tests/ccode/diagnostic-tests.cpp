@@ -59,6 +59,17 @@ int main() {
     assert(runtimeIntegrity["category"] == "integrity");
     assert(runtimeIntegrity.dump().find("private") == std::string::npos);
     assert(NeutralErrorCode("E_RUNTIME_INTEGRITY_PRIVATE_TOKEN") == "E_LOCAL");
+    for (const auto* code : {"E_MANIFEST_DIRECTORY", "E_MANIFEST_DOCUMENT",
+            "E_MANIFEST_FILE", "E_MANIFEST_FILE_LIMIT", "E_MANIFEST_FILE_MISMATCH",
+            "E_MANIFEST_HASH", "E_MANIFEST_INVENTORY", "E_MANIFEST_PE",
+            "E_MANIFEST_RESOURCE", "E_MANIFEST_SCHEMA", "E_MANIFEST_SIGNATURE"}) {
+        const auto manifestFailure = FailureDiagnostic(
+            std::string(code) + ": private path and token", 64, operation);
+        assert(manifestFailure["errorCode"] == code);
+        assert(manifestFailure["category"] == "integrity");
+        assert(manifestFailure.dump().find("private") == std::string::npos);
+    }
+    assert(NeutralErrorCode("E_MANIFEST_SIGNATURE_PRIVATE_TOKEN") == "E_LOCAL");
     const auto unknown = FailureDiagnostic("E_PRIVATE_TOKEN_12345", 64, operation);
     assert(unknown["errorCode"] == "E_LOCAL");
     assert(unknown["category"] == "local");

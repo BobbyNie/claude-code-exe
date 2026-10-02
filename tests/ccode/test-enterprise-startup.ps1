@@ -12,7 +12,10 @@ try {
                               '--ccode-self-test', '--ccode-permission-server', '--print probe')) {
         $stdout = Join-Path $root 'stdout.txt'
         $stderr = Join-Path $root 'stderr.txt'
-        $process = Start-Process -FilePath $exe -ArgumentList $arguments -WorkingDirectory $root `
+        $diagnostic = Join-Path $root 'failure.json'
+        if (Test-Path -LiteralPath $diagnostic) { Remove-Item -LiteralPath $diagnostic }
+        $invocation = "$arguments --diagnostics `"$diagnostic`""
+        $process = Start-Process -FilePath $exe -ArgumentList $invocation -WorkingDirectory $root `
             -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
         if (-not $process.WaitForExit(15000)) {
             $process.Kill(); $process.WaitForExit()
@@ -21,6 +24,20 @@ try {
         $process.Refresh()
         if ($process.ExitCode -ne 64 -or (Get-Content $stderr -Raw).Trim() -ne 'E_MANIFEST_FILE') {
             throw "Enterprise unsigned startup did not fail closed: $arguments"
+        }
+        $rawReport = Get-Content -LiteralPath $diagnostic -Raw
+        $report = $rawReport | ConvertFrom-Json
+        if ($report.errorCode -ne 'E_MANIFEST_FILE' -or $report.category -ne 'integrity' -or
+            $report.exitCode -ne 64 -or $report.status -ne 'error') {
+            throw 'Unsigned enterprise startup lost its integrity diagnostic'
+        }
+        $operationId = [Guid]::Empty
+        if (-not [Guid]::TryParse($report.operationId, [ref]$operationId)) {
+            throw 'Unsigned enterprise startup diagnostic has invalid operation ID'
+        }
+        if ($rawReport.Contains($root) -or $rawReport.Contains('probe') -or
+            @($report.privacy.PSObject.Properties | Where-Object { $_.Value -ne $false }).Count -ne 0) {
+            throw 'Unsigned enterprise startup diagnostic captured private content'
         }
         if ((Get-Item $stdout).Length -ne 0) { throw 'Unauthenticated entry point produced output' }
         if (@(Get-ChildItem -LiteralPath $program -Force).Count -ne 1) {

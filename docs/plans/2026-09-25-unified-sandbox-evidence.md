@@ -3564,3 +3564,18 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   and E_RUNTIME_INTEGRITY_PRIVATE_TOKEN still becomes E_LOCAL. Native diagnostic
   privacy suite passes. This is a local report contract, not actual Windows11
   tampered-runtime evidence or completion of A15/A19.
+
+### 2026-10-02 — enterprise gate failure diagnostics
+
+- Existing native manifest gate errors were absent from the fixed diagnostic
+  vocabulary. Add the11 exact E_MANIFEST_* codes already emitted by production
+  headers and categorize them as integrity; unknown/private suffixes remain
+  E_LOCAL. No arbitrary exception content or prefix-based allowlisting added.
+- TDD RED: report loses E_MANIFEST_DIRECTORY to E_LOCAL. GREEN: diagnostic
+  suite verifies every listed code/category and omission of appended private
+  bytes; unknown E_MANIFEST_SIGNATURE_PRIVATE_TOKEN remains rejected.
+- Extend actual enterprise missing-signature startup tests to request a new
+  external diagnostic file for each entry point and check E_MANIFEST_FILE,
+  integrity, exit64, error status, UUID and false privacy flags. Reports stay
+  outside the program directory. Native execution remains pending in CI;
+  local unit success is not a Windows11 ordinary-account or signer approval.

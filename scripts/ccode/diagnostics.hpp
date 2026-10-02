@@ -43,6 +43,10 @@ inline std::string NeutralErrorCode(const std::string& message) {
         "E_EXTRACT_ACCESS", "E_EXTRACT_SHARING", "E_EXTRACT_LOCKED", "E_EXTRACT_DISK_FULL", "E_GATEWAY", "E_GATEWAY_AUTH",
         "E_GATEWAY_RATE_LIMIT", "E_GATEWAY_RETRY", "E_GATEWAY_TLS", "E_GATEWAY_DNS",
         "E_HASH", "E_LOCAL", "E_LOCATION",
+        "E_MANIFEST_DIRECTORY", "E_MANIFEST_DOCUMENT", "E_MANIFEST_FILE",
+        "E_MANIFEST_FILE_LIMIT", "E_MANIFEST_FILE_MISMATCH", "E_MANIFEST_HASH",
+        "E_MANIFEST_INVENTORY", "E_MANIFEST_PE", "E_MANIFEST_RESOURCE",
+        "E_MANIFEST_SCHEMA", "E_MANIFEST_SIGNATURE",
         "E_MISSING_RESULT", "E_NETWORK", "E_NO_SESSION",
         "E_PACKAGE", "E_PACKAGE_METADATA", "E_PERMISSION_MODE",
         "E_PIPE", "E_PROCESS", "E_PROCESS_TREE",
@@ -84,7 +88,7 @@ inline std::string DiagnosticCategory(const std::string& errorCode) {
     if (HasPrefix(errorCode, "E_CREDENTIAL") || HasPrefix(errorCode, "E_ARGUMENT") ||
         HasPrefix(errorCode, "E_UNSUPPORTED_OPTION") || HasPrefix(errorCode, "E_PERMISSION_MODE") ||
         HasPrefix(errorCode, "E_API_ONLY") || HasPrefix(errorCode, "E_PROMPT")) return "configuration";
-    if (errorCode == "E_CHECKSUM" || HasPrefix(errorCode, "E_PACKAGE") || HasPrefix(errorCode, "E_RESOURCE") ||
+    if (HasPrefix(errorCode, "E_MANIFEST") || errorCode == "E_CHECKSUM" || HasPrefix(errorCode, "E_PACKAGE") || HasPrefix(errorCode, "E_RESOURCE") ||
         HasPrefix(errorCode, "E_HASH") || HasPrefix(errorCode, "E_RUNTIME") ||
         HasPrefix(errorCode, "E_CANDIDATE") || HasPrefix(errorCode, "E_SNAPSHOT") ||
         HasPrefix(errorCode, "E_ACTIVATION") || HasPrefix(errorCode, "E_ROLLBACK")) return "integrity";
