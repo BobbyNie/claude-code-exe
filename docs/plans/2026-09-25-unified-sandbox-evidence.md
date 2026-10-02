@@ -3743,3 +3743,18 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   probe nor SEC_IMAGE proves profile migration, active-pointer interruption,
   disk-full, hardware power-loss, complete update rollback or Win11 acceptance.
   All those wider gaps remain open. No fallback or cleanup error is ignored.
+
+### 2026-10-02 — native forced-interruption recovery result
+
+- Run37025702587 /39b61ac completed/failure. Both builds emit the explicit
+  E_TEST_INTERRUPTION_RECOVERED checkpoint and native isolation tests passed
+  (jobs110899647009 and110899647290). Real child readiness, TerminateProcess,
+  termination exit73, original hash preservation, stale staging verification and
+  fresh activation recovery therefore succeed on both hosted Windows jobs.
+  Existing production implementation is GREEN; no speculative fix was introduced.
+- Cross-version job110903861372 and both workspace-boundary jobs succeed.
+  Remaining failures are unchanged: both DNS/expiry classification gates, plus
+  old2.1.221 untrusted TLS. Check annotations are exit1/Node deprecation, not
+  billing. No rerun or relaxed acceptance. This evidence is limited to flushed
+  staging before activation; it does not prove mid-write/power-loss, migration
+  active-pointer, disk-full, full signed update rollback or actual Windows11.
