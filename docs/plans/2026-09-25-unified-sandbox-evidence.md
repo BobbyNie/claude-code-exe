@@ -3455,3 +3455,19 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 
 - Local regression:155 Python tests pass with5 skips; both native suites and
   git diff --check pass. Hosted Windows confirmation pending push-triggered CI.
+
+### 2026-10-02 — current-state A20 integration audit correction
+
+- Read launcher Main, build signer-policy branch, NativeEnterpriseGate ownership
+  and signature-tests' actual subprocess cases. Prior design/acceptance text
+  incorrectly said launcher integration was absent; corrected that historical
+  wording without promoting A20 to passed.
+- Run36988203229/c8aa21b job110777989039 records signed entry-point integration
+  at09:12:35Z and missing-signature refusal at09:12:39Z; both versions' native
+  profile recovery/isolation passed. Run failure remains confined to gateway TLS.
+- Engineering signature cases authenticate a public RFC8032 fixture, exercise
+  metadata/help and external-data sessions, and reject invalid signature,
+  modified notice and manifest bytes. They do not prove approved production
+  signer, legal/redistribution approval, full signed update interruption/rollback,
+  arbitrary concurrency or actual Windows11 ordinary-account operation.
+- This is a documentation/evidence audit only, no code or acceptance weakening.

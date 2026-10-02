@@ -207,7 +207,7 @@ A05 的正式資料分離／程式搬移／重新打包證據必須以 `scripts/
 只接受 build-time policy type 提供的公鑰與獨立 pin；不接受 CLI／環境
 信任 override。簽章是安裝控制檔，不列入自身簽署清單的 hash，以避免
 循環。fresh candidate／ZIP audit 白名單保持原樣，安裝／驗收入口須在
-核對外部簽章後另行放置同一 signature；入口整合完成前不宣稱可用。
+核對外部簽章後另行放置同一 signature；工程入口整合不等於正式簽署批准。
 
 Fresh 驗證不允許任何 runtime 殘留。Installed 驗證只額外允許固定
 signature 控制檔及已確認為非 reparse directory 的 `runtime/` 動態
@@ -215,8 +215,16 @@ signature 控制檔及已確認為非 reparse directory 的 `runtime/` 動態
 進入 program root。runtime 子樹仍須經獨立 extraction／使用前驗證，
 不得將忽略其交付名稱掃描冒稱為完整 runtime 防篡改。原生 gate 必須
 在 help、metadata、permission-worker 及正常啟動的任何副作用之前執行，
-並在整個 invocation 保持所有靜態候選與簽章 handles；launcher／build
-尚未完成這一接線時 A20 仍是未完成。
+並在整個 invocation 保持所有靜態候選與簽章 handles。
+
+2026-10-02 核對目前 `launcher.cpp`／`build.ps1`：企業 build 以
+`CCODE_ENTERPRISE_REQUIRED` 啟用 gate，建置期公鑰及獨立 pin 由 policy
+產生器固定；Main 在 help、metadata、permission-worker 及資料建立之前
+構造 owning gate。未提供 signer policy 的公開 build 不具企業 gate，
+不得拿公開版測試代表企業交付。Run36988203229/c8aa21b 的兩版 hosted
+Windows 日誌均記錄 signed entry-point integration 與 missing-signature
+refusal 通過。這只證明公開 RFC8032 工程 fixture 的入口接線，不是正式
+signer 授權、Windows11 普通帳戶或完整簽署更新／回滾驗收；A20 仍未完成。
 
 企業生命週期驗收器在比對複製後的完整 fresh inventory 之後、執行任何候選命令之前，呼叫 `enterprise_lifecycle.py install-signature --program-root ... --signature ... --public-key ... --trusted-pin ...`。此命令將有界讀取的 manifest、簽章、公開 SPKI 快照驗證成功後，以 exclusive create 安裝原樣簽章位元組到固定 `manifest.sig`；不覆寫現有控制檔，不接受 link／hardlink 來源，不把工具驗證視為正式 signer 授權。安裝證據只記錄 hash；實際企業 launcher 仍必須在每次啟動以編譯期 policy、持有的原始檔案句柄重新驗證，工具的祖先 inspection 不冒稱具備原子併發替換防禦。
 

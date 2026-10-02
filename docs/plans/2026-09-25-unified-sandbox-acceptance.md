@@ -93,5 +93,12 @@ manifest bytes 的串接。不得從候選公鑰自行生成 pin 並冒稱核准
 未通過簽章或候選 audit 不建立驗收工作目錄、不複製／執行候選；通過後
 仍在第一次執行前核對 copied files 的 path/size/SHA256。工程 Node
 runtime 必須事先備妥並由端點政策核准；CI 固定 22.23.3 不代表端點已
-具備或核准它。這不是 ccode.exe 內建啟動／更新 gate，A20 尚未完成；
-任意並行檔案替換防護、正式簽署批准及 Windows 11 實跑仍須取得證據。
+具備或核准它。外部驗收器不能替代 ccode.exe 內建啟動／更新 gate。
+2026-10-02 核對確認企業 build 已接入原生啟動 gate：編譯期 signer policy、
+所有入口前簽章／inventory／PE resource 驗證，以及 invocation 期間持有
+靜態檔案句柄。Run36988203229/c8aa21b 兩版 hosted Windows 的公開 RFC8032
+fixture 測試通過合法簽署 metadata 入口、外置 data、缺失／無效簽章、
+通知及 manifest bytes 篡改拒絕。這些案例不是完整更新流程，也不代表
+正式信任批准；A20 尚未完成。正式 signer SPKI／獨立 pin、實際通知／
+再分發批准、完整更新中斷／回退矩陣及 Windows11 普通帳戶實跑仍須取得。
+任意並行替換防護也不能只由上述入口測試推論。
