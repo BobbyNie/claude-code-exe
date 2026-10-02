@@ -3,6 +3,7 @@
 #include "../../scripts/ccode/locked-candidate-file.hpp"
 #include <filesystem>
 #include <fstream>
+#include "../../scripts/ccode/stream-sha256.hpp"
 #include <cassert>
 #include <iostream>
 #include <vector>
@@ -225,6 +226,7 @@ int main() {
     {
         ccode::LockedCandidateFile locked(fixturePath);
         assert(locked.ReadBounded(7) == "fixture");
+        assert(locked.Sha256() == "f16d05ec6b29248d2c61adb1e9263f78e4f7bace1b955014a2d17872cfe4064d");
         assert(locked.ReadBounded(7) == "fixture");
         bool limitRejected = false;
         try { locked.ReadBounded(6); }
@@ -276,5 +278,23 @@ int main() {
         if (mutation == 4) metadata["officialManifestSha256"] = std::string(64, 'd');
         assert(!ccode::ManifestMatchesEmbeddedProvenance(rootManifest, metadata));
     }
+    size_t chunkOffset = 0;
+    const std::string hashFixture = "fixture";
+    auto chunkReader = [&](unsigned char* buffer, size_t capacity) {
+        const auto count = std::min<size_t>(2, hashFixture.size() - chunkOffset);
+        assert(count <= capacity);
+        std::copy_n(hashFixture.data() + chunkOffset, count, buffer);
+        chunkOffset += count;
+        return count;
+    };
+    assert(ccode::StreamSha256(chunkReader) == "f16d05ec6b29248d2c61adb1e9263f78e4f7bace1b955014a2d17872cfe4064d");
+    assert(ccode::StreamSha256([](unsigned char*, size_t) { return size_t(0); }) ==
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    bool oversizeChunkRejected = false;
+    try { ccode::StreamSha256([](unsigned char*, size_t maximum) { return maximum + 1; }); }
+    catch (const std::runtime_error& error) {
+        oversizeChunkRejected = std::string(error.what()) == "E_MANIFEST_HASH";
+    }
+    assert(oversizeChunkRejected);
     std::cout << "native signature tests passed\n";
 }

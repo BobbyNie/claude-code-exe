@@ -4,6 +4,7 @@
 #include <string>
 #include <stdexcept>
 #include <algorithm>
+#include "stream-sha256.hpp"
 #ifdef _WIN32
 #include <windows.h>
 
@@ -32,6 +33,21 @@ public:
     LockedCandidateFile(const LockedCandidateFile&) = delete;
     LockedCandidateFile& operator=(const LockedCandidateFile&) = delete;
     uint64_t Size() const { return size_; }
+    std::string Sha256() {
+        LARGE_INTEGER start{};
+        if (!SetFilePointerEx(handle_, start, nullptr, FILE_BEGIN))
+            throw std::runtime_error("E_MANIFEST_FILE");
+        uint64_t remaining = size_;
+        return StreamSha256([&](unsigned char* buffer, size_t capacity) -> size_t {
+            if (!remaining) return 0;
+            const auto count = static_cast<DWORD>(std::min<uint64_t>(remaining, capacity));
+            DWORD read = 0;
+            if (!ReadFile(handle_, buffer, count, &read, nullptr) || !read)
+                throw std::runtime_error("E_MANIFEST_FILE");
+            remaining -= read;
+            return read;
+        });
+    }
     std::string ReadBounded(size_t maximum) {
         if (size_ > maximum) throw std::runtime_error("E_MANIFEST_FILE_LIMIT");
         LARGE_INTEGER start{};

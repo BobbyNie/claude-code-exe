@@ -2759,3 +2759,19 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   comparator alone does not obtain it, load the embedded payload or authenticate
   filesystem bytes. Actual extraction/hash/identity integration remains open.
   No startup/update or Win11 acceptance claim.
+
+### Streaming SHA256 for retained candidate handles
+
+- Test-first missing stream-hash header RED -> known SHA256 fixture GREEN;
+  empty-message known answer and oversized-reader rejection pass. Fixed 64KiB
+  buffer, BCrypt streaming on Windows/CommonCrypto engineering tests on macOS,
+  fail closed on unsupported platforms. No full-executable buffer allocation.
+- LockedCandidateFile now resets and hashes through its retained read handle,
+  requires all recorded bytes to be read and rejects premature EOF. Windows
+  fixture asserts digest and repeat bounded reads; actual Windows path remains
+  pending CI, not proven by macOS tests. Local native suite/diff-check pass.
+- Earlier 99f34f6 run 36965235632 reports both MSVC build steps success (build
+  invokes native suite including conditional Windows handle tests). Full job
+  log API was temporarily 404 while jobs running; no complete run claim.
+- Hash generation alone does not authenticate expected hashes or lock parents;
+  complete candidate verification and launcher integration remain required.
