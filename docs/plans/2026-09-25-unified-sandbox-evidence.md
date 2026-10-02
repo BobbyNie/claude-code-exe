@@ -2659,3 +2659,16 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   signature authentication, candidate file locking or startup/update enforcement.
   These remain required before A20 can pass. Local C++17 suite and diff-check
   passed; MSVC execution of this new parser remains pending.
+
+### Native manifest file-entry contract
+
+- TDD missing ValidManifestFileEntry RED, then native suite GREEN. Entry shape
+  is exactly path/size/sha256; size must be a nonnegative integer (not bool,
+  float or text), hash exactly lowercase hex64. Paths allow only ccode.exe,
+  docs/usage.md or one notice basename; traversal, nested/absolute paths,
+  streams, separators, controls, trailing dots/spaces and basic Windows device
+  stems fail closed. Native positive/negative regressions and diff-check pass.
+- Entry validation is not whole-inventory validation: duplicate/case aliases,
+  complete required file set, provenance/boundary matching, filesystem handles,
+  startup/update integration and formal signer approval remain outstanding.
+  MSVC verification pending; no Win11 acceptance claim.

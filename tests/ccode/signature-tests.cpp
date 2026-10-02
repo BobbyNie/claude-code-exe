@@ -73,5 +73,34 @@ int main() {
         assert(rejected);
     }
     assert(ccode::ParseManifestDocument("{\"a\":{\"x\":1},\"b\":{\"x\":2}}").size() == 2);
+    auto fileEntry = nlohmann::json{{"path", "notices/LICENSE.txt"}, {"size", 0},
+                                   {"sha256", std::string(64, 'a')}};
+    assert(ccode::ValidManifestFileEntry(fileEntry));
+    fileEntry["path"] = "notices/../ccode.exe";
+    assert(!ccode::ValidManifestFileEntry(fileEntry));
+    for (const auto& path : {"ccode.exe", "docs/usage.md", "notices/NOTICE.md"}) {
+        fileEntry["path"] = path;
+        assert(ccode::ValidManifestFileEntry(fileEntry));
+    }
+    for (const auto& path : {"../ccode.exe", "C:/ccode.exe", "notices/", "notices/.",
+            "notices/..", "notices/nested/a", "notices/a\\b", "notices/a:stream",
+            "notices/CON.txt", "notices/lPt9", "notices/NUL", "notices/a.",
+            "notices/a ", "notices/a?", "notices/a\n"}) {
+        fileEntry["path"] = path;
+        assert(!ccode::ValidManifestFileEntry(fileEntry));
+    }
+    fileEntry["path"] = "ccode.exe";
+    for (const auto& size : std::vector<nlohmann::json>{true, -1, 1.0, "1", nullptr}) {
+        fileEntry["size"] = size;
+        assert(!ccode::ValidManifestFileEntry(fileEntry));
+    }
+    fileEntry["size"] = 1;
+    for (const auto& hash : {std::string(64, 'A'), std::string(63, 'a'), std::string(64, 'g')}) {
+        fileEntry["sha256"] = hash;
+        assert(!ccode::ValidManifestFileEntry(fileEntry));
+    }
+    fileEntry["sha256"] = std::string(64, 'a');
+    fileEntry["extra"] = 1;
+    assert(!ccode::ValidManifestFileEntry(fileEntry));
     std::cout << "native signature tests passed\n";
 }
