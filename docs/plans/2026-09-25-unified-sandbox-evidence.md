@@ -3632,3 +3632,25 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   passes, success exit/arbitrary text/generic engine diagnostic are rejected.
   Local Python158 tests pass (5 skipped). Native actual-engine DNS behavior is
   pending CI, not proven by unit helper or script existence; A18/A19 stay open.
+
+### 2026-10-02 — native DNS acceptance exposes missing cause
+
+- Run37018986675 /0ee6a15 completed/failure. Both actual DNS tests pass preflight
+  negative resolution, invoke the engine, then fail distinct neutral DNS
+  classification. No timeout/preflight error. Old2.1.221 TLS still fails as before.
+  Both actual MCP allow/deny, workspace-boundary and cross-version jobs pass.
+  Annotations are step exit1 and Node action deprecation warnings, not billing.
+- Inspected local official2.1.282 Windows archive payload against saved official
+  manifest: size242171040, SHA256
+  fc0e3af017705624b9e1bce913f72761864ff994804514da1f5e41380fca4484, both match.
+  Its embedded API connection-error adapter obtains cause.code but sets apiError
+  only for the fixed TLS code set (tls_untrusted_ca) or BedrockUnexpectedContentType
+  (gateway_content_type); otherwise server_error has no typed apiError. This
+  explains a missing structured DNS route; it is static-source evidence, not
+  proof of all event variants or permission to classify arbitrary message text.
+- Existing exact ENOTFOUND/EAI_AGAIN parser support remains useful only when the
+  engine actually emits structured codes. Do not mark DNS/A18/A19 passed based
+  on synthetic parser tests. Do not replace actual-engine failure with frontend
+  DNS preflight and claim equivalent evidence. Need a trustworthy native cause
+  source or upstream-supported diagnostic contract while retaining original
+  payload provenance and the existing acceptance requirements.
