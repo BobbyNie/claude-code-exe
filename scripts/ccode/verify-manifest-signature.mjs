@@ -27,14 +27,22 @@ function regularBytes(path, maximum) {
 
 try {
   const args = process.argv.slice(2);
-  if (args.length !== 4) throw Error();
+  const snapshotEvidence = args.length === 5 && args[4] === '--snapshot-evidence';
+  if (args.length !== 4 && !snapshotEvidence) throw Error();
   const [manifestPath, signaturePath, keyPath, trustedPin] = args;
   const manifest = regularBytes(manifestPath, 1048576);
   const signature = regularBytes(signaturePath, 64);
   const publicKeyDer = regularBytes(keyPath, 1024);
   if (!verifyManifestSignature({manifest, signature, publicKeyDer, trustedPin})) throw Error();
-  console.log(JSON.stringify({schema: 1, status: 'passed',
-    manifestSha256: createHash('sha256').update(manifest).digest('hex')}));
+  const evidence = {schema: 1, status: 'passed',
+    manifestSha256: createHash('sha256').update(manifest).digest('hex')};
+  if (snapshotEvidence) {
+    // Hash the same in-memory buffers that passed cryptographic verification,
+    // not later rereads of mutable source paths.
+    evidence.signatureSha256 = createHash('sha256').update(signature).digest('hex');
+    evidence.publicKeySha256 = createHash('sha256').update(publicKeyDer).digest('hex');
+  }
+  console.log(JSON.stringify(evidence));
 } catch {
   console.log(JSON.stringify({schema: 1, status: 'error', code: 'E_MANIFEST_SIGNATURE'}));
   process.exitCode = 2;

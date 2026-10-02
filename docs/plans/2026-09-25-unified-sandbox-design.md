@@ -217,3 +217,5 @@ signature 控制檔及已確認為非 reparse directory 的 `runtime/` 動態
 在 help、metadata、permission-worker 及正常啟動的任何副作用之前執行，
 並在整個 invocation 保持所有靜態候選與簽章 handles；launcher／build
 尚未完成這一接線時 A20 仍是未完成。
+
+企業生命週期驗收器在比對複製後的完整 fresh inventory 之後、執行任何候選命令之前，呼叫 `enterprise_lifecycle.py install-signature --program-root ... --signature ... --public-key ... --trusted-pin ...`。此命令將有界讀取的 manifest、簽章、公開 SPKI 快照驗證成功後，以 exclusive create 安裝原樣簽章位元組到固定 `manifest.sig`；不覆寫現有控制檔，不接受 link／hardlink 來源，不把工具驗證視為正式 signer 授權。安裝證據只記錄 hash；實際企業 launcher 仍必須在每次啟動以編譯期 policy、持有的原始檔案句柄重新驗證，工具的祖先 inspection 不冒稱具備原子併發替換防禦。

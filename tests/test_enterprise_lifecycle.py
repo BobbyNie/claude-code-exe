@@ -137,6 +137,53 @@ class EnterpriseLifecycleTests(unittest.TestCase):
         completed = self.run_lifecycle(*arguments, pin)
         self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
         self.assertEqual(json.loads(completed.stdout)["signatureVerification"], "passed")
+        snapshot_verification = subprocess.run(["node", str(ROOT / "scripts/ccode/verify-manifest-signature.mjs"),
+            str(candidate / "unpacked/manifest.json"), str(signature), str(key), pin, "--snapshot-evidence"],
+            capture_output=True, text=True)
+        self.assertEqual(snapshot_verification.returncode, 0, snapshot_verification.stdout + snapshot_verification.stderr)
+        snapshot_evidence = json.loads(snapshot_verification.stdout)
+        self.assertEqual(snapshot_evidence["signatureSha256"], sha256(signature.read_bytes()))
+        self.assertEqual(snapshot_evidence["publicKeySha256"], sha256(key.read_bytes()))
+        installed_program = (self.root / "installed-program").resolve()
+        import shutil
+        shutil.copytree(candidate / "unpacked", installed_program)
+        install_arguments = ("install-signature", "--program-root", installed_program,
+                             "--signature", signature, "--public-key", key, "--trusted-pin", pin)
+        installed = self.run_lifecycle(*install_arguments)
+        self.assertEqual(installed.returncode, 0, installed.stdout + installed.stderr)
+        installation = json.loads(installed.stdout)
+        self.assertEqual(installation["signatureVerification"], "passed")
+        self.assertEqual((installed_program / "manifest.sig").read_bytes(), signature.read_bytes())
+        self.assertEqual(installation["installedSignatureSha256"], sha256(signature.read_bytes()))
+        # Exclusive installation must never overwrite an existing control file.
+        (installed_program / "manifest.sig").write_bytes(b"sentinel")
+        duplicate = self.run_lifecycle(*install_arguments)
+        self.assertEqual(duplicate.returncode, 2)
+        self.assertEqual(json.loads(duplicate.stdout)["code"], "E_LIFECYCLE_INSTALL")
+        self.assertEqual((installed_program / "manifest.sig").read_bytes(), b"sentinel")
+        (installed_program / "manifest.sig").unlink()
+        bad_install = self.run_lifecycle(*install_arguments[:-1], "0" * 64)
+        self.assertEqual(bad_install.returncode, 2)
+        self.assertFalse((installed_program / "manifest.sig").exists())
+        original_signature = signature.read_bytes()
+        signature.write_bytes(bytes(64))
+        invalid_install = self.run_lifecycle(*install_arguments)
+        self.assertEqual(invalid_install.returncode, 2)
+        self.assertEqual(json.loads(invalid_install.stdout)["code"], "E_LIFECYCLE_SIGNATURE")
+        self.assertFalse((installed_program / "manifest.sig").exists())
+        signature.write_bytes(original_signature)
+        # Source aliases must not be accepted as an installable control file.
+        linked_signature = self.root / "hardlinked.sig"
+        import os
+        os.link(signature, linked_signature)
+        linked_arguments = list(install_arguments)
+        linked_arguments[linked_arguments.index("--signature") + 1] = linked_signature
+        linked_install = self.run_lifecycle(*linked_arguments)
+        self.assertEqual(linked_install.returncode, 2)
+        self.assertEqual(json.loads(linked_install.stdout)["code"], "E_LIFECYCLE_INSTALL")
+        self.assertFalse((installed_program / "manifest.sig").exists())
+        linked_signature.unlink()
+
         rejected = self.run_lifecycle(*arguments, "0" * 64)
         self.assertEqual(rejected.returncode, 2)
         self.assertEqual(json.loads(rejected.stdout)["code"], "E_LIFECYCLE_SIGNATURE")

@@ -5,6 +5,8 @@ import hashlib
 import json
 import re
 import stat
+import os
+import tempfile
 import subprocess
 
 import package_audit
@@ -228,6 +230,87 @@ def inspect_signed_candidate(path, signature, public_key, trusted_pin, node="nod
     return report
 
 
+def _regular_snapshot(path, maximum):
+    """Bounded snapshot of one regular, nonlinked file; never accept a link."""
+    try:
+        before = Path(path).lstat()
+        if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or
+                before.st_size > maximum or
+                getattr(before, "st_file_attributes", 0) & 0x400):
+            raise LifecycleError("E_LIFECYCLE_INSTALL")
+        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) |
+                             getattr(os, "O_BINARY", 0))
+        with os.fdopen(descriptor, "rb") as source:
+            opened = os.fstat(source.fileno())
+            if (not stat.S_ISREG(opened.st_mode) or opened.st_nlink != 1 or
+                    (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino)):
+                raise LifecycleError("E_LIFECYCLE_INSTALL")
+            contents = source.read(maximum + 1)
+        if len(contents) > maximum:
+            raise LifecycleError("E_LIFECYCLE_INSTALL")
+        return contents
+    except OSError:
+        raise LifecycleError("E_LIFECYCLE_INSTALL") from None
+
+
+def install_signature(program_root, signature, public_key, trusted_pin, node="node"):
+    """Install verified snapshot bytes, not a later reread of an external path.
+
+    This harness installs a control file only; the compiled native startup gate
+    remains authoritative for the complete program inventory and trust policy.
+    """
+    root = Path(program_root).absolute()
+    try:
+        # Refuse existing symlink/reparse ancestors before any target writes.
+        for ancestor in (root, *root.parents):
+            status = ancestor.lstat()
+            if (not stat.S_ISDIR(status.st_mode) or stat.S_ISLNK(status.st_mode) or
+                    getattr(status, "st_file_attributes", 0) & 0x400):
+                raise LifecycleError("E_LIFECYCLE_INSTALL")
+        destination = root / "manifest.sig"
+        if destination.exists() or destination.is_symlink():
+            raise LifecycleError("E_LIFECYCLE_INSTALL")
+        manifest = _regular_snapshot(root / "manifest.json", JSON_MAX_BYTES)
+        signature_bytes = _regular_snapshot(signature, 64)
+        key_bytes = _regular_snapshot(public_key, 44)
+        if len(signature_bytes) != 64 or len(key_bytes) != 44:
+            raise LifecycleError("E_LIFECYCLE_INSTALL")
+        manifest_hash = hashlib.sha256(manifest).hexdigest()
+        # Verify exactly the buffered bytes that will be installed. Changes to
+        # external signature/key paths after this point cannot change the bytes.
+        with tempfile.TemporaryDirectory(prefix="ccode-signature-install-") as directory:
+            snapshot = Path(directory)
+            for name, contents in (("manifest.json", manifest), ("manifest.sig", signature_bytes),
+                                   ("public.der", key_bytes)):
+                (snapshot / name).write_bytes(contents)
+            verifier = Path(__file__).with_name("verify-manifest-signature.mjs")
+            completed = subprocess.run([node, str(verifier), str(snapshot / "manifest.json"),
+                str(snapshot / "manifest.sig"), str(snapshot / "public.der"), trusted_pin, "--snapshot-evidence"],
+                capture_output=True, text=True, timeout=15)
+            evidence = json.loads(completed.stdout, object_pairs_hook=_unique_json_object)
+            if (completed.returncode != 0 or completed.stderr or evidence !=
+                    {"schema": 1, "status": "passed", "manifestSha256": manifest_hash,
+                     "signatureSha256": hashlib.sha256(signature_bytes).hexdigest(),
+                     "publicKeySha256": hashlib.sha256(key_bytes).hexdigest()}):
+                raise LifecycleError("E_LIFECYCLE_SIGNATURE")
+        # Manifest must still have the same exact bytes immediately before the
+        # control-file write. Native startup rechecks signature and inventory.
+        if _regular_snapshot(root / "manifest.json", JSON_MAX_BYTES) != manifest:
+            raise LifecycleError("E_LIFECYCLE_INSTALL")
+        with destination.open("xb") as output:
+            if output.write(signature_bytes) != 64:
+                raise LifecycleError("E_LIFECYCLE_INSTALL")
+            output.flush()
+            os.fsync(output.fileno())
+        return {"schema": 1, "status": "passed", "signatureVerification": "passed",
+                "signedManifestSha256": manifest_hash,
+                "installedSignatureSha256": hashlib.sha256(signature_bytes).hexdigest()}
+    except LifecycleError:
+        raise
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        raise LifecycleError("E_LIFECYCLE_INSTALL") from None
+
+
 def compare_candidates(original, repacked):
     first = inspect_candidate(original)
     second = inspect_candidate(repacked)
@@ -258,12 +341,21 @@ def main():
     signed.add_argument("--public-key", required=True)
     signed.add_argument("--trusted-pin", required=True)
     signed.add_argument("--node", default="node")
+    install = commands.add_parser("install-signature")
+    install.add_argument("--program-root", required=True)
+    install.add_argument("--signature", required=True)
+    install.add_argument("--public-key", required=True)
+    install.add_argument("--trusted-pin", required=True)
+    install.add_argument("--node", default="node")
     compare = commands.add_parser("compare")
     compare.add_argument("--original", required=True)
     compare.add_argument("--repacked", required=True)
     options = parser.parse_args()
     try:
-        if options.command == "inspect-signed":
+        if options.command == "install-signature":
+            report = install_signature(options.program_root, options.signature,
+                options.public_key, options.trusted_pin, options.node)
+        elif options.command == "inspect-signed":
             report = inspect_signed_candidate(options.candidate_root, options.signature,
                 options.public_key, options.trusted_pin, options.node)
         elif options.command == "inspect":

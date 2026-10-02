@@ -31,3 +31,9 @@ class EnterpriseStartupWiringTests(unittest.TestCase):
         source = (ROOT / 'scripts/ccode/launcher.cpp').read_text()
         self.assertLess(source.index('LockedEnterpriseData enterpriseData'),
                         source.index('fs::create_directories(options.data)'))
+
+    def test_lifecycle_installs_signature_before_first_candidate_execution(self):
+        source = (ROOT / 'scripts/ccode/accept-enterprise-lifecycle-windows11-x64.ps1').read_text()
+        installation = source.index("$lifecycleTool, 'install-signature'")
+        self.assertLess(installation, source.index('& $platformGate -Executable $app'))
+        self.assertIn('$signatureInstallation.installedSignatureSha256', source)

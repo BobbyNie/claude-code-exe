@@ -3006,3 +3006,32 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   initialization in an explicit sibling external root with no engine extraction.
   New Win32 behavior is pending CI. Header Windows cross-target syntax passes;
   portable behavior tests pass. No new Win11 acceptance claim.
+
+### Detached signature installation in lifecycle harness
+
+- Missing install-signature CLI RED -> valid-signature installation GREEN.
+  enterprise_lifecycle.py installs only the fixed program/manifest.sig control
+  file, independently of the fresh-package whitelist. Exclusive create refuses
+  existing files/sentinels, with no overwrite. Wrong pin, invalid signature and
+  hardlinked source refuse without creating the control file.
+- Installer bounds manifest/signature/SPKI reads and rejects nonregular/link/
+  reparse/hardlink inputs and existing non-directory/reparse root ancestors.
+  Verifies buffered snapshots, compares hashes of the exact manifest/signature/
+  public-key buffers verified by Node, then installs those buffered signature
+  bytes. Opt-in --snapshot-evidence leaves the existing verifier CLI report
+  unchanged for inspect-signed callers. Rechecks manifest snapshot before write,
+  flushes/fsyncs the control file. Native startup remains the authoritative
+  retained-handle inventory/trust verifier; harness ancestry inspection alone
+  is not an atomic concurrent-parent-replacement guarantee.
+- Acceptance harness installs before its first platform/candidate command,
+  checks signed manifest hash against inspected candidate, and records only
+  installedSignatureSha256. Subsequent before/after program inventories include
+  this fixed control file; fresh repack still uses the original whitelist.
+- Lifecycle wiring source test RED -> GREEN; real Ed25519 fixture installation,
+  exclusive sentinel preservation and negative cases pass locally. JS signature
+  contracts 6/6 pass. Actual Win11 lifecycle execution and production signer
+  approval remain unverified, not marked passed.
+- Run 36970426670 (108afe8) both Windows Build reported runtime version steps
+  succeeded, including new external-data root retention and signed-launcher
+  overlap rejection/sibling-data success tests (jobs 110723052645/110723052770).
+  Full local Python suite now 144 tests passes with 5 Windows-only skips.

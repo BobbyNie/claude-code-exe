@@ -224,6 +224,20 @@ for ($index = 0; $index -lt $expectedFiles.Count; $index++) {
         throw 'E_LIFECYCLE_COPY'
     }
 }
+# Detached signature is an installed control file, not a fresh-package entry.
+# Verify a bounded snapshot and install exclusively before any candidate command.
+$installResult = Invoke-RecordedProcess -FilePath $PythonCommand `
+    -Arguments @($lifecycleTool, 'install-signature', '--program-root', $programRoot,
+        '--signature', $SignaturePath, '--public-key', $PublicKeyPath,
+        '--trusted-pin', $TrustedPin, '--node', $NodeCommand) `
+    -CurrentDirectory $repositoryRoot
+Assert-Success $installResult 'detached signature installation'
+$signatureInstallation = $installResult.stdout | ConvertFrom-Json
+if ($signatureInstallation.status -ne 'passed' -or
+    $signatureInstallation.signatureVerification -ne 'passed' -or
+    $signatureInstallation.signedManifestSha256 -cne $inspection.signedManifestSha256) {
+    throw 'E_LIFECYCLE_INSTALL'
+}
 $app = Join-Path $programRoot 'ccode.exe'
 $manifest = $inspection.manifest
 
@@ -364,6 +378,7 @@ $evidence = [ordered]@{
         archiveSha256 = $inspection.archiveSha256
         signatureVerification = $inspection.signatureVerification
         signedManifestSha256 = $inspection.signedManifestSha256
+        installedSignatureSha256 = $signatureInstallation.installedSignatureSha256
         audit = [ordered]@{ status = 'passed'; comparison = 'matched' }
         manifest = $manifest
         packageFilesBefore = $programBefore
