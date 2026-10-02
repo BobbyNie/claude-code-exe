@@ -3433,3 +3433,25 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 
 - Full local regression:155 tests passed with5 skips (loopback permission required);
   git diff --check passed.
+
+### 2026-10-02 — legacy native evidence confirmed; aliased recovery marker rejected
+
+- Run36986824208 at3615c4e completed failure only at both gateway rejection
+  steps. Both workspace-boundary jobs and cross-version upgrade/rollback passed.
+  The2.1.221 untrusted default/TLS1.2 probes now exactly match
+  SELF_SIGNED_CERT_UNSPECIFIED; both complete two handshakes but send zero HTTP
+  requests. Explicit fixture trust sends one HTTP request. The2.1.282 probes
+  match DEPTH_ZERO_SELF_SIGNED_CERT with zero completed untrusted handshakes.
+  Neither engine supplies structured TLS codes. Inventory investigation is now
+  confirmed for both versions; it does not authenticate production diagnostics.
+- A15 recovery marker regression: a valid completion marker hard-linked to an
+  external file previously silently suppressed migration (RED assertion failure).
+  Require exactly one hard link and a successful link-count query before accepting
+  an existing completion marker. GREEN: native profile recovery and isolation
+  suites pass; originals, external marker bytes and absent destination preserved.
+- This pathname check does not reserve the marker atomically or eliminate a
+  concurrent substitution race. It does not prove disk-full/interruption recovery
+  or Windows11 ordinary-account acceptance. Those gates remain open.
+
+- Local regression:155 Python tests pass with5 skips; both native suites and
+  git diff --check pass. Hosted Windows confirmation pending push-triggered CI.

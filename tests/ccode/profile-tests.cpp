@@ -69,6 +69,22 @@ int main() try {
         assert(Read(incomplete / ".cc" / "history.jsonl") == "original transcript\n");
         assert(!fs::exists(incomplete / ".claude"));
     }
+    // An externally aliased completion marker is not recovery-owned evidence.
+    const auto aliased = root / "hardlinked-marker";
+    Write(aliased / ".cc" / "history.jsonl", "original transcript\n");
+    const auto externalMarker = root / "external-completion.txt";
+    const std::string completion = "Legacy profile copied without replacing existing files.\n";
+    Write(externalMarker, completion);
+    fs::create_hard_link(externalMarker, aliased / ".cc-profile-restored-v1");
+    bool aliasRejected = false;
+    try { ccode::RestoreLegacyProfile(aliased); }
+    catch (const std::runtime_error& error) {
+        aliasRejected = std::string(error.what()) == "E_PROFILE_RECOVERY_MARKER";
+    }
+    assert(aliasRejected);
+    assert(Read(externalMarker) == completion);
+    assert(Read(aliased / ".cc" / "history.jsonl") == "original transcript\n");
+    assert(!fs::exists(aliased / ".claude"));
     const auto legacyMarker = root / "legacy-crlf-marker";
     Write(legacyMarker / ".cc" / "history.jsonl", "original transcript\n");
     { std::ofstream marker(legacyMarker / ".cc-profile-restored-v1", std::ios::binary);

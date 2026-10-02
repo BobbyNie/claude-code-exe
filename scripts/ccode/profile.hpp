@@ -60,7 +60,10 @@ inline ProfileRestoreResult RestoreLegacyProfile(const std::filesystem::path& ho
     const auto completionText = "Legacy profile copied without replacing existing files.\n";
     const auto markerStatus = fs::symlink_status(marker);
     if (fs::exists(markerStatus)) {
-        if (!fs::is_regular_file(markerStatus) || fs::is_symlink(markerStatus))
+        std::error_code markerError;
+        const auto links = fs::hard_link_count(marker, markerError);
+        if (!fs::is_regular_file(markerStatus) || fs::is_symlink(markerStatus) ||
+                markerError || links != 1)
             throw std::runtime_error("E_PROFILE_RECOVERY_MARKER");
         std::ifstream recorded(marker, std::ios::binary);
         char bytes[128] = {};
