@@ -3085,3 +3085,14 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   Python default cp1252 decoding failed (fixed/pushed separately in c3ce0ab),
   and actual TLS gateway rejection still lacks the required certificate evidence.
   Neither this hosted run nor local checks establish Win11 acceptance.
+
+### 2026-10-02 — extraction write-stage error categories
+
+- Native test RED observed missing ExtractionWriteError; GREEN passes after
+  mapping disk-full/access/sharing/locked errors and retaining generic WRITE
+  for unknown errors or short successful writes.
+- RuntimeStagingFile now uses that mapping at truncate/write/flush failures,
+  reading GetLastError only after an actual failed OS call (not short success).
+- Portable native suite and MinGW staging header syntax check pass. These are
+  mapping/integration checks, not a real disk-full fault injection or full A15
+  acceptance. Actual constrained-volume Windows evidence remains required.

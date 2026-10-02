@@ -14,4 +14,12 @@ inline const char* ExtractionActivationError(std::uint32_t error) {
         default: return "E_EXTRACT_ACTIVATE";
     }
 }
+// Preserve actionable OS categories at the write/flush stage too. Unknown
+// values and a successful but short write do not leak arbitrary numeric errors.
+inline const char* ExtractionWriteError(std::uint32_t error) {
+    const auto category = ExtractionActivationError(error);
+    return error == 5 || error == 32 || error == 33 || error == 39 || error == 112
+        ? category : "E_EXTRACT_WRITE";
+}
+
 }

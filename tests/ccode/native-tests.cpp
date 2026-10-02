@@ -123,6 +123,13 @@ int main() {
 #endif
 
 
+    assert(std::string(ExtractionWriteError(112)) == "E_EXTRACT_DISK_FULL");
+    assert(std::string(ExtractionWriteError(39)) == "E_EXTRACT_DISK_FULL");
+    assert(std::string(ExtractionWriteError(5)) == "E_EXTRACT_ACCESS");
+    assert(std::string(ExtractionWriteError(32)) == "E_EXTRACT_SHARING");
+    assert(std::string(ExtractionWriteError(33)) == "E_EXTRACT_LOCKED");
+    assert(std::string(ExtractionWriteError(0)) == "E_EXTRACT_WRITE");
+    assert(std::string(ExtractionWriteError(999999)) == "E_EXTRACT_WRITE");
     assert(std::string(ExtractionActivationError(5)) == "E_EXTRACT_ACCESS");
     assert(std::string(ExtractionActivationError(32)) == "E_EXTRACT_SHARING");
     assert(std::string(ExtractionActivationError(33)) == "E_EXTRACT_LOCKED");

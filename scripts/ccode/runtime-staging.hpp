@@ -36,15 +36,16 @@ public:
     void Write(const unsigned char* bytes, size_t size) {
         LARGE_INTEGER zero{};
         if (!SetFilePointerEx(file_, zero, nullptr, FILE_BEGIN) || !SetEndOfFile(file_))
-            throw std::runtime_error("E_EXTRACT_WRITE");
+            throw std::runtime_error(ExtractionWriteError(GetLastError()));
         for (size_t offset = 0; offset < size;) {
             const DWORD count = static_cast<DWORD>((size - offset) > 65536 ? 65536 : size - offset);
             DWORD written = 0;
-            if (!WriteFile(file_, bytes + offset, count, &written, nullptr) || written != count)
-                throw std::runtime_error("E_EXTRACT_WRITE");
+            if (!WriteFile(file_, bytes + offset, count, &written, nullptr))
+                throw std::runtime_error(ExtractionWriteError(GetLastError()));
+            if (written != count) throw std::runtime_error("E_EXTRACT_WRITE");
             offset += written;
         }
-        if (!FlushFileBuffers(file_)) throw std::runtime_error("E_EXTRACT_WRITE");
+        if (!FlushFileBuffers(file_)) throw std::runtime_error(ExtractionWriteError(GetLastError()));
     }
     void Activate() {
         const auto destination = (parents_.CanonicalPath() / L"engine.exe").wstring();
