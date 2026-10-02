@@ -3209,3 +3209,18 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - Existing native activation/sharing/long-Unicode and real-engine integration
   are the RED behaviors to recover, not deleted or bypassed. MinGW staging syntax,
   portable native suite and diff-check pass. Actual Windows execution is pending.
+
+### 2026-10-02 — close destination probe before classic replacement
+
+- Run36976241354 at1d820b5 completed RED with FIRST_ACTIVATE followed by
+  E_EXTRACT_ACCESS; no later phase marker was present, so this alone does not
+  prove whether first activation or a later replacement failed.
+- Existing target probe remained open through classic rename. Release that
+  READ|DELETE probe after its object/type/share checks, before classic replacement,
+  avoiding self-blocking target handles. Source/parents remain held and final
+  retained hashing still precedes execution. Target probing is explicitly not an
+  atomic reservation; no immutable target-probe-to-rename transfer is claimed.
+- Add FIRST_DONE and RETRY_BEGIN markers to distinguish initial activation from
+  existing-target retry. Existing reader-sharing refusal, original byte equality,
+  and retry success tests remain unchanged. Portable native suite, MinGW staging
+  syntax and diff-check pass; actual Windows recovery is still pending.

@@ -101,6 +101,7 @@ int RunNativeTests() {
         std::cerr << "E_TEST_STAGING_FIRST_ACTIVATE" << std::endl;
         staging.Activate();
         stagingCheck(!DeleteFileW(runtimeEngine.c_str()), "E_TEST_STAGING_2");
+        std::cerr << "E_TEST_STAGING_FIRST_DONE" << std::endl;
     }
     { RetainedRuntimePayload engine(runtimeEngine, 7, fixtureRuntimeHash); }
     stagingCheck(DeleteFileW(runtimeEngine.c_str()), "E_TEST_STAGING_3");
@@ -126,6 +127,7 @@ int RunNativeTests() {
         stagingCheck(blocked, "E_TEST_STAGING_8");
     }
     { RetainedRuntimePayload original(runtimeEngine, 7, fixtureRuntimeHash); }
+    std::cerr << "E_TEST_STAGING_RETRY_BEGIN" << std::endl;
     {
         RuntimeStagingFile staging(runtimeEngine.parent_path());
         staging.Write(reinterpret_cast<const unsigned char*>("fixture"), 7);

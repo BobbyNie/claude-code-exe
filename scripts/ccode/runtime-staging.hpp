@@ -72,6 +72,15 @@ public:
                 (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0,
                 (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0, info.nNumberOfLinks);
         }
+        // Classic replacement cannot replace a target with an outstanding
+        // probe handle. Release this probe before rename; retain source/parents.
+        // The probe is not an atomic target reservation. Native classic rename
+        // and the final retained hash remain required before engine execution.
+        if (target.value != INVALID_HANDLE_VALUE) {
+            const auto handle = target.value;
+            target.value = INVALID_HANDLE_VALUE;
+            if (!CloseHandle(handle)) throw std::runtime_error("E_EXTRACT_ACTIVATE");
+        }
         // Resolve the fixed sibling against the retained directory object, not
         // a second full-DOS-path conversion inside the rename operation.
         const std::wstring leaf = L"engine.exe";
