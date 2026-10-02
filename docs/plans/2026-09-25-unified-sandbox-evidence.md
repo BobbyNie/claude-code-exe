@@ -3408,3 +3408,28 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - Full local Python155 tests pass with5 skips; diff check passes. Actual native
   result confirmation is pending; no production classifier or acceptance assertion
   was altered, and no raw engine content is published. TLS acceptance stays open.
+
+### 2026-10-02 — native TLS probe confirmation and legacy wrapper inventory
+
+- Run36985118946 at65a57cf completed failure at gateway TLS rejection in both
+  engine versions, not billing. Remaining steps and boundary/upgrade jobs passed.
+  The2.1.282 untrusted probes now match DEPTH_ZERO_SELF_SIGNED_CERT exactly:
+  two connections, zero completed handshakes/HTTP. Trusted fixture control had
+  two TLS1.3 handshakes and one HTTP request. Structured TLS evidence is absent;
+  production classification and acceptance remain unchanged and failing.
+- Verified official GCS2.1.221 Windows x64 payload against its manifest:
+  size278279328, SHA256
+  0f73196359a07f9ad435a8c83ca7c741b9f2adbc0ad9b05f71a0c2f4aabe906a.
+  Static pfr formatter collapses leaf and chain self-signing into identical text;
+  native adapter wraps it with Rv="API Error". Inventory now recognizes only
+  that complete wrapper and labels both bare/wrapped text
+  SELF_SIGNED_CERT_UNSPECIFIED rather than inventing a specific TLS code.
+- RED: legacy message incorrectly returned DEPTH_ZERO_SELF_SIGNED_CERT.
+  GREEN: eleven probe tests pass, including complete wrapper, no structured
+  evidence, and rejection of suffixes, truncation and reflected prefixes.
+  Native legacy match remains pending the next push-triggered run.
+- No TLS bypass, production classifier changes, raw event publication or actual
+  Windows11 ordinary-account acceptance claim was introduced.
+
+- Full local regression:155 tests passed with5 skips (loopback permission required);
+  git diff --check passed.

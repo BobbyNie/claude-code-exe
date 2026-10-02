@@ -85,7 +85,7 @@ def canonical_certificate_result(events):
         # Complete static message observed in the local packaged payload.
         # Still an investigation hint; no prefix matching or production evidence.
         "Unable to connect to API: Self-signed certificate detected. "
-        "Check your proxy or corporate SSL certificates": "DEPTH_ZERO_SELF_SIGNED_CERT",
+        "Check your proxy or corporate SSL certificates": "SELF_SIGNED_CERT_UNSPECIFIED",
         "API Error: unable to verify the first certificate": "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
         "API Error: unable to get local issuer certificate": "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
         "API Error: self signed certificate": "DEPTH_ZERO_SELF_SIGNED_CERT",
@@ -95,6 +95,11 @@ def canonical_certificate_result(events):
         "API Error: certificate has expired": "CERT_HAS_EXPIRED",
         "API Error: certificate verification failed": "CERTIFICATE_VERIFY_FAILED",
     }
+    # Official2.1.221 pfr collapses leaf/chain self-signing into one message;
+    # its error adapter adds Rv="API Error". Do not invent a specific code.
+    legacy = ("Unable to connect to API: Self-signed certificate detected. "
+              "Check your proxy or corporate SSL certificates")
+    inventory["API Error: " + legacy] = "SELF_SIGNED_CERT_UNSPECIFIED"
     # Exact formatter strings recovered from the official2.1.282 payload's rte
     # function. Diagnostic inventory only: model-controlled text is not proof.
     detail = ("({code}). The certificate comes from an authority Claude Code doesn't "
