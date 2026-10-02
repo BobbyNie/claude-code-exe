@@ -95,6 +95,16 @@ def canonical_certificate_result(events):
         "API Error: certificate has expired": "CERT_HAS_EXPIRED",
         "API Error: certificate verification failed": "CERTIFICATE_VERIFY_FAILED",
     }
+    # Exact formatter strings recovered from the official2.1.282 payload's rte
+    # function. Diagnostic inventory only: model-controlled text is not proof.
+    detail = ("({code}). The certificate comes from an authority Claude Code doesn't "
+              "trust, usually a TLS-inspecting corporate proxy or a gateway signed by "
+              "a private CA: set NODE_EXTRA_CA_CERTS to that CA bundle, or add it to "
+              "the system certificate store · see "
+              "https://code.claude.com/docs/en/network-config")
+    for code in ("DEPTH_ZERO_SELF_SIGNED_CERT", "SELF_SIGNED_CERT_IN_CHAIN"):
+        inventory["Unable to connect to API: Self-signed certificate detected " +
+                  detail.format(code=code)] = code
     matches = set()
     for event in events:
         if (isinstance(event, dict) and event.get("type") == "result" and

@@ -73,6 +73,20 @@ class TlsProbeTests(unittest.TestCase):
         self.assertEqual(probe.canonical_certificate_result([None, event, event]),
                          "UNABLE_TO_VERIFY_LEAF_SIGNATURE")
 
+    def test_current_native_tls_message_inventory_matches_only_complete_messages(self):
+        detail = ("(DEPTH_ZERO_SELF_SIGNED_CERT). The certificate comes from an authority "
+                  "Claude Code doesn't trust, usually a TLS-inspecting corporate proxy or "
+                  "a gateway signed by a private CA: set NODE_EXTRA_CA_CERTS to that CA "
+                  "bundle, or add it to the system certificate store · see "
+                  "https://code.claude.com/docs/en/network-config")
+        message = "Unable to connect to API: Self-signed certificate detected " + detail
+        event = {"type": "result", "is_error": True, "result": message}
+        self.assertEqual(probe.canonical_certificate_result([event]),
+                         "DEPTH_ZERO_SELF_SIGNED_CERT")
+        for text in (message + " private-token", message[:-1], "model says " + message):
+            self.assertEqual(probe.canonical_certificate_result([
+                dict(event, result=text)]), "unmatched")
+
     def test_native_binary_certificate_inventory_requires_complete_failed_result(self):
         message = ("Unable to connect to API: Self-signed certificate detected. "
                    "Check your proxy or corporate SSL certificates")

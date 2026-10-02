@@ -3375,3 +3375,19 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - Full local profile recovery and native isolation suites pass; diff check passes.
   Windows regression is pending. This validation does not provide an atomic
   marker reservation or prove disk-full/interruption recovery for copied files.
+
+### 2026-10-02 — source-grounded native TLS formatter inventory
+
+- Inspected the locally retained official win32-x64 version2.1.282 npm payload.
+  Its embedded rte formatter emits the self-signed message followed by the exact
+  code in parentheses and a fixed CA/trust explanation. The earlier short-message
+  inventory therefore does not cover this formatter. This is static payload
+  evidence, not proof of which message the actual failed result emitted.
+- RED: exact full native formatter message returned unmatched. GREEN: extend
+  diagnostic-only inventory for DEPTH_ZERO_SELF_SIGNED_CERT and
+  SELF_SIGNED_CERT_IN_CHAIN using the complete fixed formatter text. Added
+  suffix, truncation and reflected-prefix rejection assertions. No raw engine
+  content is published and no production EventReader or acceptance gate changes.
+- Local Python155 tests pass with5 platform skips; diff check passes. Native
+  Windows probe confirmation remains pending. Even an exact message match alone
+  is not authenticated certificate-rejection evidence; TLS acceptance is open.
