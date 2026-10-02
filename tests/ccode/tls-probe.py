@@ -127,6 +127,14 @@ def probe_environment(inherited, root):
     return env
 
 
+def configure_trust_control(env, certificate, *, trusted):
+    # Diagnostic control only: add this public fixture CA without disabling
+    # certificate or hostname validation. Never inherit a caller-provided CA.
+    env.pop('NODE_EXTRA_CA_CERTS', None)
+    if trusted:
+        env['NODE_EXTRA_CA_CERTS'] = str(certificate)
+
+
 def load_fixture(name, filename):
     spec = importlib.util.spec_from_file_location(name, Path(__file__).with_name(filename))
     module = importlib.util.module_from_spec(spec)
@@ -319,7 +327,7 @@ def run_contained(args, *, cwd, env, input, timeout):
             kernel.CloseHandle(job)
 
 
-def probe(executable, *, tls12_only=False):
+def probe(executable, *, tls12_only=False, trusted_control=False):
     if sys.platform != 'win32':
         raise RuntimeError('Windows native diagnostic probe required')
     integrity = load_fixture('probe_integrity', 'payload-integrity.py')
@@ -340,13 +348,15 @@ def probe(executable, *, tls12_only=False):
         env = probe_environment(os.environ, root)
         with gateway.untrusted_tls_endpoint(
                 maximum_version=ssl.TLSVersion.TLSv1_2 if tls12_only else None) as endpoint:
+            configure_trust_control(env, endpoint.certificate, trusted=trusted_control)
             env['ANTHROPIC_BASE_URL'] = f'https://127.0.0.1:{endpoint.server_port}'
             try:
                 result = run_contained([str(engine), '--print', '--output-format', 'stream-json',
                     '--verbose', '--tools', '', '--max-turns', '1', '--no-session-persistence'],
                     input='fixture-native-tls-probe', cwd=workspace, env=env, timeout=30)
             except subprocess.TimeoutExpired:
-                print(json.dumps({'native_tls_probe': 'timeout', 'tls12_only': tls12_only}))
+                print(json.dumps({'native_tls_probe': 'timeout', 'tls12_only': tls12_only,
+                                  'explicit_fixture_trust_control': trusted_control}))
                 return
             events = []
             invalid_lines = 0
@@ -356,6 +366,7 @@ def probe(executable, *, tls12_only=False):
                 except json.JSONDecodeError:
                     invalid_lines += 1
             print(json.dumps({'native_tls_probe': summarize_events(events), 'tls12_only': tls12_only,
+                'explicit_fixture_trust_control': trusted_control,
                 'result_shape': summarize_result_shape(events),
                 'failure_text_hints_not_tls_evidence': summarize_failure_text(events),
                 'canonical_certificate_message_hint_not_tls_evidence': canonical_certificate_result(events),
@@ -369,3 +380,4 @@ def probe(executable, *, tls12_only=False):
 if __name__ == '__main__':
     probe(Path(sys.argv[1]).resolve())
     probe(Path(sys.argv[1]).resolve(), tls12_only=True)
+    probe(Path(sys.argv[1]).resolve(), trusted_control=True)

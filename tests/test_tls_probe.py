@@ -110,6 +110,17 @@ class TlsProbeTests(unittest.TestCase):
         self.assertEqual(env['CLAUDE_CODE_RETRY_WATCHDOG'], '0')
         self.assertEqual(env['CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK'], '1')
 
+    def test_trust_control_is_explicit_and_never_disables_validation(self):
+        env = {'NODE_TLS_REJECT_UNAUTHORIZED': '1'}
+        certificate = Path('public-fixture-cert.pem')
+        probe.configure_trust_control(env, certificate, trusted=False)
+        self.assertNotIn('NODE_EXTRA_CA_CERTS', env)
+        probe.configure_trust_control(env, certificate, trusted=True)
+        self.assertEqual(env['NODE_EXTRA_CA_CERTS'], str(certificate))
+        self.assertEqual(env['NODE_TLS_REJECT_UNAUTHORIZED'], '1')
+        probe.configure_trust_control(env, certificate, trusted=False)
+        self.assertNotIn('NODE_EXTRA_CA_CERTS', env)
+
     def test_tls_code_requires_structured_error_code_not_content(self):
         self.assertFalse(probe.summarize_events([{'type': 'assistant', 'message': {
             'content': [{'type': 'text', 'text': 'CERT_HAS_EXPIRED'}]}}])['structured_tls_code'])

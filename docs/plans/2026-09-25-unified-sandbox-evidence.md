@@ -3270,3 +3270,22 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - Full Python regression150 tests passed with5 platform skips. Correct the
   acceptance assembly instructions to use build sidecars before signing, while
   still requiring signed launcher metadata/boundary equality and no side effects.
+
+### 2026-10-02 — activation recovery CI and TLS trust differential probe
+
+- Run36978281307 at728d1e1 is terminal failure only in the actual-engine gateway
+  rejection steps in both versions. Both builds, tampered payload/cache recovery,
+  workspace boundary jobs and cross-version job completed success. This is
+  supplemental hosted Windows evidence, not Windows11 ordinary-account evidence.
+- Native TLS probe shows certificate-text hints but no structured TLS code; the
+  new engine aborts without a completed handshake, which alone proves neither
+  certificate rejection nor correct neutral TLS classification.
+- RED: explicit fixture-trust configuration test failed on the missing control.
+  GREEN: add a separately labelled native run using NODE_EXTRA_CA_CERTS pointing
+  only to the public fixture certificate. No validation-disable setting is added;
+  ordinary untrusted runs remain unchanged. A trust-control HTTP request would
+  help distinguish certificate trust from transport/configuration failure, but
+  this probe is not acceptance and does not fix production classification.
+- Fixture certificate has IP SAN127.0.0.1 and validity2026-09-25 to2126-09-01.
+  Local Python151 tests pass with5 platform skips. Actual native differential
+  result and gateway/TLS acceptance remain pending.
