@@ -3316,3 +3316,33 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   Both swapped-object and same-object mutation regression tests remain passing.
 - Local Python153 tests pass with5 platform skips. Actual Windows assembly
   recovery is pending CI; no metadata-only immutability claim is made.
+
+### 2026-10-02 — completed Windows regression run and TLS differential results
+
+- Run36980191935 at7c6f953 completed failure. Both engine versions passed
+  build, manifest signature contracts, Python contracts, native runtime/resume,
+  frontend, actual tools/MCP/Skill/subagent, workspace aliases, tampered payload
+  recovery and session writer concurrency. Both workspace-boundary jobs and
+  actual cross-version upgrade/rollback passed. This verifies the Windows
+  cross-API timestamp regression fix in hosted CI, not Win11 real-machine acceptance.
+- Both test jobs failed only at actual-engine gateway rejection. The unreachable
+  gateway case passed; untrusted-certificate classification remains unaccepted.
+- Jobs110752728344 (2.1.282) and110752728444 (2.1.221) provide separate native
+  trust controls. Default and TLS1.2-only untrusted probes made two connections
+  and zero HTTP requests in each version. Version2.1.282 completed zero TLS
+  handshakes; version2.1.221 completed two (TLS1.3/default, TLS1.2/forced).
+  Explicit fixture trust completed two TLS1.3 handshakes and one HTTP request
+  in each version. All probes exited1, including the trusted fixture503 control.
+- Both versions returned an error result with subtype success and result text,
+  but no structured TLS code. The exact canonical message inventory did not
+  match. Certificate-text hints occurred only in untrusted controls; these are
+  investigation hints, not production diagnostic evidence. No raw result text
+  or credentials are recorded here.
+- Current frontend.hpp maps structured error.code only, so the observed native
+  protocol cannot currently establish E_GATEWAY_TLS through that path. Neither
+  handshake completion nor absence of HTTP substitutes for certificate rejection
+  evidence. Keep the acceptance assertion unchanged; investigate a trustworthy
+  error source before changing production classification. No speculative rerun.
+- Formal signer approval and Win11 x64 ordinary-account evidence, along with the
+  remaining acceptance matrix, are still outstanding. Overall acceptance is not
+  complete.
