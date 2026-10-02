@@ -3391,3 +3391,20 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - Local Python155 tests pass with5 platform skips; diff check passes. Native
   Windows probe confirmation remains pending. Even an exact message match alone
   is not authenticated certificate-rejection evidence; TLS acceptance is open.
+
+### 2026-10-02 — native error wrapper probe and completed marker regression
+
+- Run36983710441/df4b360 completed failure only at both gateway rejection steps;
+  other test steps, cross-version and workspace-boundary jobs passed. Both native
+  probes still report unmatched exact-message inventory. This contradicts any
+  assumption that the bare rte formatter string is the observed result text.
+  Native runtime regressions containing marker validation passed in both versions.
+- Further local official2.1.282 payload inspection shows native error adapter
+  content assembled as `${ma}: ${rte(e)}` with ma="API Error". Add only that exact
+  complete wrapper to the diagnostic inventory, keeping bare formatter entries.
+- RED: wrapped full message returned unmatched. GREEN: complete wrapper matches;
+  appended/private text, truncation and reflected prefixes remain rejected. The
+  test also proves matched text still does not set structured_tls_code.
+- Full local Python155 tests pass with5 skips; diff check passes. Actual native
+  result confirmation is pending; no production classifier or acceptance assertion
+  was altered, and no raw engine content is published. TLS acceptance stays open.

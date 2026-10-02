@@ -83,7 +83,13 @@ class TlsProbeTests(unittest.TestCase):
         event = {"type": "result", "is_error": True, "result": message}
         self.assertEqual(probe.canonical_certificate_result([event]),
                          "DEPTH_ZERO_SELF_SIGNED_CERT")
-        for text in (message + " private-token", message[:-1], "model says " + message):
+        wrapped = "API Error: " + message
+        self.assertEqual(probe.canonical_certificate_result([
+            dict(event, result=wrapped)]), "DEPTH_ZERO_SELF_SIGNED_CERT")
+        self.assertFalse(probe.summarize_events([
+            dict(event, result=wrapped)])["structured_tls_code"])
+        for text in (message + " private-token", message[:-1], "model says " + message,
+                     wrapped + " private-token", wrapped[:-1], "model says " + wrapped):
             self.assertEqual(probe.canonical_certificate_result([
                 dict(event, result=text)]), "unmatched")
 

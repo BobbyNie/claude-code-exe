@@ -103,8 +103,12 @@ def canonical_certificate_result(events):
               "the system certificate store · see "
               "https://code.claude.com/docs/en/network-config")
     for code in ("DEPTH_ZERO_SELF_SIGNED_CERT", "SELF_SIGNED_CERT_IN_CHAIN"):
-        inventory["Unable to connect to API: Self-signed certificate detected " +
-                  detail.format(code=code)] = code
+        message = ("Unable to connect to API: Self-signed certificate detected " +
+                   detail.format(code=code))
+        inventory[message] = code
+        # The native error adapter wraps rte output as `${ma}: ${rte(e)}`,
+        # with ma="API Error". Match the whole wrapper, never strip prefixes.
+        inventory["API Error: " + message] = code
     matches = set()
     for event in events:
         if (isinstance(event, dict) and event.get("type") == "result" and
