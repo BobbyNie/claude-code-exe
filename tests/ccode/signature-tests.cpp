@@ -260,5 +260,21 @@ int main() {
     assert(DeleteFileW(hardlinkPath.c_str()));
     assert(DeleteFileW(fixturePath.c_str()));
 #endif
+    auto embeddedProvenance = rootManifest["provenance"];
+    embeddedProvenance["platform"] = "windows";
+    embeddedProvenance["architecture"] = "x64";
+    assert(ccode::ManifestMatchesEmbeddedProvenance(rootManifest, embeddedProvenance));
+    embeddedProvenance["engineSha256"] = std::string(64, 'd');
+    assert(!ccode::ManifestMatchesEmbeddedProvenance(rootManifest, embeddedProvenance));
+    for (int mutation = 0; mutation < 5; ++mutation) {
+        auto metadata = rootManifest["provenance"];
+        metadata["platform"] = "windows"; metadata["architecture"] = "x64";
+        if (mutation == 0) metadata["engineSize"] = 1.0;
+        if (mutation == 1) metadata["architecture"] = "arm64";
+        if (mutation == 2) metadata.erase("adapterRevision");
+        if (mutation == 3) metadata["extra"] = "untrusted";
+        if (mutation == 4) metadata["officialManifestSha256"] = std::string(64, 'd');
+        assert(!ccode::ManifestMatchesEmbeddedProvenance(rootManifest, metadata));
+    }
     std::cout << "native signature tests passed\n";
 }

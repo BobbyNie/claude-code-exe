@@ -2747,3 +2747,15 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   immutable whole-candidate hash and metadata verification, approved signer and
   launcher integration remain open. Not an A20 or Win11 acceptance claim.
   Local portable native suite and diff-check pass; Windows branch unverified.
+
+### Manifest versus embedded provenance comparison
+
+- TDD missing embedded-provenance comparator RED -> native suite GREEN. Requires
+  full valid manifest plus exact embedded metadata projection including Windows
+  and x64, with canonical integer type preservation. Rejects changed payload or
+  official manifest hashes, float size, wrong architecture, missing revision and
+  unknown metadata fields. Local native suite/diff-check pass; MSVC pending.
+- API explicitly requires resource metadata from the locked executable; this
+  comparator alone does not obtain it, load the embedded payload or authenticate
+  filesystem bytes. Actual extraction/hash/identity integration remains open.
+  No startup/update or Win11 acceptance claim.

@@ -178,4 +178,15 @@ inline nlohmann::json AuthenticateManifestDocument(const std::string& originalBy
     return document;
 }
 
+// Metadata must come from the locked executable's resource, not a sidecar or
+// candidate subprocess. This comparison does not itself load/hash the payload.
+inline bool ManifestMatchesEmbeddedProvenance(const nlohmann::json& manifest,
+                                             const nlohmann::json& embedded) {
+    if (!ValidManifestProvenanceContract(manifest) || !embedded.is_object()) return false;
+    auto expected = manifest["provenance"];
+    expected["platform"] = "windows";
+    expected["architecture"] = "x64";
+    return embedded.dump() == expected.dump();
+}
+
 }
