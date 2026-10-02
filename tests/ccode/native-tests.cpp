@@ -130,6 +130,20 @@ int main() {
         staging.Activate();
     }
     { RetainedRuntimePayload engine(runtimeEngine, 7, fixtureRuntimeHash); }
+    const auto namedRuntime = runtimeRoot / (L"runtime 中文 with spaces " + std::wstring(80, L'x'));
+    std::filesystem::create_directory(namedRuntime);
+    const std::string largePayload(131073, 'q');
+    {
+        RuntimeStagingFile staging(namedRuntime);
+        staging.Write(reinterpret_cast<const unsigned char*>(largePayload.data()), largePayload.size());
+        staging.Activate();
+    }
+    {
+        LockedCandidateFile activated(namedRuntime / L"engine.exe", LockedFilePurpose::RuntimePayload);
+        stagingCheck(activated.Size() == largePayload.size(), "E_TEST_STAGING_LONG_SIZE");
+        stagingCheck(activated.ReadBounded(largePayload.size()) == largePayload,
+                     "E_TEST_STAGING_LONG_BYTES");
+    }
     std::filesystem::remove_all(runtimeRoot);
 
 #endif

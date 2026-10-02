@@ -3138,3 +3138,20 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   were added. This will discriminate causes before a speculative behavior fix.
 - RED observed absent RuntimePayloadOpenError; portable native/signature GREEN
   and diff-check pass. Actual integration recovery remains pending Windows CI.
+
+### 2026-10-02 — terminated runtime activation destination
+
+- Run36974252597 atb758c8f completed RED: both actual runtime/resume jobs
+  reported E_RUNTIME_MISSING after activation; most real-engine tool cases
+  also reported MISSING, not SHARING. This rules out the suggested sharing
+  retry as a justified fix for those observations. Some alias/cross-version
+  cases instead reported generic activation failure.
+- Inspection found the variable-length rename destination had no explicit NUL
+  terminator after copied characters. Allocate an extra wchar and copy the
+  terminator while retaining FileNameLength excluding it. This removes reliance
+  on uninitialized buffer tail during path conversion. Causality/recovery is
+  not proven until actual Windows integration runs again.
+- Add actual Windows staging fixture with Chinese/space/long directory name and
+  131073-byte payload, checking resulting exact bytes through a locked reader.
+  Portable native GREEN, MinGW syntax and diff-check pass; Windows fixture and
+  real-engine GREEN remain pending. No change to sharing or final verification.
