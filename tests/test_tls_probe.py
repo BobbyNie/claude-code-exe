@@ -9,6 +9,17 @@ spec.loader.exec_module(probe)
 
 
 class TlsProbeTests(unittest.TestCase):
+    def test_typed_tls_cause_requires_native_wrapper_fields_not_model_text(self):
+        event = {'type': 'assistant', 'is_api_error_message': True,
+                 'api_error': 'tls_untrusted_ca',
+                 'message': {'content': [{'type': 'text', 'text': 'private-token'}]}}
+        self.assertTrue(probe.typed_tls_cause([event]))
+        for change in ({'type': 'result'}, {'is_api_error_message': False},
+                       {'is_api_error_message': 1}, {'api_error': 'private-code'}):
+            self.assertFalse(probe.typed_tls_cause([dict(event, **change)]))
+        self.assertFalse(probe.typed_tls_cause([None, {'type': 'assistant',
+            'message': {'is_api_error_message': True, 'api_error': 'tls_untrusted_ca'}}]))
+
     def test_event_summary_preserves_only_allowlisted_structural_evidence(self):
         events = [
             {'type': 'assistant', 'error': 'api_error', 'message': {'content': [

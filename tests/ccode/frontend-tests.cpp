@@ -75,6 +75,31 @@ int main() {
         assert(rejected.failed);
         assert(rejected.failureCode == expectedCode);
     }
+    // Native2.1.282 emits typed API cause as a wrapper sibling, not model text.
+    const auto typedTls = ccode::Json{{"type", "assistant"},
+        {"is_api_error_message", true}, {"api_error", "tls_untrusted_ca"},
+        {"message", {{"content", ccode::Json::array({{{"type", "text"},
+            {"text", "private-token private-host"}}})}}}};
+    for (size_t split = 0; split < typedTls.dump().size() + 1; ++split) {
+        ccode::EventReader typed;
+        const auto line = typedTls.dump() + "\n";
+        assert(typed.Feed(line.substr(0, split)).empty());
+        ExpectError(typed, line.substr(split), "E_GATEWAY_TLS");
+    }
+    for (const auto flag : {ccode::Json(false), ccode::Json(1), ccode::Json("true"), ccode::Json()}) {
+        auto reflected = typedTls;
+        reflected["is_api_error_message"] = flag;
+        ccode::EventReader ordinary;
+        assert(ordinary.Feed(reflected.dump() + "\n") == "private-token private-host\n");
+        assert(!ordinary.failed && ordinary.failureCode.empty());
+    }
+    auto nestedCause = typedTls;
+    nestedCause.erase("is_api_error_message"); nestedCause.erase("api_error");
+    nestedCause["message"]["is_api_error_message"] = true;
+    nestedCause["message"]["api_error"] = "tls_untrusted_ca";
+    ccode::EventReader nestedTyped;
+    assert(nestedTyped.Feed(nestedCause.dump() + "\n") == "private-token private-host\n");
+    assert(!nestedTyped.failed && nestedTyped.failureCode.empty());
     // Only allowlisted engine error codes classify TLS; never render details.
     for (const auto& kind : {"assistant", "system", "result"}) {
         for (const auto& code : {"CERT_HAS_EXPIRED", "DEPTH_ZERO_SELF_SIGNED_CERT",

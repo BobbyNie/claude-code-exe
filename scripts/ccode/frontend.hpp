@@ -36,6 +36,14 @@ class EventReader {
         if (!event.is_object()) throw ProtocolError("E_PROTOCOL");
         const auto type = event.value("type", std::string());
         if (complete && (type == "assistant" || type == "result")) throw ProtocolError("E_PROTOCOL_ORDER");
+        // Native2.1.282's typed API cause comes from the local error adapter.
+        // Both fields must be top-level wrapper siblings; never inspect content.
+        if (type == "assistant" && event.contains("is_api_error_message") &&
+            event.at("is_api_error_message").is_boolean() &&
+            event.at("is_api_error_message").get<bool>() &&
+            event.contains("api_error") && event.at("api_error").is_string() &&
+            event.at("api_error").get<std::string>() == "tls_untrusted_ca")
+            throw ProtocolError("E_GATEWAY_TLS");
         // Only structured engine codes are diagnostic evidence. Model text,
         // arbitrary error messages and transport resets cannot establish TLS trust failure.
         if ((type == "assistant" || type == "system" || type == "result") &&

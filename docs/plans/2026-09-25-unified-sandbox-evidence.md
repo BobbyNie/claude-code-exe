@@ -3471,3 +3471,29 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   signer, legal/redistribution approval, full signed update interruption/rollback,
   arbitrary concurrency or actual Windows11 ordinary-account operation.
 - This is a documentation/evidence audit only, no code or acceptance weakening.
+
+### 2026-10-02 — native typed TLS cause adapter (runtime confirmation pending)
+
+- Current official2.1.282 Windows payload contains a structured API-error cause:
+  the local API connection error adapter maps IPo certificate codes to
+  apiError="tls_untrusted_ca". IPo contains leaf/issuer/self-signed verification
+  codes, not arbitrary connection resets. Its assistant wire serializer emits
+  is_api_error_message=true and api_error as wrapper siblings, outside content.
+  This is a distinct diagnostic source from the exact-text investigation inventory.
+- EventReader now accepts that exact typed cause only for assistant events with
+  a strictly boolean true top-level API-error marker. It neither matches result
+  text nor reads nested model content. Existing structured code handling remains.
+- RED: native frontend rejected no typed cause; test failed. GREEN: typed wrapper
+  maps to E_GATEWAY_TLS at every transport split without rendering private text.
+  False/null/string/integer markers and nested cause fields remain ordinary text.
+- Probe now separately publishes a fixed native_typed_tls_cause boolean. RED:
+  probe function absent; GREEN:12 probe tests pass with wrong type/marker/cause
+  rejection. No raw cause values or content are published.
+- These are local adapter contracts, not native event confirmation: prior probe
+  assistant_api_error flag checked only error="api_error", not these new fields.
+  Next native run must determine whether the typed wrapper is actually emitted.
+  Older2.1.221 behavior is not inferred from2.1.282. Production TLS acceptance,
+  certificate expiry/DNS matrix and Windows11 ordinary-account gates stay open.
+
+- Full local regression:156 Python tests pass with5 skips; native frontend
+  suite and git diff --check pass. No gateway acceptance assertion was changed.
