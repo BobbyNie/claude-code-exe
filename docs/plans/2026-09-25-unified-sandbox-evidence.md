@@ -2857,3 +2857,26 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   inserting an extra child after enumeration. No atomic-directory safety claim.
   This composition still lacks embedded payload/metadata resource verification,
   compiled approved signer policy and mandatory launcher/update enforcement.
+
+### Mandatory candidate embedded resource verification
+
+- Windows-target compile RED reported the missing VerifyEmbeddedResources method.
+  LockedCandidatePackage now invokes it before successful construction, while
+  all listed static files and directories remain retained. Loads the PE with
+  DATAFILE_EXCLUSIVE | IMAGE_RESOURCE only, never runs candidate code or imports.
+- Bounded resource 102 JSON is parsed with duplicate-key/depth protection and
+  matched exactly to authenticated provenance. Resource 101 size and streaming
+  SHA256 must match that provenance; mismatch/missing resources fail closed.
+  Resource image mapping is released after verification, file handles stay held.
+- Windows build now passes its actual built PE and independent generated metadata
+  to the native test. The complete candidate fixture uses that real executable,
+  signs its file inventory and validates resources; separately signed conflicting
+  provenance must fail. Local native/Python135 (5 skips)/diff-check pass, but
+  these Win32 resource assertions await CI. No local behavioral GREEN claim.
+- b1f75c7 run 36966909891 reports both Windows build steps success, confirming
+  execution of the unchanged directory rename assertions after the access fix.
+  Whole workflow remains in progress, not accepted as Windows 11 evidence.
+- This is fresh-candidate verification, not yet an enforced launcher/update gate.
+  Approved compiled signer policy, PE machine/header validation and final Win11
+  ordinary-account acceptance remain open. Snapshot enumeration still does not
+  prevent extra-child insertion after enumeration.

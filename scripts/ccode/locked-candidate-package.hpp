@@ -52,9 +52,47 @@ public:
                 return std::make_unique<LockedCandidateFile>(root_ / std::filesystem::u8path(relative));
             });
         CheckInventory();
+        VerifyEmbeddedResources();
     }
     LockedCandidatePackage(const LockedCandidatePackage&) = delete;
     LockedCandidatePackage& operator=(const LockedCandidatePackage&) = delete;
+    void VerifyEmbeddedResources() const {
+        struct Image {
+            HMODULE handle;
+            ~Image() { if (handle) FreeLibrary(handle); }
+        } image{LoadLibraryExW((root_ / L"ccode.exe").c_str(), nullptr,
+            LOAD_LIBRARY_AS_DATAFILE_EXCLUSIVE | LOAD_LIBRARY_AS_IMAGE_RESOURCE)};
+        if (!image.handle) throw std::runtime_error("E_MANIFEST_RESOURCE");
+        auto resource = [&](int id) {
+            auto info = FindResourceW(image.handle, MAKEINTRESOURCEW(id), MAKEINTRESOURCEW(10));
+            auto loaded = info ? LoadResource(image.handle, info) : nullptr;
+            auto bytes = loaded ? static_cast<const unsigned char*>(LockResource(loaded)) : nullptr;
+            DWORD size = info ? SizeofResource(image.handle, info) : 0;
+            if (!bytes || !size) throw std::runtime_error("E_MANIFEST_RESOURCE");
+            return std::make_pair(bytes, size);
+        };
+        const auto metadata = resource(102);
+        if (metadata.second > 1048576) throw std::runtime_error("E_MANIFEST_RESOURCE");
+        nlohmann::json embedded;
+        try {
+            embedded = ParseManifestDocument(std::string(
+                reinterpret_cast<const char*>(metadata.first), metadata.second));
+        } catch (...) { throw std::runtime_error("E_MANIFEST_RESOURCE"); }
+        if (!ManifestMatchesEmbeddedProvenance(manifest_, embedded))
+            throw std::runtime_error("E_MANIFEST_RESOURCE");
+        const auto payload = resource(101);
+        if (payload.second != manifest_["provenance"]["engineSize"].get<uint64_t>())
+            throw std::runtime_error("E_MANIFEST_RESOURCE");
+        size_t offset = 0;
+        const auto digest = StreamSha256([&](unsigned char* buffer, size_t maximum) {
+            const auto count = std::min<size_t>(maximum, payload.second - offset);
+            std::copy_n(payload.first + offset, count, buffer);
+            offset += count;
+            return count;
+        });
+        if (digest != manifest_["provenance"]["engineSha256"].get<std::string>())
+            throw std::runtime_error("E_MANIFEST_RESOURCE");
+    }
     const nlohmann::json& Manifest() const { return manifest_; }
 };
 }

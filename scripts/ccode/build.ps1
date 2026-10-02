@@ -109,7 +109,7 @@ try {
     Invoke-Checked cl.exe /nologo /std:c++17 /O2 /EHsc /MT /utf-8 `
         (Join-Path $PSScriptRoot "..\..\tests\ccode\signature-tests.cpp") `
         @cryptoObjects "/Fe:$signatureTest" /link bcrypt.lib
-    Invoke-Checked $signatureTest
+    Invoke-Checked $signatureTest $output $metadataPath
 
     $info = Get-Item $output
     if ($info.Length -le (Get-Item $payload).Length) {

@@ -18,7 +18,7 @@ std::vector<unsigned char> Hex(const std::string& text) {
         bytes.push_back(static_cast<unsigned char>(std::stoul(text.substr(i, 2), nullptr, 16)));
     return bytes;
 }
-int main() {
+int main(int argc, char** argv) {
     // RFC 8032 test 1 proves the native primitive independently of our domain.
     const auto key = Hex("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a");
     auto signature = Hex("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555f"
@@ -287,17 +287,48 @@ int main() {
         if (entry["path"] == "ccode.exe") packageDocument["executable"] = entry;
         if (entry["path"] == "notices/LICENSE.txt") packageDocument["notices"][0] = entry;
     }
+    assert(argc == 3); // Windows build supplies its actual PE and independent build metadata.
+    std::ifstream expectedMetadataFile(argv[2], std::ios::binary);
+    const std::string expectedMetadataBytes((std::istreambuf_iterator<char>(expectedMetadataFile)), {});
+    auto expectedMetadata = ccode::ParseManifestDocument(expectedMetadataBytes);
+    packageDocument["packageVersion"] = expectedMetadata["engineVersion"];
+    packageDocument["provenance"] = expectedMetadata;
+    packageDocument["provenance"].erase("platform");
+    packageDocument["provenance"].erase("architecture");
+    std::filesystem::copy_file(std::filesystem::path(argv[1]), packageFixture / L"ccode.exe",
+        std::filesystem::copy_options::overwrite_existing);
+    {
+        ccode::LockedCandidateFile executable(packageFixture / L"ccode.exe");
+        for (auto& entry : packageDocument["files"]) if (entry["path"] == "ccode.exe") {
+            entry["size"] = executable.Size();
+            entry["sha256"] = executable.Sha256();
+            packageDocument["executable"] = entry;
+        }
+    }
     const auto packageBytes = packageDocument.dump();
     { std::ofstream file(packageFixture / L"manifest.json", std::ios::binary); file << packageBytes; }
     const auto packageSignature = signDocument(packageBytes);
     {
         ccode::LockedCandidatePackage package(packageFixture, packageSignature, validDer, pin);
         assert(package.Manifest() == packageDocument);
+        package.VerifyEmbeddedResources();
         assert(!DeleteFileW((packageFixture / L"manifest.json").c_str()));
         assert(!DeleteFileW((packageFixture / L"notices" / L"LICENSE.txt").c_str()));
         assert(!MoveFileW(packageFixture.c_str(), (packageFixture.wstring() + L"-moved").c_str()));
 
     }
+    auto resourceMismatchDocument = packageDocument;
+    resourceMismatchDocument["provenance"]["engineSha256"] = std::string(64, '0');
+    const auto resourceMismatchBytes = resourceMismatchDocument.dump();
+    { std::ofstream file(packageFixture / L"manifest.json", std::ios::binary); file << resourceMismatchBytes; }
+    bool resourceMismatchRejected = false;
+    try {
+        ccode::LockedCandidatePackage package(packageFixture, signDocument(resourceMismatchBytes), validDer, pin);
+    } catch (const std::runtime_error& error) {
+        resourceMismatchRejected = std::string(error.what()) == "E_MANIFEST_RESOURCE";
+    }
+    assert(resourceMismatchRejected);
+    { std::ofstream file(packageFixture / L"manifest.json", std::ios::binary); file << packageBytes; }
     { std::ofstream file(packageFixture / L"extra.txt"); file << "extra"; }
     bool extraFileRejected = false;
     try { ccode::LockedCandidatePackage package(packageFixture, packageSignature, validDer, pin); }
