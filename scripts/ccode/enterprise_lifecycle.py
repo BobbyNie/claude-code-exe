@@ -10,7 +10,8 @@ import tempfile
 import subprocess
 
 import package_audit
-from build_enterprise_package import BOUNDARY_DOCUMENT, _unique_json_object, _https
+from build_enterprise_package import (BOUNDARY_DOCUMENT, _unique_json_object, _https,
+                                      _regular_bytes, PackageBuildError)
 
 
 HEX_64 = re.compile(r"^[0-9a-f]{64}$")
@@ -39,20 +40,12 @@ JSON_MAX_BYTES = 1024 * 1024
 
 def _json(path, code="E_LIFECYCLE_FORMAT"):
     try:
-        status = Path(path).lstat()
-        if (stat.S_ISLNK(status.st_mode) or not stat.S_ISREG(status.st_mode) or
-                status.st_size > JSON_MAX_BYTES):
-            raise LifecycleError(code)
-        # Bound the read itself: a file may grow after the size check.
-        with Path(path).open("rb") as source:
-            contents = source.read(JSON_MAX_BYTES + 1)
-        if len(contents) > JSON_MAX_BYTES:
-            raise LifecycleError(code)
+        contents = _regular_bytes(path, max_bytes=JSON_MAX_BYTES)
         return json.loads(contents.decode("utf-8-sig"),
                           object_pairs_hook=_unique_json_object)
     except LifecycleError:
         raise
-    except (OSError, UnicodeError, ValueError):
+    except (OSError, UnicodeError, ValueError, PackageBuildError):
         raise LifecycleError(code) from None
 
 

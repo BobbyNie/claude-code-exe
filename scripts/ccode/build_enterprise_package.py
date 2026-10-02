@@ -96,12 +96,14 @@ def _cross_api_stamp(status):
             getattr(status, "st_birthtime_ns", status.st_ctime_ns))
 
 
-def _regular_bytes(path):
+def _regular_bytes(path, *, max_bytes=None):
     path = Path(path)
     try:
         status = path.lstat()
         if stat.S_ISLNK(status.st_mode) or not stat.S_ISREG(status.st_mode):
             raise PackageBuildError("E_INPUT_TYPE")
+        if max_bytes is not None and status.st_size > max_bytes:
+            raise PackageBuildError("E_INPUT_READ")
         # Read the opened object and compare its identity with the observation.
         # Never re-open the pathname via read_bytes after a separate type check.
         flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
@@ -113,7 +115,9 @@ def _regular_bytes(path):
                 raise PackageBuildError("E_INPUT_TYPE")
             if _cross_api_stamp(status) != _cross_api_stamp(opened):
                 raise PackageBuildError("E_INPUT_READ")
-            contents = stream.read()
+            contents = stream.read() if max_bytes is None else stream.read(max_bytes + 1)
+            if max_bytes is not None and len(contents) > max_bytes:
+                raise PackageBuildError("E_INPUT_READ")
             after = os.fstat(stream.fileno())
             current = path.lstat()
             if (stat.S_ISLNK(current.st_mode) or not stat.S_ISREG(current.st_mode) or

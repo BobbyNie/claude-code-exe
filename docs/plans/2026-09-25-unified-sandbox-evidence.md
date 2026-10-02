@@ -3346,3 +3346,19 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - Formal signer approval and Win11 x64 ordinary-account evidence, along with the
   remaining acceptance matrix, are still outstanding. Overall acceptance is not
   complete.
+
+### 2026-10-02 — lifecycle JSON snapshot replacement rejection
+
+- RED: replacing an audit JSON pathname immediately after its first lstat was
+  accepted by lifecycle._json; the new deterministic regression failed because
+  no LifecycleError was raised.
+- GREEN: lifecycle audit/manifest JSON now uses the assembly snapshot reader,
+  translating PackageBuildError to the caller's neutral lifecycle code. Add an
+  optional byte limit to that reader: reject oversized initial metadata and cap
+  the actual read at limit+1. Preserve file identity and before/after descriptor
+  stamp checks, unique JSON keys, UTF-8 BOM compatibility and the1MiB JSON cap.
+- Targeted lifecycle tests12 pass with1 platform skip; snapshot tests pass.
+  Full Python154 tests pass with5 platform skips; git diff --check passes.
+- This rejects the tested replacement race; it is not a claim of immutable reads
+  against every same-object writer or of complete candidate-directory atomicity.
+  Hosted Windows regression and Windows11 ordinary-account evidence are pending.
