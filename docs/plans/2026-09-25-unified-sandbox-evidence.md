@@ -3096,3 +3096,14 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - Portable native suite and MinGW staging header syntax check pass. These are
   mapping/integration checks, not a real disk-full fault injection or full A15
   acceptance. Actual constrained-volume Windows evidence remains required.
+
+### 2026-10-02 — staging CI regression remains RED
+
+- Run36972781321 at75aabf8 completed failure in both Windows build jobs:
+  launcher compilation succeeded, but native-tests.exe exited -1073740791.
+  No assertion expression was emitted. Staging Win32 behavior is therefore
+  unproven and currently a regression, not accepted implementation.
+- Replace new staging fixture assertions with equivalent explicit checks that
+  emit fixed E_TEST_STAGING checkpoint IDs and exit1. No fixture paths/bytes
+  are emitted and no assertion condition is removed or relaxed. Portable suite
+  still passes; this diagnostic change awaits actual Windows execution.

@@ -81,27 +81,32 @@ int main() {
         assert(writer == INVALID_HANDLE_VALUE);
     }
     assert(DeleteFileW(runtimeEngine.c_str()));
+    // MSVC release CRT assertion failures can omit their expression from CI.
+    // Emit only fixed fixture checkpoint IDs, never candidate paths or bytes.
+    auto stagingCheck = [](bool condition, const char* checkpoint) {
+        if (!condition) { std::cerr << checkpoint << std::endl; std::exit(1); }
+    };
     const auto stagingPath = runtimeEngine.parent_path() / L"engine.new";
     { std::ofstream stale(stagingPath, std::ios::binary); stale << "stale-long-tail"; }
     {
         RuntimeStagingFile staging(runtimeEngine.parent_path());
         staging.Write(reinterpret_cast<const unsigned char*>("fixture"), 7);
-        assert(!DeleteFileW(stagingPath.c_str()));
+        stagingCheck(!DeleteFileW(stagingPath.c_str()), "E_TEST_STAGING_1");
         staging.Activate();
-        assert(!DeleteFileW(runtimeEngine.c_str()));
+        stagingCheck(!DeleteFileW(runtimeEngine.c_str()), "E_TEST_STAGING_2");
     }
     { RetainedRuntimePayload engine(runtimeEngine, 7, fixtureRuntimeHash); }
-    assert(DeleteFileW(runtimeEngine.c_str()));
+    stagingCheck(DeleteFileW(runtimeEngine.c_str()), "E_TEST_STAGING_3");
     const auto sentinel = runtimeRoot / L"sentinel";
     { std::ofstream original(sentinel, std::ios::binary); original << "sentinel"; }
-    assert(CreateHardLinkW(stagingPath.c_str(), sentinel.c_str(), nullptr));
+    stagingCheck(CreateHardLinkW(stagingPath.c_str(), sentinel.c_str(), nullptr), "E_TEST_STAGING_4");
     bool hardlinkRejected = false;
     try { RuntimeStagingFile staging(runtimeEngine.parent_path()); }
     catch (const std::runtime_error& error) { hardlinkRejected = std::string(error.what()) == "E_RUNTIME_PATH"; }
-    assert(hardlinkRejected);
+    stagingCheck(hardlinkRejected, "E_TEST_STAGING_5");
     { std::ifstream original(sentinel, std::ios::binary); std::string value;
-      original >> value; assert(value == "sentinel"); }
-    assert(DeleteFileW(stagingPath.c_str()));
+      original >> value; stagingCheck(value == "sentinel", "E_TEST_STAGING_6"); }
+    stagingCheck(DeleteFileW(stagingPath.c_str()), "E_TEST_STAGING_7");
     { std::ofstream original(runtimeEngine, std::ios::binary); original << "fixture"; }
     {
         RetainedRuntimePayload original(runtimeEngine, 7, fixtureRuntimeHash);
@@ -109,7 +114,7 @@ int main() {
         staging.Write(reinterpret_cast<const unsigned char*>("replacement"), 11);
         bool blocked = false;
         try { staging.Activate(); } catch (const std::runtime_error&) { blocked = true; }
-        assert(blocked);
+        stagingCheck(blocked, "E_TEST_STAGING_8");
     }
     { RetainedRuntimePayload original(runtimeEngine, 7, fixtureRuntimeHash); }
     {
