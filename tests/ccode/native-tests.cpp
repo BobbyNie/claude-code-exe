@@ -168,6 +168,53 @@ int RunNativeTests() {
         release.join();
     }
     { RetainedRuntimePayload original(runtimeEngine, 7, fixtureRuntimeHash); }
+    // Isolate an image-section blocker from ordinary file share-denial.
+    // Use this actual PE fixture, not the non-executable seven-byte payload.
+    {
+        std::vector<wchar_t> module(32768);
+        const auto length = GetModuleFileNameW(nullptr, module.data(),
+                                               static_cast<DWORD>(module.size()));
+        stagingCheck(length > 0 && length < module.size(), "E_TEST_IMAGE_MODULE");
+        stagingCheck(CopyFileW(module.data(), runtimeEngine.c_str(), FALSE),
+                     "E_TEST_IMAGE_COPY");
+        std::string originalHash;
+        { LockedCandidateFile original(runtimeEngine, LockedFilePurpose::RuntimePayload);
+          originalHash = original.Sha256(); }
+        HANDLE backing = CreateFileW(runtimeEngine.c_str(), GENERIC_READ,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        stagingCheck(backing != INVALID_HANDLE_VALUE, "E_TEST_IMAGE_OPEN");
+        LARGE_INTEGER originalSize{};
+        stagingCheck(GetFileSizeEx(backing, &originalSize), "E_TEST_IMAGE_SIZE");
+        HANDLE image = CreateFileMappingW(backing, nullptr, PAGE_READONLY | SEC_IMAGE,
+                                          0, 0, nullptr);
+        stagingCheck(image != nullptr, "E_TEST_IMAGE_SECTION");
+        void* view = MapViewOfFile(image, FILE_MAP_READ, 0, 0, 0);
+        stagingCheck(view != nullptr, "E_TEST_IMAGE_VIEW");
+        stagingCheck(CloseHandle(backing), "E_TEST_IMAGE_BACKING_CLOSE");
+        RuntimeStagingFile staging(runtimeEngine.parent_path());
+        staging.Write(reinterpret_cast<const unsigned char*>("fixture"), 7);
+        const auto started = GetTickCount64();
+        bool blocked = false;
+        try { staging.Activate(100); }
+        catch (const std::runtime_error& error) {
+            const std::string code(error.what());
+            blocked = code == "E_EXTRACT_ACCESS" || code == "E_EXTRACT_SHARING" ||
+                      code == "E_EXTRACT_LOCKED";
+        }
+        stagingCheck(blocked && GetTickCount64() - started >= 100,
+                     "E_TEST_IMAGE_DEADLINE");
+        {
+            LockedCandidateFile original(runtimeEngine, LockedFilePurpose::RuntimePayload);
+            stagingCheck(original.Size() == static_cast<uint64_t>(originalSize.QuadPart) &&
+                         original.Sha256() == originalHash,
+                         "E_TEST_IMAGE_ORIGINAL_PRESERVED");
+        }
+        stagingCheck(UnmapViewOfFile(view), "E_TEST_IMAGE_UNMAP");
+        stagingCheck(CloseHandle(image), "E_TEST_IMAGE_SECTION_CLOSE");
+        staging.Activate(2000);
+    }
+    { RetainedRuntimePayload original(runtimeEngine, 7, fixtureRuntimeHash); }
     std::cerr << "E_TEST_STAGING_LONG_BEGIN" << std::endl;
     const auto namedRuntime = runtimeRoot / (L"runtime 中文 with spaces " + std::wstring(80, L'x'));
     std::filesystem::create_directory(namedRuntime);

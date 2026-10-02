@@ -3654,3 +3654,19 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   DNS preflight and claim equivalent evidence. Need a trustworthy native cause
   source or upstream-supported diagnostic contract while retaining original
   payload provenance and the existing acceptance requirements.
+
+### 2026-10-02 — image-section contention test-first entry
+
+- Add Windows-only native acceptance using a real PE copy of the test executable,
+  SEC_IMAGE section and mapped view. Close the share-permissive backing handle
+  before activation, isolating image-section contention from file-share denial.
+- Require bounded activation failure with existing neutral contention codes,
+  preserved original size and SHA256, then successful activation and integrity
+  validation after explicitly unmapping and closing the image section. Cleanup
+  errors fail the test; no production classification or retry policy changed.
+- Local portable native suite and Python158 tests (5 skipped) pass. The new
+  Windows-only branch has NOT run locally: this is a test-first native probe,
+  with RED/GREEN pending Windows CI. Do not infer SEC_IMAGE or A15 acceptance
+  from portable results. Any required production fix follows actual native RED.
+- Hosted CI remains supplemental, not Windows11 ordinary-account evidence.
+  Existing actual-engine DNS and legacy TLS failures remain unresolved.
