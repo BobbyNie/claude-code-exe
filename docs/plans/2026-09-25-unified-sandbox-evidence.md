@@ -2699,3 +2699,19 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   C++17 suite/diff-check pass; MSVC pending. Provenance and runtimeBoundary are
   currently only required to be objects and remain separate validation work.
   This helper is not startup enforcement or A20/Win11 acceptance.
+
+### Native provenance and runtime-boundary contract
+
+- TDD missing provenance validator RED -> native suite GREEN. Combines root
+  and inventory validation with exact provenance keys/schema/package, adapter
+  revision/hashes, positive integer payload size and engine-version agreement.
+  Official manifest/payload URLs must match the launcher's fixed GCS distribution
+  base and version segment; candidate host/query substitution is rejected.
+  runtimeBoundary canonical dump must exactly equal compiled BoundaryManifest,
+  including integer types. Regression tests reject bool/zero/float sizes,
+  version mismatch, uppercase revision, unknown fields, altered boundary types
+  and URL queries. Local native suite/diff-check pass; MSVC pending.
+- Metadata claims alone do not prove candidate executable embedded provenance,
+  payload hash or immutable filesystem identity. Connecting these validators to
+  authenticated locked candidate files and startup/update remains required.
+  A20 and Windows 11 x64 acceptance remain incomplete.

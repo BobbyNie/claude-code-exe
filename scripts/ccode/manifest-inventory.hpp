@@ -1,5 +1,6 @@
 #pragma once
 #include "vendor/json.hpp"
+#include "boundary.hpp"
 #include <set>
 #include <vector>
 #include <stdexcept>
@@ -125,6 +126,40 @@ inline bool ValidManifestRootContract(const nlohmann::json& manifest) {
     const Json expected = {{"opaqueContents", Json::array({"ccode.exe"})},
         {"scannedText", scanned}, {"parentDirectories", "excluded"}};
     return manifest["publicBoundary"].dump() == expected.dump();
+}
+
+inline bool ValidManifestProvenanceContract(const nlohmann::json& manifest) {
+    if (!ValidManifestRootContract(manifest)) return false;
+    const auto& source = manifest["provenance"];
+    const std::set<std::string> required = {"schemaVersion", "packageName", "packageVersion",
+        "adapterRevision", "engineVersion", "engineSha256", "engineSize",
+        "officialManifestUrl", "officialManifestSha256", "officialPayloadUrl"};
+    if (source.size() != required.size()) return false;
+    for (const auto& key : required) if (!source.contains(key)) return false;
+    auto hex = [](const nlohmann::json& value, size_t length) {
+        if (!value.is_string()) return false;
+        const auto text = value.get<std::string>();
+        return text.size() == length && std::all_of(text.begin(), text.end(), [](char c) {
+            return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+        });
+    };
+    if (!source["schemaVersion"].is_number_integer() || source["schemaVersion"].dump() != "1" ||
+        source["packageName"] != "ccode" || source["packageVersion"] != "1.0" ||
+        source["engineVersion"] != manifest["packageVersion"] ||
+        !(hex(source["adapterRevision"], 40) || hex(source["adapterRevision"], 64)) ||
+        !hex(source["engineSha256"], 64) || !hex(source["officialManifestSha256"], 64) ||
+        !source["engineSize"].is_number_integer() ||
+        (!source["engineSize"].is_number_unsigned() && source["engineSize"].get<int64_t>() <= 0) ||
+        (source["engineSize"].is_number_unsigned() && source["engineSize"].get<uint64_t>() == 0) ||
+        manifest["runtimeBoundary"].dump() != BoundaryManifest().dump()) return false;
+    const auto version = manifest["packageVersion"].get<std::string>();
+    // Version is one URL path segment, not candidate-controlled URL syntax.
+    if (!std::all_of(version.begin(), version.end(), [](char c) {
+        return (c >= '0' && c <= '9') || c == '.';
+    }) || version.front() == '.' || version.back() == '.') return false;
+    const auto base = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/" + version;
+    return source["officialManifestUrl"] == base + "/manifest.json" &&
+           source["officialPayloadUrl"] == base + "/win32-x64/claude.exe";
 }
 
 }

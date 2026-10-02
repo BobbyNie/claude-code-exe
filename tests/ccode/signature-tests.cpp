@@ -152,5 +152,30 @@ int main() {
         if (mutation == 7) invalidRoot["excludedDynamicData"].push_back("other/");
         assert(!ccode::ValidManifestRootContract(invalidRoot));
     }
+    const std::string officialBase = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.282";
+    rootManifest["provenance"] = {{"schemaVersion", 1}, {"packageName", "ccode"},
+        {"packageVersion", "1.0"}, {"adapterRevision", std::string(40, 'a')},
+        {"engineVersion", "2.1.282"}, {"engineSha256", std::string(64, 'b')},
+        {"engineSize", 1}, {"officialManifestUrl", officialBase + "/manifest.json"},
+        {"officialManifestSha256", std::string(64, 'c')},
+        {"officialPayloadUrl", officialBase + "/win32-x64/claude.exe"}};
+    rootManifest["runtimeBoundary"] = ccode::BoundaryManifest();
+    assert(ccode::ValidManifestProvenanceContract(rootManifest));
+    auto wrongSource = rootManifest;
+    wrongSource["provenance"]["officialPayloadUrl"] = "https://example.invalid/claude.exe";
+    assert(!ccode::ValidManifestProvenanceContract(wrongSource));
+    for (int mutation = 0; mutation < 8; ++mutation) {
+        auto invalidSource = rootManifest;
+        auto& source = invalidSource["provenance"];
+        if (mutation == 0) source["engineSize"] = true;
+        if (mutation == 1) source["engineSize"] = 0;
+        if (mutation == 2) source["engineSize"] = 1.0;
+        if (mutation == 3) source["engineVersion"] = "2.1.221";
+        if (mutation == 4) source["adapterRevision"] = std::string(40, 'A');
+        if (mutation == 5) source["extra"] = 1;
+        if (mutation == 6) invalidSource["runtimeBoundary"]["schemaVersion"] = 1.0;
+        if (mutation == 7) source["officialManifestUrl"] = officialBase + "/manifest.json?override=1";
+        assert(!ccode::ValidManifestProvenanceContract(invalidSource));
+    }
     std::cout << "native signature tests passed\n";
 }
