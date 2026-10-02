@@ -53,6 +53,12 @@ int main() {
     assert(checksum["exitCode"] == 64);
     assert(checksum["operationId"] == operation);
     assert(checksum.dump().find("private") == std::string::npos);
+    const auto runtimeIntegrity = FailureDiagnostic(
+        "E_RUNTIME_INTEGRITY: private payload path and token", 64, operation);
+    assert(runtimeIntegrity["errorCode"] == "E_RUNTIME_INTEGRITY");
+    assert(runtimeIntegrity["category"] == "integrity");
+    assert(runtimeIntegrity.dump().find("private") == std::string::npos);
+    assert(NeutralErrorCode("E_RUNTIME_INTEGRITY_PRIVATE_TOKEN") == "E_LOCAL");
     const auto unknown = FailureDiagnostic("E_PRIVATE_TOKEN_12345", 64, operation);
     assert(unknown["errorCode"] == "E_LOCAL");
     assert(unknown["category"] == "local");

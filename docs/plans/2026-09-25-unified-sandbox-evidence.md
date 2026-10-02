@@ -3552,3 +3552,15 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   and no gateway acceptance assertion changes.
 - This is a local presentation contract, not actual DNS fault injection or
   Windows11 acceptance. Native DNS/expiry/full A18-A19 matrix remains open.
+
+### 2026-10-02 — retain runtime integrity diagnostic vocabulary
+
+- Audit found RetainedRuntimePayload throws the existing E_RUNTIME_INTEGRITY
+  on size/hash mismatch, but NeutralErrorCode omitted that fixed product code,
+  collapsing its failure report to E_LOCAL. Add only this exact allowlisted code;
+  existing runtime category handling already maps it to integrity.
+- TDD RED: FailureDiagnostic of a runtime integrity failure loses its code.
+  GREEN: exact errorCode/category preserved, appended private path/token omitted,
+  and E_RUNTIME_INTEGRITY_PRIVATE_TOKEN still becomes E_LOCAL. Native diagnostic
+  privacy suite passes. This is a local report contract, not actual Windows11
+  tampered-runtime evidence or completion of A15/A19.
