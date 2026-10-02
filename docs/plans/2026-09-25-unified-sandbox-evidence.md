@@ -3534,3 +3534,21 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - TDD RED: new probe test fails with missing function. GREEN:13 probe tests pass
   including boolean/type/top-level constraints and non-TLS marked API error.
   Native emission of the legacy wrapper remains to be measured in the next run.
+
+### 2026-10-02 — legacy wrapper measured; neutral DNS presentation
+
+- Run36993882844/786a67e:2.1.282 full job, cross-version and both boundary
+  jobs pass;2.1.221 gateway gate remains failed. Legacy native API wrapper flag
+  is true in both untrusted cases AND the explicitly trusted fixture's503 case.
+  It is therefore provenance evidence only, never sufficient TLS attribution.
+- Read-only repository runner inventory returned total_count=0. No Windows11
+  self-hosted endpoint is available through this repository; do not dispatch an
+  acceptance job into an indefinite queue or substitute hosted Windows Server.
+- Existing structured ENOTFOUND/EAI_AGAIN causes already map to E_GATEWAY_DNS,
+  but the shared terminal renderer still described them as invalid engine events.
+  TDD RED: exact DNS neutral message assertion fails. GREEN: renderer outputs
+  E_GATEWAY_DNS: name resolution failed; existing strict structured-code and
+  reflected model-text negative tests remain intact. No trust or retry policy
+  and no gateway acceptance assertion changes.
+- This is a local presentation contract, not actual DNS fault injection or
+  Windows11 acceptance. Native DNS/expiry/full A18-A19 matrix remains open.
