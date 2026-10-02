@@ -38,10 +38,10 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 | A14 | 升級／搬移 | `ee9e8b5` / `36159427257` 真正 2.1.221 → 2.1.282 → 2.1.221 回退、程式目錄及外置資料根搬移後續接通過；不相容引擎拒絕 | 工作區本身搬移、完整支援版本／隨包相容 manifest、企業端點實測 |
 | A15 | 遷移 | SHA-256 快照、隔離候選、全會話 preflight／恢復、來源變動拒絕、原子切換及回退；`c17b873` / `36190191804` 兩版本公開 --archive-workspace-pending 保全原 bytes／已提交身份及重試通過 | 重名衝突完整分類、磁碟滿／強制中斷邊界與重試、企業真實資料／gateway 驗收；預置 pending 或檔案替換失敗不等於斷電 |
 | A16 | 並發 | 已實作 profile shared／維護 exclusive、metadata 短鎖及每 session 單 writer；`concurrency-integration.py` 使用真實引擎與 barrier fixture 驗證新 session 固定 UUID、同 session 拒絕及不同 session 並行 | 本機 helper／回歸已通過；仍欠 Windows 11 x64 上 2.1.221、2.1.282 的實際執行證據，不得以 Windows Server 或程式存在代替 |
-| A17 | 擴展 | CLI 參數可接設定／MCP／agents | 技能、子代理、核准 MCP 真實流程及明確版本相容矩陣 |
-| A18 | 網路 | gateway 設定入口；實際引擎本機 fixture 已覆蓋不可達、401、429、傳輸截斷、正常 EOF 未完成／完整參數但缺終止；指定案例要求非零退出、無寫入／洩漏，HTTP 案例一次模型請求 | TLS／DNS／過期憑證及完整分類、企業核准端點／部署政策仍欠；不得推廣為所有故障無重放，亦不宣稱 OS 網路隔離 |
+| A17 | 擴展 | Run37025702587 /39b61ac 兩版本真實 engine Skill body 後續請求、獨立 subagent context／parent result、stdio MCP discover/call exactly once 與未核准 server 零啟動通過 | 僅 synthetic loopback fixture；正式核准第三方工具／服務、企業 gateway 工作負載、版本相容矩陣及 Windows11 普通帳戶試運行仍欠 |
+| A18 | 網路 | 真實 engine 不可達、401、429、截斷／正常 EOF 未完成工具等既有 fixture；2.1.282 未信任 CA gate 通過 | Run37025702587 兩版本 DNS／過期憑證分類失敗，2.1.221 未信任 CA TLS 亦失敗；官方 adapter 缺 DNS／expiry typed cause，不能以訊息文字或 frontend preflight 取代。企業 gateway／部署政策仍欠，不宣稱 OS 網路隔離 |
 | A19 | 診斷 | 中性錯誤碼及 parser 內容不直接外洩；已實作 `--diagnostics PATH` create-new JSON、UUID operation ID、分類、exit code、四項 privacy=false、敏感內容不落檔及 `E_DIAGNOSTIC_WRITE` 不遮蔽主要退出碼；本機純函式／contract 已通過 | 尚須 Windows 11 x64 普通帳戶實跑並保存 JSON，且逐一覆蓋 A01-A18 的 TLS／DNS／429／串流／資料損壞／政策拒絕等全部失敗；目前單一 gateway 缺設定案例及程式存在不能標記通過 |
-| A20 | 更新 | SHA256、版本化 runtime | 可信簽名 manifest、固定依賴、簽名失敗、中斷、相容資料快照回退 |
+| A20 | 更新 | compiled signer policy／NativeEnterpriseGate 已接 build／所有 launcher 入口並持有驗證 handles；RFC8032 engineering fixture 簽名／篡改拒絕已跑；Run37021564275 SEC_IMAGE deadline／保全／解除後恢復，Run37025702587 真實 staging writer 強制終止／原 hash 保全／重試兩版本通過 | 工程 fixture 非正式 signer 批准；正式 SPKI／獨立 pin、必要通知及再分發批准、mid-write／磁碟滿／斷電／完整簽署更新與相容資料回退、Windows11 普通帳戶證據仍欠 |
 
 ## 設計額外要求與放行條件
 
@@ -3758,3 +3758,17 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   billing. No rerun or relaxed acceptance. This evidence is limited to flushed
   staging before activation; it does not prove mid-write/power-loss, migration
   active-pointer, disk-full, full signed update rollback or actual Windows11.
+
+### 2026-10-02 — release blockers and summary reconciliation
+
+- Reconcile A17/A18/A20 top-level rows with actual recorded jobs rather than
+  leaving implemented gates or passing synthetic expansion tests as merely CLI
+  parameters. None of the rows is promoted to full acceptance.
+- Repository runner inventory revalidated: total_count=0. No actual Windows11
+  ordinary-account endpoint is available through repository runners. Hosted
+  success cannot fulfill the platform prerequisite; need an authorized endpoint
+  or user-provided authentic execution evidence from the documented scripts.
+- Formal signer SPKI/independent pin, notice/redistribution approvals, approved
+  enterprise gateway/model and third-party workload must be supplied/approved
+  externally, never generated from engineering fixtures and called approved.
+  Do not repeatedly rerun unchanged DNS/expiry/legacy TLS failures as progress.
