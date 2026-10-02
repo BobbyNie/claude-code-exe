@@ -5,6 +5,9 @@
 #include <stdexcept>
 #include "locked-candidate-directories.hpp"
 #include "extraction-errors.hpp"
+#ifdef _WIN32
+#include <winternl.h>
+#endif
 
 namespace ccode {
 inline void RequireRuntimeStagingObservation(bool disk, bool directory, bool reparse, unsigned links) {
@@ -83,9 +86,26 @@ public:
         // FileNameLength excludes NUL, but provide an explicit terminator too:
         // never let the Win32 path conversion observe uninitialized tail bytes.
         std::memcpy(rename->FileName, leaf.c_str(), nameBytes + sizeof(wchar_t));
-        const bool activated = SetFileInformationByHandle(file_, FileRenameInfo, rename,
-            static_cast<DWORD>(length)) != FALSE;
-        const auto error = activated ? ERROR_SUCCESS : GetLastError();
+        // Pass the retained root directly through the native directory-relative
+        // rename contract, avoiding the Win32 pathname conversion layer.
+        using SetInformation = NTSTATUS (NTAPI *)(HANDLE, PIO_STATUS_BLOCK, PVOID,
+                                                   ULONG, FILE_INFORMATION_CLASS);
+        using StatusToError = ULONG (NTAPI *)(NTSTATUS);
+        const auto module = GetModuleHandleW(L"ntdll.dll");
+        const auto setInformation = reinterpret_cast<SetInformation>(
+            GetProcAddress(module, "NtSetInformationFile"));
+        const auto statusToError = reinterpret_cast<StatusToError>(
+            GetProcAddress(module, "RtlNtStatusToDosError"));
+        IO_STATUS_BLOCK io{};
+        // FILE_INFORMATION_CLASS::FileRenameInformation = 10. FILE_RENAME_INFO
+        // has the same BOOLEAN/root/length/name layout for the classic rename.
+        const auto status = setInformation && statusToError
+            ? setInformation(file_, &io, rename, static_cast<ULONG>(length),
+                             static_cast<FILE_INFORMATION_CLASS>(10))
+            : static_cast<NTSTATUS>(0xC0000002L);
+        const bool activated = status == 0;
+        const auto error = activated ? ERROR_SUCCESS
+            : statusToError ? statusToError(status) : ERROR_NOT_SUPPORTED;
         rename->~FILE_RENAME_INFO();
         ::operator delete(storage);
         if (!activated) throw std::runtime_error(ExtractionActivationError(error));

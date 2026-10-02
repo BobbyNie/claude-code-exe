@@ -3194,3 +3194,18 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   destination names within rename. Windows behavior remains to be verified.
 - Portable native GREEN, staging MinGW syntax and diff-check pass. These do not
   establish actual Windows activation or Win11 acceptance.
+
+### 2026-10-02 — native retained-root rename awaiting execution
+
+- Run36975859976 at828779b completed RED at FIRST_ACTIVATE with generic
+  E_EXTRACT_ACTIVATE in both versions; Win32 retained-root change did not recover
+  activation. No claim is made about the exact unmapped OS error from that run.
+- Keep directory-relative resolution but pass the retained root directly to
+  NtSetInformationFile classic FileRenameInformation, resolving system ntdll
+  exports and translating unsuccessful status with RtlNtStatusToDosError.
+  Missing exports fail closed. This uses the same ordinary-account access and
+  source/target handles, no elevation or weaker ACL/share policy. Win32 path
+  conversion is no longer part of the actual rename call.
+- Existing native activation/sharing/long-Unicode and real-engine integration
+  are the RED behaviors to recover, not deleted or bypassed. MinGW staging syntax,
+  portable native suite and diff-check pass. Actual Windows execution is pending.
