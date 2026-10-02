@@ -127,5 +127,30 @@ int main() {
         if (mutation == 5) invalidInventory["notices"].push_back(noticeEntry);
         assert(!ccode::ValidManifestInventory(invalidInventory));
     }
+    auto rootManifest = inventory;
+    rootManifest.update(nlohmann::json{{"schemaVersion", 1}, {"packageName", "ccode-enterprise"},
+        {"packageVersion", "2.1.282"}, {"platform", "windows"}, {"architecture", "x64"},
+        {"minimumWindowsBuild", 22000}, {"provenance", nlohmann::json::object()},
+        {"runtimeBoundary", nlohmann::json::object()},
+        {"excludedDynamicData", {"data/", "profile/", "runtime/", "sessions/", "temp/"}},
+        {"redistributionApproval", "external-gate-not-asserted"},
+        {"publicBoundary", {{"opaqueContents", {"ccode.exe"}},
+            {"scannedText", {"docs/usage.md", "manifest.json", "notices/LICENSE.txt"}},
+            {"parentDirectories", "excluded"}}}});
+    assert(ccode::ValidManifestRootContract(rootManifest));
+    auto floatSchema = rootManifest; floatSchema["schemaVersion"] = 1.0;
+    assert(!ccode::ValidManifestRootContract(floatSchema));
+    for (int mutation = 0; mutation < 8; ++mutation) {
+        auto invalidRoot = rootManifest;
+        if (mutation == 0) invalidRoot["extra"] = true;
+        if (mutation == 1) invalidRoot.erase("platform");
+        if (mutation == 2) invalidRoot["minimumWindowsBuild"] = 22000.0;
+        if (mutation == 3) invalidRoot["architecture"] = "arm64";
+        if (mutation == 4) invalidRoot["publicBoundary"]["scannedText"] = nlohmann::json::array();
+        if (mutation == 5) invalidRoot["publicBoundary"]["extra"] = true;
+        if (mutation == 6) invalidRoot["redistributionApproval"] = "approved";
+        if (mutation == 7) invalidRoot["excludedDynamicData"].push_back("other/");
+        assert(!ccode::ValidManifestRootContract(invalidRoot));
+    }
     std::cout << "native signature tests passed\n";
 }

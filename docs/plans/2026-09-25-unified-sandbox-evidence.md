@@ -2686,3 +2686,16 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   folding is not claimed to solve all Windows filename aliases. Root schema,
   provenance/runtime boundary, locked filesystem checks and actual launcher
   enforcement remain open. No A20 or Win11 acceptance claim; MSVC pending.
+
+### Native root/public-boundary contract
+
+- TDD missing root contract RED -> native suite GREEN. Requires exactly the
+  builder's root keys, integer schema1/build22000, Windows/x64, nonempty version,
+  exact dynamic-data exclusions and unasserted redistribution marker. Public
+  boundary must exactly match opaque executable, all scanned notice paths plus
+  usage/manifest, and excluded parents. Integrates static inventory validation.
+- Tests reject unknown/missing fields, float schema/build, wrong architecture,
+  omitted scanned notices, extra boundary fields and invented approval. Local
+  C++17 suite/diff-check pass; MSVC pending. Provenance and runtimeBoundary are
+  currently only required to be objects and remain separate validation work.
+  This helper is not startup enforcement or A20/Win11 acceptance.

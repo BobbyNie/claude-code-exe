@@ -102,4 +102,29 @@ inline bool ValidManifestInventory(const nlohmann::json& manifest) {
     return executable != files.end() && executable->dump() == manifest["executable"].dump();
 }
 
+// Root contract only: provenance and runtimeBoundary need independent validation.
+inline bool ValidManifestRootContract(const nlohmann::json& manifest) {
+    using Json = nlohmann::json;
+    const std::set<std::string> required = {"schemaVersion", "packageName", "packageVersion",
+        "platform", "architecture", "minimumWindowsBuild", "executable", "provenance",
+        "runtimeBoundary", "files", "notices", "publicBoundary", "excludedDynamicData",
+        "redistributionApproval"};
+    if (!manifest.is_object() || manifest.size() != required.size()) return false;
+    for (const auto& key : required) if (!manifest.contains(key)) return false;
+    if (!manifest["schemaVersion"].is_number_integer() || manifest["schemaVersion"].dump() != "1" ||
+        !manifest["minimumWindowsBuild"].is_number_integer() || manifest["minimumWindowsBuild"].dump() != "22000" ||
+        manifest["packageName"] != "ccode-enterprise" || manifest["platform"] != "windows" ||
+        manifest["architecture"] != "x64" || !manifest["packageVersion"].is_string() ||
+        manifest["packageVersion"].get<std::string>().empty() ||
+        !manifest["provenance"].is_object() || !manifest["runtimeBoundary"].is_object() ||
+        manifest["redistributionApproval"] != "external-gate-not-asserted" ||
+        manifest["excludedDynamicData"].dump() != Json({"data/", "profile/", "runtime/", "sessions/", "temp/"}).dump() ||
+        !ValidManifestInventory(manifest)) return false;
+    auto scanned = Json::array({"docs/usage.md", "manifest.json"});
+    for (const auto& entry : manifest["notices"]) scanned.push_back(entry["path"]);
+    const Json expected = {{"opaqueContents", Json::array({"ccode.exe"})},
+        {"scannedText", scanned}, {"parentDirectories", "excluded"}};
+    return manifest["publicBoundary"].dump() == expected.dump();
+}
+
 }
