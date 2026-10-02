@@ -241,7 +241,7 @@ ccode::RetainedRuntimePayload PrepareRuntime(const fs::path& directory, const Js
     if (!equal) {
         ccode::RuntimeStagingFile staging(runtime);
         staging.Write(resource.bytes, resource.size);
-        staging.Activate();
+        staging.Activate(30000);
     }
     // Acquire and independently hash through retained handles before releasing
     // prepare.lock. Caller owns this guard throughout actual engine use.

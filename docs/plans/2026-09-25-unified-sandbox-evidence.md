@@ -3224,3 +3224,22 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   existing-target retry. Existing reader-sharing refusal, original byte equality,
   and retry success tests remain unchanged. Portable native suite, MinGW staging
   syntax and diff-check pass; actual Windows recovery is still pending.
+
+### 2026-10-02 — bounded runtime activation contention recovery
+
+- Run36976678691 at8856d72 completed failure, not a billing block. Build,
+  runtime/resume, workspace boundary and cross-version upgrade/rollback recovered;
+  new-engine tampered-cache repair still reported E_EXTRACT_ACCESS. Gateway TLS
+  rejection evidence remains insufficient and is not marked passed.
+- RED: portable native compilation failed on seven missing retry-policy calls.
+  GREEN: retry only ACCESS/SHARING/LOCKED before the deadline. Runtime preparation
+  explicitly waits at most30 seconds; other categories and deadline expiry fail
+  closed. Every retry revalidates the target, retaining source and parent guards;
+  no POSIX replacement, readonly changes or integrity bypass is introduced.
+- Add real Windows share-denying reader release and permanent-reader deadline
+  tests. These Windows-only behaviors await CI execution; portable policy passing
+  is not proof that the observed ACCESS failure was transient or repaired.
+- Local portable native suite and MinGW staging-header syntax check pass.
+  Python145 tests pass with5 Windows-specific skips (loopback fixtures require
+  execution outside the local sandbox). Diff-check passes. Windows11 ordinary
+  account acceptance, mapped-image fault coverage and TLS evidence remain open.

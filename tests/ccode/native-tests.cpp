@@ -8,6 +8,7 @@
 #include "../../scripts/ccode/workspace-boundary.hpp"
 #include <fstream>
 #include <chrono>
+#include <thread>
 
 #include <cassert>
 #include <iostream>
@@ -19,6 +20,13 @@ int RunNativeTests() {
     assert(std::string(RuntimePayloadOpenError(5)) == "E_RUNTIME_ACCESS");
     assert(std::string(RuntimePayloadOpenError(32)) == "E_RUNTIME_SHARING");
     assert(std::string(RuntimePayloadOpenError(999999)) == "E_RUNTIME_FILE");
+    assert(ShouldRetryRuntimeActivation("E_EXTRACT_ACCESS", 100, 200));
+    assert(ShouldRetryRuntimeActivation("E_EXTRACT_SHARING", 100, 200));
+    assert(ShouldRetryRuntimeActivation("E_EXTRACT_LOCKED", 100, 200));
+    assert(!ShouldRetryRuntimeActivation("E_EXTRACT_ACCESS", 200, 200));
+    assert(!ShouldRetryRuntimeActivation("E_EXTRACT_ACCESS", 0, 0));
+    assert(!ShouldRetryRuntimeActivation("E_EXTRACT_DISK_FULL", 0, 200));
+    assert(!ShouldRetryRuntimeActivation("E_RUNTIME_PATH", 0, 200));
     RequireRuntimeStagingObservation(true, false, false, 1);
     for (const auto& invalid : std::vector<std::array<unsigned, 4>>{
             {0, 0, 0, 1}, {1, 1, 0, 1}, {1, 0, 1, 1}, {1, 0, 0, 2}}) {
@@ -134,6 +142,32 @@ int RunNativeTests() {
         staging.Activate();
     }
     { RetainedRuntimePayload engine(runtimeEngine, 7, fixtureRuntimeHash); }
+    // A permanently retained reader must still fail closed at the deadline.
+    {
+        RetainedRuntimePayload original(runtimeEngine, 7, fixtureRuntimeHash);
+        RuntimeStagingFile staging(runtimeEngine.parent_path());
+        staging.Write(reinterpret_cast<const unsigned char*>("replacement"), 11);
+        const auto started = GetTickCount64();
+        bool blocked = false;
+        try { staging.Activate(100); } catch (const std::runtime_error& error) {
+            blocked = std::string(error.what()) == "E_EXTRACT_SHARING";
+        }
+        stagingCheck(blocked && GetTickCount64() - started >= 100, "E_TEST_STAGING_DEADLINE");
+    }
+    { RetainedRuntimePayload original(runtimeEngine, 7, fixtureRuntimeHash); }
+    // Release a real share-denying handle while the public activation waits.
+    {
+        HANDLE reader = CreateFileW(runtimeEngine.c_str(), GENERIC_READ, FILE_SHARE_READ,
+            nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        stagingCheck(reader != INVALID_HANDLE_VALUE, "E_TEST_STAGING_READER");
+        RuntimeStagingFile staging(runtimeEngine.parent_path());
+        staging.Write(reinterpret_cast<const unsigned char*>("fixture"), 7);
+        std::thread release([reader] { Sleep(200); CloseHandle(reader); });
+        try { staging.Activate(2000); }
+        catch (...) { release.join(); throw; }
+        release.join();
+    }
+    { RetainedRuntimePayload original(runtimeEngine, 7, fixtureRuntimeHash); }
     std::cerr << "E_TEST_STAGING_LONG_BEGIN" << std::endl;
     const auto namedRuntime = runtimeRoot / (L"runtime 中文 with spaces " + std::wstring(80, L'x'));
     std::filesystem::create_directory(namedRuntime);

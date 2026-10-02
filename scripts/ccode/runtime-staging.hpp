@@ -3,6 +3,7 @@
 #include <cstring>
 #include <new>
 #include <stdexcept>
+#include <string_view>
 #include "locked-candidate-directories.hpp"
 #include "extraction-errors.hpp"
 #ifdef _WIN32
@@ -12,6 +13,10 @@
 namespace ccode {
 inline void RequireRuntimeStagingObservation(bool disk, bool directory, bool reparse, unsigned links) {
     if (!disk || directory || reparse || links != 1) throw std::runtime_error("E_RUNTIME_PATH");
+}
+inline bool ShouldRetryRuntimeActivation(std::string_view code, uint64_t elapsed, uint64_t budget) {
+    return elapsed < budget && (code == "E_EXTRACT_ACCESS" ||
+        code == "E_EXTRACT_SHARING" || code == "E_EXTRACT_LOCKED");
 }
 #ifdef _WIN32
 // Never truncate a pathname before verifying its opened object. Keep the source
@@ -50,7 +55,22 @@ public:
         }
         if (!FlushFileBuffers(file_)) throw std::runtime_error(ExtractionWriteError(GetLastError()));
     }
-    void Activate() {
+    void Activate(DWORD waitMilliseconds = 0) {
+        // Keep source and parent guards throughout bounded contention recovery.
+        const auto budget = waitMilliseconds > 30000 ? 30000 : waitMilliseconds;
+        const auto started = GetTickCount64();
+        for (;;) {
+            try { ActivateOnce(); return; }
+            catch (const std::runtime_error& error) {
+                const auto elapsed = GetTickCount64() - started;
+                if (!ShouldRetryRuntimeActivation(error.what(), elapsed, budget)) throw;
+                const auto remaining = budget - elapsed;
+                Sleep(static_cast<DWORD>(remaining < 50 ? remaining : 50));
+            }
+        }
+    }
+private:
+    void ActivateOnce() {
         const auto destination = (parents_.CanonicalPath() / L"engine.exe").wstring();
         // Do not rely on replacement rename to enforce a live reader's share
         // policy. Explicitly request DELETE on the existing target first.
