@@ -2732,3 +2732,18 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - This composition has no filesystem side effects and still requires approved
   compiled signer policy, locked file hash/identity checks, embedded provenance
   matching and launcher/update integration. A20/Win11 acceptance not claimed.
+
+### Windows locked candidate-file foundation (platform verification pending)
+
+- Added test-first LockedCandidateFile header: missing-header compilation RED,
+  portable native suite GREEN after addition. This does NOT mean Win32 behavior
+  passed locally: actual Windows tests are conditional and must execute in MSVC
+  CI. They exercise repeated bounded reads, concurrent writer/delete denial,
+  preexisting writable handle refusal, hardlink refusal and release cleanup.
+- Windows implementation retains a read handle sharing only reads, opens final
+  component without following reparse points, rejects non-disk/directory/reparse
+  or multi-link identities and bounds allocation before reads. Fixed errors only.
+- This locks a single file only: parent directory replacement/reparse aliases,
+  immutable whole-candidate hash and metadata verification, approved signer and
+  launcher integration remain open. Not an A20 or Win11 acceptance claim.
+  Local portable native suite and diff-check pass; Windows branch unverified.

@@ -1,0 +1,53 @@
+#pragma once
+#include <filesystem>
+#include <cstdint>
+#include <string>
+#include <stdexcept>
+#include <algorithm>
+#ifdef _WIN32
+#include <windows.h>
+
+namespace ccode {
+// Retain through candidate use. Denies concurrent writes/deletes to this file;
+// callers must separately secure its parent directories and candidate identity.
+class LockedCandidateFile {
+    HANDLE handle_ = INVALID_HANDLE_VALUE;
+    uint64_t size_ = 0;
+public:
+    explicit LockedCandidateFile(const std::filesystem::path& path) {
+        handle_ = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
+            OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+        if (handle_ == INVALID_HANDLE_VALUE) throw std::runtime_error("E_MANIFEST_FILE");
+        BY_HANDLE_FILE_INFORMATION info{};
+        if (!GetFileInformationByHandle(handle_, &info) ||
+            GetFileType(handle_) != FILE_TYPE_DISK ||
+            (info.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) ||
+            info.nNumberOfLinks != 1) {
+            CloseHandle(handle_); handle_ = INVALID_HANDLE_VALUE;
+            throw std::runtime_error("E_MANIFEST_FILE");
+        }
+        size_ = (uint64_t(info.nFileSizeHigh) << 32) | info.nFileSizeLow;
+    }
+    ~LockedCandidateFile() { if (handle_ != INVALID_HANDLE_VALUE) CloseHandle(handle_); }
+    LockedCandidateFile(const LockedCandidateFile&) = delete;
+    LockedCandidateFile& operator=(const LockedCandidateFile&) = delete;
+    uint64_t Size() const { return size_; }
+    std::string ReadBounded(size_t maximum) {
+        if (size_ > maximum) throw std::runtime_error("E_MANIFEST_FILE_LIMIT");
+        LARGE_INTEGER start{};
+        if (!SetFilePointerEx(handle_, start, nullptr, FILE_BEGIN))
+            throw std::runtime_error("E_MANIFEST_FILE");
+        std::string bytes(static_cast<size_t>(size_), '\0');
+        size_t offset = 0;
+        while (offset < bytes.size()) {
+            DWORD read = 0;
+            const auto count = static_cast<DWORD>(std::min<size_t>(bytes.size() - offset, 65536));
+            if (!ReadFile(handle_, &bytes[offset], count, &read, nullptr) || read == 0)
+                throw std::runtime_error("E_MANIFEST_FILE");
+            offset += read;
+        }
+        return bytes;
+    }
+};
+}
+#endif

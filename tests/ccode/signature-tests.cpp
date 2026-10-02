@@ -1,5 +1,8 @@
 #include "../../scripts/ccode/manifest-signature.hpp"
 #include "../../scripts/ccode/manifest-inventory.hpp"
+#include "../../scripts/ccode/locked-candidate-file.hpp"
+#include <filesystem>
+#include <fstream>
 #include <cassert>
 #include <iostream>
 #include <vector>
@@ -215,5 +218,47 @@ int main() {
         signatureFirst = std::string(error.what()) == "E_MANIFEST_SIGNATURE";
     }
     assert(signatureFirst);
+#ifdef _WIN32
+    auto fixturePath = std::filesystem::temp_directory_path() /
+        (L"ccode-locked-file-" + std::to_wstring(GetCurrentProcessId()) + L".txt");
+    { std::ofstream fixture(fixturePath, std::ios::binary); fixture << "fixture"; }
+    {
+        ccode::LockedCandidateFile locked(fixturePath);
+        assert(locked.ReadBounded(7) == "fixture");
+        assert(locked.ReadBounded(7) == "fixture");
+        bool limitRejected = false;
+        try { locked.ReadBounded(6); }
+        catch (const std::runtime_error& error) {
+            limitRejected = std::string(error.what()) == "E_MANIFEST_FILE_LIMIT";
+        }
+        assert(limitRejected);
+        HANDLE writer = CreateFileW(fixturePath.c_str(), GENERIC_WRITE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        assert(writer == INVALID_HANDLE_VALUE);
+        assert(!DeleteFileW(fixturePath.c_str()));
+    }
+    HANDLE existingWriter = CreateFileW(fixturePath.c_str(), GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    assert(existingWriter != INVALID_HANDLE_VALUE);
+    bool writerRejected = false;
+    try { ccode::LockedCandidateFile locked(fixturePath); }
+    catch (const std::runtime_error& error) {
+        writerRejected = std::string(error.what()) == "E_MANIFEST_FILE";
+    }
+    CloseHandle(existingWriter);
+    assert(writerRejected);
+    auto hardlinkPath = fixturePath; hardlinkPath += L".link";
+    assert(CreateHardLinkW(hardlinkPath.c_str(), fixturePath.c_str(), nullptr));
+    bool hardlinkRejected = false;
+    try { ccode::LockedCandidateFile locked(fixturePath); }
+    catch (const std::runtime_error& error) {
+        hardlinkRejected = std::string(error.what()) == "E_MANIFEST_FILE";
+    }
+    assert(hardlinkRejected);
+    assert(DeleteFileW(hardlinkPath.c_str()));
+    assert(DeleteFileW(fixturePath.c_str()));
+#endif
     std::cout << "native signature tests passed\n";
 }
