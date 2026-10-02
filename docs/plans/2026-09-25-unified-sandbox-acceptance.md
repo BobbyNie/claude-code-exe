@@ -31,13 +31,10 @@
 
 每個案例記錄 Windows 版本、包版本、引擎版本、adapter 版本、帳戶權限、測試輸入、期望與實際結果及證據位置。測試資料不得用真實憑證。
 
-企業包必須先在連線建置階段取得 `ccode.exe --package-manifest` 與 `ccode.exe --boundary-manifest` 的成功 JSON，並使用法律／合規方提供的實際必要通知及核准 SHA-256；下列 `<核准值>` 不可用測試佔位值代替正式證據。每個禁用名稱需重複提供 `--restricted-name`：
+企業包必須先在連線建置階段取得 `build.ps1` 成功輸出的 `package-provenance.json` 與 `runtime-boundary.json`（尚未簽署 manifest 的企業版不可啟動查詢），並使用法律／合規方提供的實際必要通知及核准 SHA-256；下列 `<核准值>` 不可用測試佔位值代替正式證據。每個禁用名稱需重複提供 `--restricted-name`：
 
 ```powershell
-./ccode.exe --package-manifest > ./package-provenance.json
-if ($LASTEXITCODE -ne 0) { throw 'package provenance failed' }
-./ccode.exe --boundary-manifest > ./runtime-boundary.json
-if ($LASTEXITCODE -ne 0) { throw 'runtime boundary failed' }
+# 使用 build.ps1 成功產出的 sidecar；不得繞過未簽署企業版啟動閘門。
 python ./scripts/ccode/build_enterprise_package.py `
   --executable ./ccode.exe `
   --provenance ./package-provenance.json `
@@ -50,7 +47,7 @@ python ./scripts/ccode/build_enterprise_package.py `
 if ($LASTEXITCODE -ne 0) { throw 'enterprise package assembly failed' }
 ```
 
-輸出路徑必須事前不存在。兩個 manifest 命令都必須證明沒有建立 data/profile/runtime；`runtime-boundary.json` 必須與包內 `manifest.json.runtimeBoundary` 完全一致。正式 Windows 11 x64 驗收需保存 archive SHA-256、`package-audit.json`、解包鏡像、實際核准政策／通知來源及端點 metadata；本機 deterministic 測試或未核准通知不能把 A02／A04 標記通過。
+輸出路徑必須事前不存在。簽署安裝完成後，兩個 manifest 命令仍須證明沒有建立 data/profile/runtime，並與建置 sidecar 完全一致；`runtime-boundary.json` 必須與包內 `manifest.json.runtimeBoundary` 完全一致。正式 Windows 11 x64 驗收需保存 archive SHA-256、`package-audit.json`、解包鏡像、實際核准政策／通知來源及端點 metadata；本機 deterministic 測試或未核准通知不能把 A02／A04 標記通過。
 
 離線案例不得放進仍需 GitHub 網路連線的 workflow 後宣稱自動通過。先在連線狀態準備 repo、Python 3、PowerShell 7 及候選 `ccode.exe`，之後斷開所有非 loopback 網路，再於普通帳戶執行：
 

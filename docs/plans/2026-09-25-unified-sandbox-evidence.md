@@ -3255,3 +3255,18 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - Local independent exporter compiles and emits valid x64/build22000 boundary
   without creating runtime/data files. Windows PowerShell build execution remains
   pending CI; sidecars are assembly inputs, not signer approval or acceptance.
+
+### 2026-10-02 — opened-object assembly input snapshots
+
+- RED: deterministic pathname replacement after lstat was accepted; a separate
+  same-inode mutation before open was also accepted. Both tests now reject.
+- Read through one opened descriptor, compare observed/opened identity and
+  size/mtime/ctime, verify regular type, then verify descriptor metadata and
+  pathname identity after reading. O_NOFOLLOW is used where available. Captured
+  bytes are subsequently hashed and assembled without a pathname reread.
+- This detects the tested replacement/mutation cases; metadata comparison is
+  not a claim of immutable reads against all concurrent same-object writers.
+  Signed manifest/runtime retained-hash checks remain required on Windows.
+- Full Python regression150 tests passed with5 platform skips. Correct the
+  acceptance assembly instructions to use build sidecars before signing, while
+  still requiring signed launcher metadata/boundary equality and no side effects.

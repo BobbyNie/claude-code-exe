@@ -93,7 +93,29 @@ def _regular_bytes(path):
         status = path.lstat()
         if stat.S_ISLNK(status.st_mode) or not stat.S_ISREG(status.st_mode):
             raise PackageBuildError("E_INPUT_TYPE")
-        return path.read_bytes()
+        # Read the opened object and compare its identity with the observation.
+        # Never re-open the pathname via read_bytes after a separate type check.
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(path, flags)
+        with os.fdopen(descriptor, "rb") as stream:
+            opened = os.fstat(stream.fileno())
+            if (not stat.S_ISREG(opened.st_mode) or
+                    (opened.st_dev, opened.st_ino) != (status.st_dev, status.st_ino)):
+                raise PackageBuildError("E_INPUT_TYPE")
+            if ((status.st_size, status.st_mtime_ns, status.st_ctime_ns) !=
+                    (opened.st_size, opened.st_mtime_ns, opened.st_ctime_ns)):
+                raise PackageBuildError("E_INPUT_READ")
+            contents = stream.read()
+            after = os.fstat(stream.fileno())
+            current = path.lstat()
+            if (stat.S_ISLNK(current.st_mode) or not stat.S_ISREG(current.st_mode) or
+                    (current.st_dev, current.st_ino) != (opened.st_dev, opened.st_ino)):
+                raise PackageBuildError("E_INPUT_TYPE")
+            if ((opened.st_size, opened.st_mtime_ns, opened.st_ctime_ns) !=
+                    (after.st_size, after.st_mtime_ns, after.st_ctime_ns) or
+                    len(contents) != after.st_size):
+                raise PackageBuildError("E_INPUT_READ")
+            return contents
     except PackageBuildError:
         raise
     except OSError:
