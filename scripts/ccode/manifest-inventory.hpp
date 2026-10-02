@@ -1,6 +1,7 @@
 #pragma once
 #include "vendor/json.hpp"
 #include "boundary.hpp"
+#include "manifest-signature.hpp"
 #include <set>
 #include <vector>
 #include <stdexcept>
@@ -160,6 +161,21 @@ inline bool ValidManifestProvenanceContract(const nlohmann::json& manifest) {
     const auto base = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/" + version;
     return source["officialManifestUrl"] == base + "/manifest.json" &&
            source["officialPayloadUrl"] == base + "/win32-x64/claude.exe";
+}
+
+// Authenticate original bytes before interpreting any candidate-supplied paths.
+// The pin must originate from independently approved compiled policy.
+// This has no filesystem side effects; callers still must lock/verify files.
+inline nlohmann::json AuthenticateManifestDocument(const std::string& originalBytes,
+        const std::vector<unsigned char>& signature,
+        const std::vector<unsigned char>& publicKeyDer, const std::string& trustedPin) {
+    if (!VerifyManifestSignature(std::vector<unsigned char>(originalBytes.begin(), originalBytes.end()),
+                                 signature, publicKeyDer, trustedPin))
+        throw std::runtime_error("E_MANIFEST_SIGNATURE");
+    auto document = ParseManifestDocument(originalBytes);
+    if (!ValidManifestProvenanceContract(document))
+        throw std::runtime_error("E_MANIFEST_SCHEMA");
+    return document;
 }
 
 }

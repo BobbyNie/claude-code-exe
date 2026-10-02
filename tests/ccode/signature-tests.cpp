@@ -177,5 +177,43 @@ int main() {
         if (mutation == 7) source["officialManifestUrl"] = officialBase + "/manifest.json?override=1";
         assert(!ccode::ValidManifestProvenanceContract(invalidSource));
     }
+    // RFC8032 public test seed only; never a production trust policy.
+    auto signDocument = [](const std::string& document) {
+        auto seed = Hex("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60");
+        unsigned char secret[64], publicBytes[32];
+        crypto_ed25519_key_pair(secret, publicBytes, seed.data());
+        const char domain[] = "ccode-enterprise-manifest-v1";
+        std::vector<unsigned char> bytes(domain, domain + sizeof(domain));
+        bytes.insert(bytes.end(), document.begin(), document.end());
+        std::vector<unsigned char> result(64);
+        crypto_ed25519_sign(result.data(), secret, bytes.data(), bytes.size());
+        return result;
+    };
+    auto rawDocument = rootManifest.dump() + "\n";
+    auto documentSignature = signDocument(rawDocument);
+    auto validDer = Hex("302a300506032b6570032100d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a");
+    assert(ccode::AuthenticateManifestDocument(rawDocument, documentSignature, validDer, pin) == rootManifest);
+    bool changedRejected = false;
+    try { ccode::AuthenticateManifestDocument(rawDocument + " ", documentSignature, validDer, pin); }
+    catch (const std::runtime_error& error) {
+        changedRejected = std::string(error.what()) == "E_MANIFEST_SIGNATURE";
+    }
+    assert(changedRejected);
+    auto signedBadSchema = rootManifest;
+    signedBadSchema["architecture"] = "arm64";
+    for (const auto& item : std::vector<std::pair<std::string, std::string>>{
+            {signedBadSchema.dump(), "E_MANIFEST_SCHEMA"},
+            {"{\"schemaVersion\":1,\"schemaVersion\":2}", "E_MANIFEST_DOCUMENT"}}) {
+        bool rejected = false;
+        try { ccode::AuthenticateManifestDocument(item.first, signDocument(item.first), validDer, pin); }
+        catch (const std::runtime_error& error) { rejected = error.what() == item.second; }
+        assert(rejected);
+    }
+    bool signatureFirst = false;
+    try { ccode::AuthenticateManifestDocument("not JSON", documentSignature, validDer, pin); }
+    catch (const std::runtime_error& error) {
+        signatureFirst = std::string(error.what()) == "E_MANIFEST_SIGNATURE";
+    }
+    assert(signatureFirst);
     std::cout << "native signature tests passed\n";
 }

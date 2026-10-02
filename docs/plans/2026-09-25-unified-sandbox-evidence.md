@@ -2715,3 +2715,20 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   payload hash or immutable filesystem identity. Connecting these validators to
   authenticated locked candidate files and startup/update remains required.
   A20 and Windows 11 x64 acceptance remain incomplete.
+
+### Composed native authenticated manifest document
+
+- TDD missing AuthenticateManifestDocument RED -> native suite GREEN. Public
+  composition verifies domain-separated original bytes and independent pin
+  before parsing, then enforces root/inventory/provenance/runtime boundary.
+  Fixed errors separate signature, document and schema failures without raw
+  contents. Regression authenticates a complete fixture, rejects changed raw
+  whitespace, correctly signed wrong architecture and duplicate-key documents,
+  and proves unauthenticated malformed JSON fails at signature first.
+- Fixture signing uses the public RFC8032 test seed only. Production API is
+  verification only; no fixture key is approved policy. Existing independent
+  RFC/domain known-answer tests remain in the suite. Native suite, full Python
+  135 tests (5 Windows-only skips), and diff-check pass; MSVC pending.
+- This composition has no filesystem side effects and still requires approved
+  compiled signer policy, locked file hash/identity checks, embedded provenance
+  matching and launcher/update integration. A20/Win11 acceptance not claimed.
