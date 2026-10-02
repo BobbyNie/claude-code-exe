@@ -15,6 +15,7 @@
 #include "diagnostics.hpp"
 #include "environment.hpp"
 #include "runtime-paths.hpp"
+#include "retained-runtime.hpp"
 #include "extraction-errors.hpp"
 #include "profile.hpp"
 #include "snapshot.hpp"
@@ -208,7 +209,7 @@ std::string FileDigest(const fs::path& path) {
     for (auto byte : bytes) { result += hex[byte >> 4]; result += hex[byte & 15]; }
     return result;
 }
-fs::path PrepareRuntime(const fs::path& directory, const Json& metadata) {
+ccode::RetainedRuntimePayload PrepareRuntime(const fs::path& directory, const Json& metadata) {
     auto resource = Load(101);
     auto hash = Digest(resource);
     if (hash != metadata.at("engineSha256").get<std::string>()) throw std::runtime_error("E_CHECKSUM");
@@ -242,7 +243,9 @@ fs::path PrepareRuntime(const fs::path& directory, const Json& metadata) {
             throw std::runtime_error(ccode::ExtractionActivationError(error));
         }
     }
-    return payload;
+    // Acquire and independently hash through retained handles before releasing
+    // prepare.lock. Caller owns this guard throughout actual engine use.
+    return ccode::RetainedRuntimePayload(payload, resource.size, hash);
 }
 bool AskPermission(const Json& args) {
     if (Env(L"CCODE_INTERACTIVE") != L"1") return false;
@@ -727,7 +730,7 @@ int Main(int argc, wchar_t** argv, std::string* failureCode) {
                 auto resumed = id;
                 std::string answer;
                 // Never put the expected answer into the prompt or terminal output.
-                const auto code = RunTurn(module, payload, options.data, isolated, probeOptions, false,
+                const auto code = RunTurn(module, payload.Path(), options.data, isolated, probeOptions, false,
                     "For profile recovery verification, repeat verbatim the complete text of the first user message "
                     "in this conversation. Return only that text. Do not call tools.", resumed, &answer, &workspace);
                 return code == 0 && resumed == id && answer == expected + "\n";
@@ -779,19 +782,19 @@ int Main(int argc, wchar_t** argv, std::string* failureCode) {
             if (!piped.empty()) options.prompt = piped + (options.prompt.empty() ? "" : "\n" + options.prompt);
         }
         if (options.prompt.empty()) throw std::runtime_error("E_PROMPT");
-        return RunTurn(module, payload, options.data, profile, options, false, options.prompt, options.session, nullptr, &options.workspace, failureCode);
+        return RunTurn(module, payload.Path(), options.data, profile, options, false, options.prompt, options.session, nullptr, &options.workspace, failureCode);
     }
     std::cout << "ccode - portable coding assistant\n/resume  /new  /exit\n";
     if (options.resumePicker) PickSession(profile, options.workspace, options.session);
     int code = 0;
-    if (!options.prompt.empty()) code = RunTurn(module, payload, options.data, profile, options, console, options.prompt, options.session, nullptr, &options.workspace, failureCode);
+    if (!options.prompt.empty()) code = RunTurn(module, payload.Path(), options.data, profile, options, console, options.prompt, options.session, nullptr, &options.workspace, failureCode);
     std::string prompt;
     while (std::cout << "ccode> " << std::flush, std::getline(std::cin, prompt)) {
         if (prompt == "/exit" || prompt == "/quit") break;
         if (prompt == "/new") { options.session.clear(); continue; }
         if (prompt == "/resume") { PickSession(profile, options.workspace, options.session); continue; }
         if (prompt.empty()) continue;
-        code = RunTurn(module, payload, options.data, profile, options, console, prompt, options.session, nullptr, &options.workspace, failureCode);
+        code = RunTurn(module, payload.Path(), options.data, profile, options, console, prompt, options.session, nullptr, &options.workspace, failureCode);
     }
     return code;
 }

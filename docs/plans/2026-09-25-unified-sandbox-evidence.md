@@ -3035,3 +3035,29 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   succeeded, including new external-data root retention and signed-launcher
   overlap rejection/sibling-data success tests (jobs 110723052645/110723052770).
   Full local Python suite now 144 tests passes with 5 Windows-only skips.
+
+### Retained runtime executable through actual engine use
+
+- Missing retained-runtime.hpp compile RED -> portable native GREEN for exact
+  observed size/hash matching and mismatch refusal. PrepareRuntime now returns
+  an owning RetainedRuntimePayload rather than a bare path, for both public and
+  enterprise builds. All four RunTurn call sites use Path() while retaining the
+  owner across normal print, interactive turns and candidate/rollback probes.
+- Before the preparation lock is released, acquire the engine's entire existing
+  parent directory chain and a regular/nonreparse/single-link FILE_SHARE_READ-only
+  engine handle, then independently stream-hash that same retained handle against
+  embedded resource size/hash. Hold until the full caller scope completes.
+  Post-verification writes/deletion and ancestor replacement cannot occur while
+  those handles are held. This is not a claim that earlier extraction writes
+  are already secured against concurrent intermediate-file replacement.
+- Windows native tests require mismatch refusal, write/deletion/ancestor-rename
+  denial while retained, and deletion after release. Signed launcher suite also
+  starts an actual PE while a RetainedRuntimePayload owns its read handle and
+  parent locks, testing loader/share-mode compatibility. Existing real engine
+  functional workflows will exercise the new owner end-to-end. Added BCrypt
+  linkage for native test suites. New Win32 execution is pending CI.
+- Local portable native/signature tests pass, Python145 passes (5 Windows-only
+  skips), diff-check passes. Run36971075188 (6f2505c) both Windows build steps
+  succeeded (jobs110724974170/110724974388); no full-workflow/Win11 acceptance claim.
+- Runtime preparation temporary-file safety, interruption/disk-full/sharing fault
+  matrix, approved signer and actual Win11 ordinary-account evidence remain open.

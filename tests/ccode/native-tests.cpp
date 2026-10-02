@@ -1,6 +1,7 @@
 #include "../../scripts/ccode/common.hpp"
 #include "../../scripts/ccode/runtime-paths.hpp"
 #include "../../scripts/ccode/enterprise-data.hpp"
+#include "../../scripts/ccode/retained-runtime.hpp"
 #include "../../scripts/ccode/extraction-errors.hpp"
 #include "../../scripts/ccode/concurrency.hpp"
 #include "../../scripts/ccode/workspace-boundary.hpp"
@@ -12,6 +13,15 @@
 
 int main() {
     using namespace ccode;
+    const std::string fixtureRuntimeHash = "f16d05ec6b29248d2c61adb1e9263f78e4f7bace1b955014a2d17872cfe4064d";
+    RequireRuntimePayloadObservation(7, fixtureRuntimeHash, 7, fixtureRuntimeHash);
+    for (const auto& observation : std::vector<std::pair<uint64_t, std::string>>{
+            {8, fixtureRuntimeHash}, {7, std::string(64, '0')}}) {
+        bool runtimeRejected = false;
+        try { RequireRuntimePayloadObservation(7, fixtureRuntimeHash, observation.first, observation.second); }
+        catch (const std::runtime_error& error) { runtimeRejected = std::string(error.what()) == "E_RUNTIME_INTEGRITY"; }
+        assert(runtimeRejected);
+    }
     const auto programPath = std::filesystem::absolute("enterprise-program");
     for (const auto& dataPath : {programPath, programPath / "data", programPath.parent_path()}) {
         bool rejected = false;
@@ -40,6 +50,30 @@ int main() {
     }
     assert(MoveFileW(enterpriseData.c_str(), (enterpriseData.wstring() + L"-moved").c_str()));
     std::filesystem::remove_all(enterpriseRoot);
+    const auto runtimeRoot = std::filesystem::temp_directory_path() /
+        (L"ccode-runtime-retention-" + std::to_wstring(GetCurrentProcessId()));
+    std::filesystem::create_directories(runtimeRoot / L"runtime");
+    const auto runtimeEngine = runtimeRoot / L"runtime" / L"engine.exe";
+    { std::ofstream engine(runtimeEngine, std::ios::binary); engine << "fixture"; }
+    bool retainedMismatchRejected = false;
+    try { RetainedRuntimePayload engine(runtimeEngine, 7, std::string(64, '0')); }
+    catch (const std::runtime_error& error) {
+        retainedMismatchRejected = std::string(error.what()) == "E_RUNTIME_INTEGRITY";
+    }
+    assert(retainedMismatchRejected);
+    {
+        RetainedRuntimePayload engine(runtimeEngine, 7, fixtureRuntimeHash);
+        assert(engine.Path() == runtimeEngine);
+        assert(!DeleteFileW(runtimeEngine.c_str()));
+        assert(!MoveFileW(runtimeRoot.c_str(), (runtimeRoot.wstring() + L"-moved").c_str()));
+        HANDLE writer = CreateFileW(runtimeEngine.c_str(), GENERIC_WRITE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        assert(writer == INVALID_HANDLE_VALUE);
+    }
+    assert(DeleteFileW(runtimeEngine.c_str()));
+    std::filesystem::remove_all(runtimeRoot);
+
 #endif
 
 

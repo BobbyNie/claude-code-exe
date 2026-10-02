@@ -4,6 +4,7 @@
 #include "../../scripts/ccode/authenticated-candidate-files.hpp"
 #include <memory>
 #include "../../scripts/ccode/native-enterprise-gate.hpp"
+#include "../../scripts/ccode/retained-runtime.hpp"
 #include "../../scripts/ccode/pe-image-contract.hpp"
 #include "../../scripts/ccode/locked-candidate-package.hpp"
 #include "../../scripts/ccode/locked-candidate-directories.hpp"
@@ -426,6 +427,14 @@ int main(int argc, char** argv) {
             assert(wait == WAIT_OBJECT_0 && observed);
             return exitCode;
         };
+        {
+            const auto& entry = packageDocument["executable"];
+            ccode::RetainedRuntimePayload retained(executable, entry["size"].get<uint64_t>(),
+                                                   entry["sha256"].get<std::string>());
+            // Demonstrate actual PE process creation remains compatible with
+            // the retained read-only file handle and locked parent chain.
+            assert(runEntry(L"--help") == 0);
+        }
         for (const auto option : {L"--help", L"--version", L"--package-manifest",
                                  L"--boundary-manifest", L"--ccode-self-test"})
             assert(runEntry(option) == 0);

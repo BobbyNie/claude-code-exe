@@ -37,3 +37,10 @@ class EnterpriseStartupWiringTests(unittest.TestCase):
         installation = source.index("$lifecycleTool, 'install-signature'")
         self.assertLess(installation, source.index('& $platformGate -Executable $app'))
         self.assertIn('$signatureInstallation.installedSignatureSha256', source)
+
+    def test_runtime_owner_reaches_all_actual_engine_calls(self):
+        source = (ROOT / 'scripts/ccode/launcher.cpp').read_text()
+        self.assertIn('ccode::RetainedRuntimePayload PrepareRuntime(', source)
+        self.assertIn('return ccode::RetainedRuntimePayload(payload, resource.size, hash)', source)
+        self.assertNotIn('RunTurn(module, payload,', source)
+        self.assertEqual(source.count('RunTurn(module, payload.Path(),'), 4)

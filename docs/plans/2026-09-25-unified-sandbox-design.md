@@ -219,3 +219,5 @@ signature 控制檔及已確認為非 reparse directory 的 `runtime/` 動態
 尚未完成這一接線時 A20 仍是未完成。
 
 企業生命週期驗收器在比對複製後的完整 fresh inventory 之後、執行任何候選命令之前，呼叫 `enterprise_lifecycle.py install-signature --program-root ... --signature ... --public-key ... --trusted-pin ...`。此命令將有界讀取的 manifest、簽章、公開 SPKI 快照驗證成功後，以 exclusive create 安裝原樣簽章位元組到固定 `manifest.sig`；不覆寫現有控制檔，不接受 link／hardlink 來源，不把工具驗證視為正式 signer 授權。安裝證據只記錄 hash；實際企業 launcher 仍必須在每次啟動以編譯期 policy、持有的原始檔案句柄重新驗證，工具的祖先 inspection 不冒稱具備原子併發替換防禦。
+
+runtime 準備完成後不可只回傳 executable 路徑、隨即釋放全部驗證句柄。`PrepareRuntime` 必須在 prepare lock 尚未釋放時建立 owning `RetainedRuntimePayload`，鎖定現有祖先目錄鏈並從不可寫入／刪除的原始 engine 句柄比對嵌入 payload 大小與 SHA-256；正常 print、互動多輪、候選／回滾驗證所有實際引擎呼叫均持有該 owner 到使用期結束。此使用期約束與 extraction 暫存檔建立／啟用的防競態及中斷恢復是分開的要求，不能以實作前者宣稱後者已完成。
