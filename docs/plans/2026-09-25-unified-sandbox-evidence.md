@@ -3107,3 +3107,19 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   emit fixed E_TEST_STAGING checkpoint IDs and exit1. No fixture paths/bytes
   are emitted and no assertion condition is removed or relaxed. Portable suite
   still passes; this diagnostic change awaits actual Windows execution.
+
+### 2026-10-02 — explicit destination sharing check before activation
+
+- Run36973127398 at1634c04 completed RED: both versions emitted
+  E_TEST_STAGING_8, proving replacement rename succeeded despite an existing
+  retained target reader. Earlier reliance on rename-only sharing enforcement
+  was incorrect on these actual Windows runners.
+- Activate now explicitly opens an existing destination with READ|DELETE before
+  replacement, validates its opened disk/non-directory/non-reparse/single-link
+  object, and retains that handle until activation finishes. An existing reader
+  not sharing DELETE must prevent this open; only FILE_NOT_FOUND permits the
+  no-existing-target case. Sharing fixture now requires E_EXTRACT_SHARING and
+  still verifies original payload bytes, followed by retry after reader release.
+- Portable native tests and MinGW staging syntax pass. Actual Windows GREEN is
+  pending, not inferred. This is not atomic protection against newly inserted
+  directory entries; final retained hashing still precedes execution.

@@ -49,6 +49,26 @@ public:
     }
     void Activate() {
         const auto destination = (parents_.CanonicalPath() / L"engine.exe").wstring();
+        // Do not rely on replacement rename to enforce a live reader's share
+        // policy. Explicitly request DELETE on the existing target first.
+        struct TargetOwner {
+            HANDLE value;
+            ~TargetOwner() { if (value != INVALID_HANDLE_VALUE) CloseHandle(value); }
+        } target{CreateFileW(destination.c_str(), GENERIC_READ | DELETE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+            OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr)};
+        if (target.value == INVALID_HANDLE_VALUE) {
+            const auto error = GetLastError();
+            if (error != ERROR_FILE_NOT_FOUND)
+                throw std::runtime_error(ExtractionActivationError(error));
+        } else {
+            BY_HANDLE_FILE_INFORMATION info{};
+            if (!GetFileInformationByHandle(target.value, &info))
+                throw std::runtime_error("E_RUNTIME_PATH");
+            RequireRuntimeStagingObservation(GetFileType(target.value) == FILE_TYPE_DISK,
+                (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0,
+                (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0, info.nNumberOfLinks);
+        }
         const auto nameBytes = destination.size() * sizeof(wchar_t);
         const auto length = sizeof(FILE_RENAME_INFO) + nameBytes;
         // operator new supplies alignment suitable for FILE_RENAME_INFO.

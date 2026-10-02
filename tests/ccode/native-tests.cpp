@@ -113,7 +113,9 @@ int main() {
         RuntimeStagingFile staging(runtimeEngine.parent_path());
         staging.Write(reinterpret_cast<const unsigned char*>("replacement"), 11);
         bool blocked = false;
-        try { staging.Activate(); } catch (const std::runtime_error&) { blocked = true; }
+        try { staging.Activate(); } catch (const std::runtime_error& error) {
+            blocked = std::string(error.what()) == "E_EXTRACT_SHARING";
+        }
         stagingCheck(blocked, "E_TEST_STAGING_8");
     }
     { RetainedRuntimePayload original(runtimeEngine, 7, fixtureRuntimeHash); }
