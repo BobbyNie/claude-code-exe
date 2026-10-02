@@ -324,7 +324,9 @@ int main(int argc, char** argv) {
         if (entry["path"] == "ccode.exe") packageDocument["executable"] = entry;
         if (entry["path"] == "notices/LICENSE.txt") packageDocument["notices"][0] = entry;
     }
-    assert(argc == 3); // Windows build supplies its actual PE and independent build metadata.
+    assert(argc == 3 || (argc == 4 && std::string(argv[3]) == "--enterprise-launcher"));
+    const bool exerciseEnterpriseLauncher = argc == 4;
+    // Windows build supplies an actual PE and independent build metadata.
     std::ifstream expectedMetadataFile(argv[2], std::ios::binary);
     const std::string expectedMetadataBytes((std::istreambuf_iterator<char>(expectedMetadataFile)), {});
     auto expectedMetadata = ccode::ParseManifestDocument(expectedMetadataBytes);
@@ -399,6 +401,54 @@ int main(int argc, char** argv) {
         ccode::NativeEnterpriseGate<FixtureSignerPolicy> gate(packageFixture);
         assert(gate.Manifest() == packageDocument);
         assert(!DeleteFileW((packageFixture / L"manifest.sig").c_str()));
+    }
+    if (exerciseEnterpriseLauncher) {
+        // Execute the real enterprise frontend against this signed synthetic
+        // package. This catches gate/PE-loader/share-mode integration failures
+        // that constructing NativeEnterpriseGate alone cannot demonstrate.
+        const auto executable = packageFixture / L"ccode.exe";
+        auto runEntry = [&](const wchar_t* option) {
+            std::wstring command = L"\"" + executable.wstring() + L"\" " + option;
+            STARTUPINFOW startup{}; startup.cb = sizeof(startup);
+            PROCESS_INFORMATION process{};
+            assert(CreateProcessW(executable.c_str(), command.data(), nullptr, nullptr,
+                FALSE, CREATE_NO_WINDOW, nullptr, packageFixture.c_str(), &startup, &process));
+            const auto wait = WaitForSingleObject(process.hProcess, 60000);
+            if (wait != WAIT_OBJECT_0) {
+                TerminateProcess(process.hProcess, 99);
+                WaitForSingleObject(process.hProcess, 5000);
+            }
+            DWORD exitCode = 99;
+            const bool observed = GetExitCodeProcess(process.hProcess, &exitCode) != FALSE;
+            CloseHandle(process.hThread); CloseHandle(process.hProcess);
+            assert(wait == WAIT_OBJECT_0 && observed);
+            return exitCode;
+        };
+        for (const auto option : {L"--help", L"--version", L"--package-manifest",
+                                 L"--boundary-manifest", L"--ccode-self-test"})
+            assert(runEntry(option) == 0);
+        assert(!std::filesystem::exists(packageFixture / L"data"));
+        assert(std::filesystem::is_empty(packageFixture / L"runtime"));
+        {
+            std::ofstream signatureFile(packageFixture / L"manifest.sig", std::ios::binary);
+            const std::string zeros(64, '\0'); signatureFile.write(zeros.data(), zeros.size());
+        }
+        for (const auto option : {L"--help", L"--package-manifest", L"--ccode-permission-server", L"--print probe"})
+            assert(runEntry(option) == 64);
+        {
+            std::ofstream signatureFile(packageFixture / L"manifest.sig", std::ios::binary);
+            signatureFile.write(reinterpret_cast<const char*>(packageSignature.data()), packageSignature.size());
+        }
+        { std::ofstream notice(packageFixture / L"notices" / L"LICENSE.txt", std::ios::binary); notice << "tamper!"; }
+        assert(runEntry(L"--help") == 64);
+        { std::ofstream notice(packageFixture / L"notices" / L"LICENSE.txt", std::ios::binary); notice << "fixture"; }
+        { std::ofstream manifestFile(packageFixture / L"manifest.json", std::ios::binary); manifestFile << packageBytes << ' '; }
+        assert(runEntry(L"--version") == 64); // Signature covers original raw bytes.
+        { std::ofstream manifestFile(packageFixture / L"manifest.json", std::ios::binary); manifestFile << packageBytes; }
+        assert(runEntry(L"--version") == 0);
+        assert(!std::filesystem::exists(packageFixture / L"data"));
+        assert(std::filesystem::is_empty(packageFixture / L"runtime"));
+        std::cout << "Signed enterprise launcher entry-point integration passed\n";
     }
     { std::ofstream signatureFile(packageFixture / L"manifest.sig", std::ios::binary);
       signatureFile << std::string(64, '\0'); }

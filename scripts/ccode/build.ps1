@@ -144,6 +144,7 @@ try {
         (Join-Path $PSScriptRoot "launcher.cpp"), $resourceObject) + $cryptoObjects + @(
         "/Fe:$fixtureExe", "/link", "bcrypt.lib", "/SUBSYSTEM:CONSOLE")
     Invoke-Checked cl.exe @fixtureArgs
+    Invoke-Checked $signatureTest $fixtureExe $metadataPath --enterprise-launcher
     & (Join-Path $PSScriptRoot "..\..\tests\ccode\test-enterprise-startup.ps1") -Executable $fixtureExe
 
     $info = Get-Item $output

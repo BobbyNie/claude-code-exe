@@ -2957,3 +2957,25 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   installation of signature, external-data enforcement, retained runtime-use
   integrity and Win11 ordinary-account acceptance remain incomplete. This is
   not an A20/startup acceptance completion claim.
+
+### Enterprise startup execution coverage follow-up
+
+- Run 36969406725 (1cbb6eb): both engine-version Build reported runtime version
+  steps succeeded (jobs 110720026990 / 110720027138). This includes compiling the
+  real enterprise frontend and executing missing-signature refusal tests for
+  all seven tested entry points. It is hosted Windows engineering evidence,
+  not Win11 ordinary-account evidence or an overall green workflow claim.
+- Added separate --enterprise-launcher mode to the native fixture suite and
+  wired build.ps1 to execute it against the ephemeral enterprise PE. The suite
+  signs a complete package from that exact executable's observed size/hash and
+  independent build metadata, then actually spawns help/version/package/boundary/
+  self-test. It requires success with no data creation and no runtime extraction.
+- Negative subprocesses require refusal for an invalid signature (including
+  permission worker and normal print), notice tampering and even a whitespace
+  change to the signed raw manifest. Restoring exact bytes must restore success.
+  Child processes have bounded waits and test handles are closed.
+- New invocation wiring test RED -> GREEN locally; portable native suite passes.
+  These Windows-only positive/tampered subprocess cases are pending the next CI
+  execution. Engineering RFC8032 signing does not imply real signer approval.
+  External-data, installed-signature lifecycle, runtime retention and all actual
+  Windows 11 acceptance gaps remain open.
