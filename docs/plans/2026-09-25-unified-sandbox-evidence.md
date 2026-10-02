@@ -3243,3 +3243,15 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   Python145 tests pass with5 Windows-specific skips (loopback fixtures require
   execution outside the local sandbox). Diff-check passes. Windows11 ordinary
   account acceptance, mapped-image fault coverage and TLS evidence remain open.
+
+### 2026-10-02 — enterprise pre-signing build sidecars
+
+- RED: new assembly-input wiring test failed and independent boundary exporter
+  compilation failed because the exporter did not exist.
+- GREEN: add a build-only executable using the same BoundaryManifest definition,
+  and export its JSON after build checks. Copy the exact resource102 provenance
+  input to the output directory before temporary build cleanup. No unsigned
+  enterprise launcher invocation or startup-gate bypass is added.
+- Local independent exporter compiles and emits valid x64/build22000 boundary
+  without creating runtime/data files. Windows PowerShell build execution remains
+  pending CI; sidecars are assembly inputs, not signer approval or acceptance.

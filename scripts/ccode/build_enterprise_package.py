@@ -335,7 +335,7 @@ def main():
     parser.add_argument("--provenance", required=True,
                         help="Verified JSON emitted by ccode.exe --package-manifest")
     parser.add_argument("--boundary", required=True,
-                        help="Verified JSON emitted by ccode.exe --boundary-manifest")
+                        help="Verified runtime-boundary.json emitted by build.ps1 (or a signed launcher)")
     parser.add_argument("--usage", required=True)
     parser.add_argument("--notice", action="append", required=True,
                         help="Required notice to preserve byte-for-byte; repeat as needed")

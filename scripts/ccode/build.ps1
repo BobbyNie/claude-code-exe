@@ -151,6 +151,17 @@ try {
     if ($info.Length -le (Get-Item $payload).Length) {
         throw "ccode.exe is unexpectedly small; embedded resources may be missing"
     }
+    # Export inputs for signing/assembly without invoking the unsigned enterprise
+    # launcher. Provenance is the exact buffer embedded as resource102; boundary
+    # comes from the same C++ document used by the launcher, not a copied schema.
+    $boundaryExporter = Join-Path $work "export-build-boundary.exe"
+    Invoke-Checked cl.exe /nologo /std:c++17 /O2 /EHsc /MT /utf-8 `
+        (Join-Path $PSScriptRoot "export-build-boundary.cpp") "/Fe:$boundaryExporter"
+    $boundaryJson = & $boundaryExporter
+    if ($LASTEXITCODE -ne 0) { throw "E_BUILD_BOUNDARY" }
+    $sidecarDirectory = Split-Path -Parent $output
+    $boundaryJson | Set-Content -LiteralPath (Join-Path $sidecarDirectory "runtime-boundary.json") -Encoding utf8NoBOM
+    Copy-Item -LiteralPath $metadataPath -Destination (Join-Path $sidecarDirectory "package-provenance.json")
     Write-Output "Built single-file ccode.exe ($($info.Length) bytes)."
 }
 finally {
