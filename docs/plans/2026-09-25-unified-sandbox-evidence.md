@@ -3497,3 +3497,17 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 
 - Full local regression:156 Python tests pass with5 skips; native frontend
   suite and git diff --check pass. No gateway acceptance assertion was changed.
+
+### 2026-10-02 — preserve canonical TLS terminal presentation
+
+- Run36991081165 completed failure at13e7b1a, not a spending-limit block.
+  Native2.1.282 probe confirms native_typed_tls_cause=true for untrusted
+  certificate cases and false in the explicit fixture-trust control.2.1.221
+  does not emit this typed cause; its separate compatibility gate remains open.
+- RunTurn already preserves the ProtocolError and exits65, but presented TLS
+  errors as invalid engine events. Use the canonical neutral certificate
+  verification message without publishing engine content or changing TLS trust.
+- TDD RED: frontend test fails because ProtocolFailureMessage is absent.
+  GREEN: native frontend suite and12 probe tests pass; launcher uses the tested
+  renderer. Gateway acceptance assertions are unchanged. Native CI confirmation
+  and actual Windows11 ordinary-account acceptance remain pending.

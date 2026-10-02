@@ -350,5 +350,6 @@ int main() {
     try { reader.Feed("{\"type\":\"assistant\",\"message\":{\"content\":[]}}\n"); }
     catch (...) { afterResult = true; }
     assert(afterResult);
+    assert(ccode::ProtocolFailureMessage("E_GATEWAY_TLS") == "[E_GATEWAY_TLS: certificate verification failed]\n");
     std::cout << "frontend event tests passed\n";
 }

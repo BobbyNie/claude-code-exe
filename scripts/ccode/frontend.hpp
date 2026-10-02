@@ -12,6 +12,13 @@ class ProtocolError : public std::runtime_error {
 public:
     explicit ProtocolError(const char* code) : std::runtime_error(code) {}
 };
+inline std::string ProtocolFailureMessage(const std::string& code) {
+    if (code == "E_GATEWAY_TLS")
+        return "[E_GATEWAY_TLS: certificate verification failed]\n";
+    if (code == "E_GATEWAY_RETRY")
+        return "[E_GATEWAY_RETRY: automatic retry refused]\n";
+    return "[" + code + ": invalid engine event]\n";
+}
 inline std::string ConsoleText(const std::string& text) {
     std::string result;
     for (unsigned char ch : text)

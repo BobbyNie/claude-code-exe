@@ -542,8 +542,7 @@ int RunTurn(const fs::path& module, const fs::path& payload, const fs::path& dat
     }
     if (!protocolError.empty()) {
         if (failureCode) *failureCode = protocolError;
-        std::cerr << "[" << protocolError << (protocolError == "E_GATEWAY_RETRY"
-            ? ": automatic retry refused]\n" : ": invalid engine event]\n");
+        std::cerr << ccode::ProtocolFailureMessage(protocolError);
         return 65;
     }
     try { reader.Finish(); }
