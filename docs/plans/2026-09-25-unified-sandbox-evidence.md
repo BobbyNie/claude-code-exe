@@ -3362,3 +3362,16 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - This rejects the tested replacement race; it is not a claim of immutable reads
   against every same-object writer or of complete candidate-directory atomicity.
   Hosted Windows regression and Windows11 ordinary-account evidence are pending.
+
+### 2026-10-02 — legacy recovery completion marker validation
+
+- RED: native profile regression demonstrated that empty, directory and unrelated
+  completion markers silently skipped recovery without validating success.
+- GREEN: require a regular non-symlink marker containing the complete fixed
+  completion sentence. Read at most128 bytes; reject malformed/truncated/oversized
+  content with E_PROFILE_RECOVERY_MARKER, preserving both marker and originals.
+  New markers use binary output. A separate RED/GREEN regression preserves exact
+  CRLF marker compatibility with previous Windows text-mode output.
+- Full local profile recovery and native isolation suites pass; diff check passes.
+  Windows regression is pending. This validation does not provide an atomic
+  marker reservation or prove disk-full/interruption recovery for copied files.

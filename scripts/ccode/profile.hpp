@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
+#include <string>
 
 namespace ccode {
 
@@ -56,13 +57,26 @@ inline ProfileRestoreResult RestoreLegacyProfile(const std::filesystem::path& ho
     namespace fs = std::filesystem;
     ProfileRestoreResult result;
     const auto marker = home / ".cc-profile-restored-v1";
-    if (fs::exists(fs::symlink_status(marker))) return result;
+    const auto completionText = "Legacy profile copied without replacing existing files.\n";
+    const auto markerStatus = fs::symlink_status(marker);
+    if (fs::exists(markerStatus)) {
+        if (!fs::is_regular_file(markerStatus) || fs::is_symlink(markerStatus))
+            throw std::runtime_error("E_PROFILE_RECOVERY_MARKER");
+        std::ifstream recorded(marker, std::ios::binary);
+        char bytes[128] = {};
+        recorded.read(bytes, sizeof(bytes));
+        const std::string contents(bytes, static_cast<size_t>(recorded.gcount()));
+        if (recorded.bad() || !recorded.eof() || (contents != completionText &&
+                contents != "Legacy profile copied without replacing existing files.\r\n"))
+            throw std::runtime_error("E_PROFILE_RECOVERY_MARKER");
+        return result;
+    }
     if (!fs::exists(fs::symlink_status(home / ".cc")) &&
         !fs::exists(fs::symlink_status(home / ".cc.json"))) return result;
     profile_detail::CopyMissing(home / ".cc", home / ".claude", result);
     profile_detail::CopyMissing(home / ".cc.json", home / ".claude.json", result);
-    std::ofstream completed(marker);
-    completed << "Legacy profile copied without replacing existing files.\n";
+    std::ofstream completed(marker, std::ios::binary);
+    completed << completionText;
     completed.close();
     if (!completed) throw std::runtime_error("Unable to record profile recovery completion");
     return result;

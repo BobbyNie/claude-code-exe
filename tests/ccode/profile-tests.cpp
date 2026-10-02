@@ -53,6 +53,28 @@ int main() try {
     assert(commitReplaceFailed);
     assert(Read(obstructedPointer / "active-profile.json.pending") == "uncommitted pointer\n");
     assert(Read(obstructedPointer / "active-profile.json" / "retain.txt") == "unrelated directory");
+    // Interrupted or unrelated marker objects cannot certify completed recovery.
+    for (const auto kind : {"empty", "directory", "unrelated"}) {
+        const auto incomplete = root / (std::string("invalid-marker-") + kind);
+        Write(incomplete / ".cc" / "history.jsonl", "original transcript\n");
+        const auto marker = incomplete / ".cc-profile-restored-v1";
+        if (std::string(kind) == "directory") fs::create_directory(marker);
+        else Write(marker, std::string(kind) == "empty" ? "" : "unrelated content");
+        bool rejected = false;
+        try { ccode::RestoreLegacyProfile(incomplete); }
+        catch (const std::runtime_error& error) {
+            rejected = std::string(error.what()) == "E_PROFILE_RECOVERY_MARKER";
+        }
+        assert(rejected);
+        assert(Read(incomplete / ".cc" / "history.jsonl") == "original transcript\n");
+        assert(!fs::exists(incomplete / ".claude"));
+    }
+    const auto legacyMarker = root / "legacy-crlf-marker";
+    Write(legacyMarker / ".cc" / "history.jsonl", "original transcript\n");
+    { std::ofstream marker(legacyMarker / ".cc-profile-restored-v1", std::ios::binary);
+      marker << "Legacy profile copied without replacing existing files.\r\n"; }
+    assert(ccode::RestoreLegacyProfile(legacyMarker).copied == 0);
+    assert(!fs::exists(legacyMarker / ".claude"));
     const auto old = root / ".cc/projects/D--tt";
     const auto current = root / ".claude/projects/D--tt";
     Write(old / "history.jsonl", "old transcript\n");
