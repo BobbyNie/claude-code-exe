@@ -103,6 +103,48 @@ def unreachable_endpoint():
         yield endpoint.getsockname()
 
 
+def dns_failure_observed(returncode, terminal):
+    return returncode != 0 and '[E_GATEWAY_DNS: name resolution failed]' in terminal.splitlines()
+
+
+def check_dns_rejection(executable):
+    """Actual engine failure, not synthetic stream events or a text classifier."""
+    hostname = 'ccode-dns-rejection.invalid'
+    try:
+        socket.getaddrinfo(hostname, 443)
+    except socket.gaierror as error:
+        assert error.errno == socket.EAI_NONAME, 'DNS fixture lacks authoritative negative resolution'
+    else:
+        raise AssertionError('DNS refusal fixture unexpectedly resolves')
+    with tempfile.TemporaryDirectory(prefix='ccode-dns-') as folder:
+        root = Path(folder).resolve()
+        program, workspace, data = root / 'program', root / 'workspace', root / 'data'
+        program.mkdir()
+        workspace.mkdir()
+        app = program / 'ccode.exe'
+        shutil.copy2(executable, app)
+        token, prompt = 'fixture-dns-dummy-token-81397', 'fixture-private-dns-prompt-34197'
+        env = {key: value for key, value in os.environ.items()
+               if not key.startswith(('A_', 'C_', 'ANTHROPIC_', 'CLAUDE_', 'CCODE_'))}
+        env.update(A_AUTH_TOKEN=token, A_BASE_URL=f'https://{hostname}')
+        report = root / 'failure.json'
+        try:
+            result = subprocess.run([str(app), '--data-dir', str(data), '--print',
+                '--diagnostics', str(report), '--tools', '', prompt], cwd=workspace,
+                env=env, input='', capture_output=True, text=True, encoding='utf-8',
+                errors='replace', timeout=60)
+        except subprocess.TimeoutExpired:
+            raise AssertionError('DNS failure did not terminate within 60 seconds') from None
+        terminal = result.stdout + result.stderr
+        assert dns_failure_observed(result.returncode, terminal), 'DNS failure lacks distinct neutral classification'
+        validate_failure_diagnostic(report, 'E_GATEWAY_DNS', result.returncode)
+        for private in (token, prompt, str(root), hostname):
+            assert private not in terminal, 'DNS failure disclosed private fixture information'
+        assert not list(workspace.iterdir()), 'DNS failure changed workspace'
+        assert not list(program.rglob('*.jsonl')), 'DNS failure stored history in program directory'
+        print('PASS: actual engine DNS failure has distinct neutral report, no workspace writes or terminal disclosure')
+
+
 def check_unreachable(executable):
     with tempfile.TemporaryDirectory(prefix="ccode-unreachable-") as folder:
         root = Path(folder).resolve()
@@ -400,6 +442,9 @@ def check_rejection(executable, status_code, error_type, diagnostic, stream_cut=
 
 if __name__ == "__main__":
     executable = Path(sys.argv[1]).resolve()
+    if '--dns-only' in sys.argv[2:]:
+        check_dns_rejection(executable)
+        sys.exit(0)
     check_unreachable(executable)
     check_rejection(executable, 401, "authentication_error", "E_GATEWAY_AUTH")
     check_rejection(executable, 429, "rate_limit_error", "E_GATEWAY_RATE_LIMIT")

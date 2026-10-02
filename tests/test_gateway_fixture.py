@@ -17,6 +17,12 @@ spec.loader.exec_module(fixture)
 
 
 class GatewayFixtureTests(unittest.TestCase):
+    def test_dns_refusal_requires_nonzero_exit_and_exact_neutral_line(self):
+        self.assertTrue(fixture.dns_failure_observed(1, '[E_GATEWAY_DNS: name resolution failed]\n'))
+        self.assertFalse(fixture.dns_failure_observed(0, '[E_GATEWAY_DNS: name resolution failed]\n'))
+        self.assertFalse(fixture.dns_failure_observed(1, 'private E_GATEWAY_DNS text'))
+        self.assertFalse(fixture.dns_failure_observed(1, '[E_ENGINE: incomplete turn; check gateway and configuration]'))
+
     def test_tls12_probe_endpoint_rejects_untrusted_client_and_negotiates_only_tls12(self):
         with fixture.untrusted_tls_endpoint(maximum_version=ssl.TLSVersion.TLSv1_2) as endpoint:
             with socket.create_connection(endpoint.address, timeout=2) as connection:

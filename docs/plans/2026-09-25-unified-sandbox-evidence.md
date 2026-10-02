@@ -3617,3 +3617,18 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   Formal signer/pin, legal approvals and full matrix remain prerequisites.
 - This is evidence-only recording of the tested code revision. Skip CI on the
   documentation commit to avoid repeating the same unchanged binaries/tests.
+
+### 2026-10-02 — actual DNS failure acceptance entry
+
+- Add independent --dns-only gateway fixture invocation to hosted Windows and
+  platform-gated Windows11 workflows, so legacy TLS failure cannot hide DNS
+  evidence. Real engine uses a .invalid hostname, preflight requires EAI_NONAME;
+  unexpected resolution or transient DNS preflight failure fails closed.
+- Require nonzero exit and exact neutral E_GATEWAY_DNS renderer line, strict
+  failure JSON/category/privacy schema, no private token/prompt/path/hostname in
+  terminal, no workspace writes or history in program. Generic E_ENGINE is not
+  accepted. Existing TLS handshake assertions and trust policy are unchanged.
+- TDD RED: acceptance classifier missing. GREEN: fixed-line/nonzero contract
+  passes, success exit/arbitrary text/generic engine diagnostic are rejected.
+  Local Python158 tests pass (5 skipped). Native actual-engine DNS behavior is
+  pending CI, not proven by unit helper or script existence; A18/A19 stay open.
