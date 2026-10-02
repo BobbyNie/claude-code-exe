@@ -23,6 +23,26 @@ class GatewayFixtureTests(unittest.TestCase):
         self.assertFalse(fixture.dns_failure_observed(1, 'private E_GATEWAY_DNS text'))
         self.assertFalse(fixture.dns_failure_observed(1, '[E_ENGINE: incomplete turn; check gateway and configuration]'))
 
+    def test_expired_turn_trusts_only_fixture_ca_without_disabling_tls(self):
+        with tempfile.TemporaryDirectory() as folder:
+            executable = Path(folder) / 'ccode.exe'
+            executable.write_bytes(b'fixture')
+            ca = Path(folder) / 'public-test-ca.pem'
+            endpoint = SimpleNamespace(server_port=12345, http_requests=0, ca_certificate=ca)
+            def run(args, **kwargs):
+                self.assertEqual(kwargs['env']['NODE_EXTRA_CA_CERTS'], str(ca))
+                self.assertNotIn('NODE_TLS_REJECT_UNAUTHORIZED', kwargs['env'])
+                return SimpleNamespace(returncode=1,
+                    stdout='[E_GATEWAY_TLS: certificate verification failed]\n', stderr='')
+            with patch.object(fixture, 'untrusted_tls_endpoint') as context, patch.object(
+                    fixture.subprocess, 'run', side_effect=run), patch.object(
+                    fixture, 'tls_rejection_observed', return_value=True), patch.object(
+                    fixture, 'validate_failure_diagnostic') as validate, patch('builtins.print'):
+                context.return_value.__enter__.return_value = endpoint
+                fixture.check_tls_rejection(executable, expired=True)
+                context.assert_called_once_with(expired=True)
+                self.assertEqual(validate.call_args.args[1:], ('E_GATEWAY_TLS', 1))
+
     def test_tls12_probe_endpoint_rejects_untrusted_client_and_negotiates_only_tls12(self):
         with fixture.untrusted_tls_endpoint(maximum_version=ssl.TLSVersion.TLSv1_2) as endpoint:
             with socket.create_connection(endpoint.address, timeout=2) as connection:
@@ -36,6 +56,17 @@ class GatewayFixtureTests(unittest.TestCase):
                     secure.sendall(b'GET / HTTP/1.0\r\nHost: localhost\r\n\r\n')
                     self.assertIn(b'503', secure.recv(4096))
             self.assertEqual(endpoint.tls_versions, {'TLSv1.2': 1, 'TLSv1.3': 0, 'other': 0})
+
+    def test_expired_endpoint_is_rejected_even_with_approved_fixture_ca(self):
+        with fixture.untrusted_tls_endpoint(expired=True) as endpoint:
+            context = ssl.create_default_context(cafile=str(endpoint.ca_certificate))
+            with socket.create_connection(endpoint.address, timeout=2) as connection:
+                with self.assertRaises(ssl.SSLCertVerificationError) as caught:
+                    context.wrap_socket(connection, server_hostname='127.0.0.1')
+            self.assertEqual(caught.exception.verify_code, 10)  # certificate expired
+            self.assertTrue(endpoint.handshake_failed.wait(2))
+            self.assertEqual(endpoint.http_requests, 0)
+            self.assertEqual(endpoint.tls_handshakes_completed, 0)
 
     def test_unreachable_endpoint_reserves_port_without_accepting_connections(self):
         with fixture.unreachable_endpoint() as address:

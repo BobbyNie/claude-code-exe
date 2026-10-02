@@ -100,6 +100,10 @@ jobs:
         if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.platform.outcome == 'success' }}
         shell: pwsh
         run: python tests/ccode/gateway-integration.py ./ccode.exe --dns-only
+      - name: Verify actual engine expired certificate rejection
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.platform.outcome == 'success' }}
+        shell: pwsh
+        run: python tests/ccode/gateway-integration.py ./ccode.exe --expired-tls-only
       - name: Verify actual engine gateway rejection
         if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.platform.outcome == 'success' }}
         shell: pwsh

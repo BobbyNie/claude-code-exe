@@ -24,10 +24,10 @@ def classify_tls_prefix(prefix):
 
 
 @contextmanager
-def untrusted_tls_endpoint(*, maximum_version=None):
-    """Loopback-only TLS fixture; the checked-in key is public test data, never trusted by the engine."""
+def untrusted_tls_endpoint(*, maximum_version=None, expired=False):
+    """Loopback-only public TLS fixtures; trust is explicit and scoped per test."""
     fixtures = Path(__file__).parent / "fixtures"
-    certificate = fixtures / "untrusted-test-cert.pem"
+    certificate = fixtures / ("expired-test-cert.pem" if expired else "untrusted-test-cert.pem")
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(certificate, fixtures / "untrusted-test-key.pem")
     if maximum_version is not None:
@@ -74,6 +74,7 @@ def untrusted_tls_endpoint(*, maximum_version=None):
     server = Server(("127.0.0.1", 0), Handler)
     server.address = server.server_address
     server.certificate = certificate
+    server.ca_certificate = fixtures / ("expired-test-ca.pem" if expired else "untrusted-test-cert.pem")
     server.rejected = threading.Event()
     server.handshake_failed = threading.Event()
     server.connections = 0
@@ -201,7 +202,7 @@ def tls_rejection_observed(endpoint, returncode, diagnostic, *, handshake_timeou
             and diagnostic == "E_GATEWAY_TLS")
 
 
-def check_tls_rejection(executable):
+def check_tls_rejection(executable, *, expired=False):
     with tempfile.TemporaryDirectory(prefix="ccode-tls-") as folder:
         root = Path(folder).resolve()
         program, workspace, data = root / "program", root / "workspace", root / "data"
@@ -216,7 +217,10 @@ def check_tls_rejection(executable):
                and key not in ("NODE_TLS_REJECT_UNAUTHORIZED", "NODE_EXTRA_CA_CERTS",
                                "SSL_CERT_FILE", "SSL_CERT_DIR")}
         report_path = root / "failure.json"
-        with untrusted_tls_endpoint() as endpoint:
+        with (untrusted_tls_endpoint(expired=True) if expired else untrusted_tls_endpoint()) as endpoint:
+            if expired:
+                # Public fixture CA only; keep certificate/time verification enabled.
+                env["NODE_EXTRA_CA_CERTS"] = str(endpoint.ca_certificate)
             env.update(A_AUTH_TOKEN=token,
                        A_BASE_URL=f"https://127.0.0.1:{endpoint.server_port}")
             try:
@@ -249,7 +253,8 @@ def check_tls_rejection(executable):
                            ("E_GATEWAY_TLS", "E_GATEWAY_RETRY", "E_ENGINE_API", "E_ENGINE_RESULT")}
         assert classifications["E_GATEWAY_TLS"], (
             "TLS failure needs its distinct neutral diagnostic: " + json.dumps(classifications))
-        print("PASS: actual engine rejects untrusted TLS before HTTP, with TLS classification and no workspace writes or terminal secret disclosure")
+        scenario = "expired certificate with trusted fixture CA" if expired else "untrusted TLS"
+        print(f"PASS: actual engine rejects {scenario} before HTTP, with TLS classification and no workspace writes or terminal secret disclosure")
 
 
 def unfinished_tool_events(model, target, marker, complete_arguments=False):
@@ -442,6 +447,9 @@ def check_rejection(executable, status_code, error_type, diagnostic, stream_cut=
 
 if __name__ == "__main__":
     executable = Path(sys.argv[1]).resolve()
+    if '--expired-tls-only' in sys.argv[2:]:
+        check_tls_rejection(executable, expired=True)
+        sys.exit(0)
     if '--dns-only' in sys.argv[2:]:
         check_dns_rejection(executable)
         sys.exit(0)

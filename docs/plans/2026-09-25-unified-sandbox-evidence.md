@@ -3689,3 +3689,20 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   deprecation warnings, not billing. No rerun, error-policy weakening or raw
   sensitive event logging was introduced. Record evidence with skip CI because
   this documentation does not change the tested binaries or acceptance tests.
+
+### 2026-10-02 — expiration-only TLS acceptance entry
+
+- Add independent --expired-tls-only actual-engine invocation in both hosted and
+  platform-gated Windows11 workflows, keeping the original untrusted-CA gate.
+  Public valid fixture CA signs a leaf expired since2021-01-01 with correct IP
+  SAN and strict CA/leaf extensions. Only the isolated test subprocess receives
+  NODE_EXTRA_CA_CERTS; verification remains enabled, no machine trust changed.
+- TDD RED: endpoint lacks expired option, then engine invocation lacks expired
+  option. GREEN: strict Python client trusting the fixture CA rejects specifically
+  with verification code10, failed handshake and zero HTTP; invocation contract
+  scopes only fixture CA and has no NODE_TLS_REJECT_UNAUTHORIZED bypass.
+  Intermediate invalid-chain failures85/92 were corrected, not accepted as expiry.
+- Python160 tests pass (5 skipped). Actual engine still must prove failed TLS
+  handshake, zero HTTP, nonzero exit, E_GATEWAY_TLS, strict neutral JSON and privacy;
+  this new branch is pending Windows CI, not yet A18/A19 or Win11 acceptance.
+  Original DNS/legacy TLS failures remain open; production engine unchanged.

@@ -14,3 +14,20 @@ exit, a TLS-specific neutral diagnostic, and no workspace writes or terminal
 credential/prompt disclosure. Local fixture success is not engine acceptance.
 
 Certificate validity: 2026-09-25 21:35:06 UTC through 2126-09-01 21:35:06 UTC.
+
+## Expiration-only rejection
+
+`expired-test-ca.pem` is a separate, valid, test-only CA with critical CA and
+keyCertSign/cRLSign extensions. `expired-test-cert.pem` is its leaf certificate,
+with serverAuth, CA:FALSE, IP SAN 127.0.0.1 and validity from January 1, 2020
+through January 1, 2021 UTC. Both reuse the intentionally public fixture key.
+Never use these files or key for deployment or install them in a machine store.
+
+The expiration test scopes NODE_EXTRA_CA_CERTS to this public CA for the single
+fixture subprocess; it never disables TLS verification. The unit test uses a
+strict trust context and requires verification code 10 (expired), not an issuer,
+hostname or malformed-chain failure. The actual-engine acceptance independently
+requires failed TLS handshake evidence, zero HTTP, nonzero exit, E_GATEWAY_TLS
+and the strict neutral failure report. Trusting this test CA is not production
+signer approval, enterprise gateway trust or permission to bypass certificate
+validity checks. Original untrusted-issuer acceptance remains unchanged.
