@@ -2790,3 +2790,18 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   36965446929 and 36965235632 remain in progress at this check. No rerun requested.
 - Parent-directory identity, complete candidate locking, embedded resource
   authentication and mandatory launcher enforcement remain outstanding.
+
+### Authenticated complete listed-file ownership
+
+- Missing orchestrator header RED -> native suite GREEN. Added an owning
+  AuthenticatedCandidateFiles composition: authenticates original bytes and
+  schema before invoking an opener, acquires all listed file handles before
+  content verification, verifies every listed entry, retains them until release.
+- Portable fixture tests prove all listed files remain owned on success,
+  invalid signature invokes no opener, a tampered notice rejects the candidate,
+  and failed verification releases the acquired handles. These are orchestration
+  tests, not evidence of Windows filesystem locks or production signer approval.
+- Native suite/diff-check pass; Python suite 135 tests, 5 Windows-only skips.
+- Production opener still must secure candidate and ancestor identity and reject
+  unlisted package files; this composition does not implement those requirements,
+  load embedded resources or enforce startup. A20 remains incomplete.

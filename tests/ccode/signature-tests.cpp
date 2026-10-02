@@ -1,6 +1,8 @@
 #include "../../scripts/ccode/manifest-signature.hpp"
 #include "../../scripts/ccode/manifest-inventory.hpp"
 #include "../../scripts/ccode/locked-candidate-file.hpp"
+#include "../../scripts/ccode/authenticated-candidate-files.hpp"
+#include <memory>
 #include <filesystem>
 #include <fstream>
 #include "../../scripts/ccode/stream-sha256.hpp"
@@ -219,6 +221,56 @@ int main() {
         signatureFirst = std::string(error.what()) == "E_MANIFEST_SIGNATURE";
     }
     assert(signatureFirst);
+    struct FixtureFile {
+        nlohmann::json observation;
+        int& alive;
+        explicit FixtureFile(nlohmann::json value, int& count) : observation(value), alive(count) { ++alive; }
+        ~FixtureFile() { --alive; }
+        void Verify(const nlohmann::json& expected) {
+            if (!ccode::ManifestFileMatchesObservation(expected,
+                    observation["size"].get<uint64_t>(), observation["sha256"].get<std::string>()))
+                throw std::runtime_error("E_MANIFEST_FILE_MISMATCH");
+        }
+    };
+    int aliveFiles = 0, openedFiles = 0;
+    auto openFixture = [&](const std::string& path) {
+        ++openedFiles;
+        for (const auto& entry : rootManifest["files"])
+            if (entry["path"] == path) return std::make_unique<FixtureFile>(entry, aliveFiles);
+        throw std::runtime_error("unexpected fixture path");
+    };
+    {
+        ccode::AuthenticatedCandidateFiles<FixtureFile> candidate(
+            rawDocument, documentSignature, validDer, pin, openFixture);
+        assert(candidate.Manifest() == rootManifest);
+        assert(aliveFiles == static_cast<int>(rootManifest["files"].size()));
+        assert(openedFiles == aliveFiles);
+    }
+    assert(aliveFiles == 0);
+    const int openedBeforeBadSignature = openedFiles;
+    bool candidateSignatureRejected = false;
+    try {
+        ccode::AuthenticatedCandidateFiles<FixtureFile> candidate(
+            rawDocument + " ", documentSignature, validDer, pin, openFixture);
+    } catch (const std::runtime_error& error) {
+        candidateSignatureRejected = std::string(error.what()) == "E_MANIFEST_SIGNATURE";
+    }
+    assert(candidateSignatureRejected && openedFiles == openedBeforeBadSignature);
+    auto openTampered = [&](const std::string& path) {
+        auto file = openFixture(path);
+        if (path == "notices/LICENSE.txt") file->observation["sha256"] = std::string(64, '0');
+        return file;
+    };
+    bool candidateTamperRejected = false;
+    try {
+        ccode::AuthenticatedCandidateFiles<FixtureFile> candidate(
+            rawDocument, documentSignature, validDer, pin, openTampered);
+    } catch (const std::runtime_error& error) {
+        candidateTamperRejected = std::string(error.what()) == "E_MANIFEST_FILE_MISMATCH";
+    }
+    assert(candidateTamperRejected && aliveFiles == 0);
+
+
 #ifdef _WIN32
     auto fixturePath = std::filesystem::temp_directory_path() /
         (L"ccode-locked-file-" + std::to_wstring(GetCurrentProcessId()) + L".txt");
