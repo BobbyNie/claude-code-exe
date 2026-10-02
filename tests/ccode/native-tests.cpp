@@ -215,6 +215,51 @@ int RunNativeTests() {
         staging.Activate(2000);
     }
     { RetainedRuntimePayload original(runtimeEngine, 7, fixtureRuntimeHash); }
+    // Kill a real writer after its staging bytes are flushed, before activation.
+    // The old verified runtime must survive, and a fresh writer must recover.
+    {
+        SECURITY_ATTRIBUTES security{sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE};
+        HANDLE ready = CreateEventW(&security, TRUE, FALSE, nullptr);
+        stagingCheck(ready != nullptr, "E_TEST_INTERRUPTION_EVENT");
+        std::vector<wchar_t> module(32768);
+        const auto length = GetModuleFileNameW(nullptr, module.data(),
+                                               static_cast<DWORD>(module.size()));
+        stagingCheck(length > 0 && length < module.size(), "E_TEST_INTERRUPTION_MODULE");
+        std::wstring command = L"\"" + std::wstring(module.data()) +
+            L"\" --staging-interruption " +
+            std::to_wstring(reinterpret_cast<uintptr_t>(ready));
+        STARTUPINFOW startup{}; startup.cb = sizeof(startup);
+        PROCESS_INFORMATION child{};
+        stagingCheck(CreateProcessW(module.data(), command.data(), nullptr, nullptr,
+            TRUE, 0, nullptr, runtimeEngine.parent_path().c_str(), &startup, &child),
+            "E_TEST_INTERRUPTION_SPAWN");
+        HANDLE observed[] = {ready, child.hProcess};
+        const auto outcome = WaitForMultipleObjects(2, observed, FALSE, 10000);
+        // Always reap the fixture, including a failed readiness handshake.
+        stagingCheck(TerminateProcess(child.hProcess, 73), "E_TEST_INTERRUPTION_KILL");
+        stagingCheck(WaitForSingleObject(child.hProcess, 10000) == WAIT_OBJECT_0,
+                     "E_TEST_INTERRUPTION_REAP");
+        DWORD exitCode = 0;
+        stagingCheck(GetExitCodeProcess(child.hProcess, &exitCode) && exitCode == 73,
+                     "E_TEST_INTERRUPTION_EXIT");
+        stagingCheck(CloseHandle(child.hThread), "E_TEST_INTERRUPTION_THREAD_CLOSE");
+        stagingCheck(CloseHandle(child.hProcess), "E_TEST_INTERRUPTION_PROCESS_CLOSE");
+        stagingCheck(CloseHandle(ready), "E_TEST_INTERRUPTION_EVENT_CLOSE");
+        stagingCheck(outcome == WAIT_OBJECT_0, "E_TEST_INTERRUPTION_READY");
+        { RetainedRuntimePayload original(runtimeEngine, 7, fixtureRuntimeHash); }
+        {
+            LockedCandidateFile interrupted(stagingPath, LockedFilePurpose::RuntimePayload);
+            stagingCheck(interrupted.ReadBounded(64) == "interrupted-staging-bytes",
+                         "E_TEST_INTERRUPTION_STALE_BYTES");
+        }
+        {
+            RuntimeStagingFile replacement(runtimeEngine.parent_path());
+            replacement.Write(reinterpret_cast<const unsigned char*>("fixture"), 7);
+            replacement.Activate(2000);
+        }
+        { RetainedRuntimePayload recovered(runtimeEngine, 7, fixtureRuntimeHash); }
+        std::cerr << "E_TEST_INTERRUPTION_RECOVERED" << std::endl;
+    }
     std::cerr << "E_TEST_STAGING_LONG_BEGIN" << std::endl;
     const auto namedRuntime = runtimeRoot / (L"runtime 中文 with spaces " + std::wstring(80, L'x'));
     std::filesystem::create_directory(namedRuntime);
@@ -444,8 +489,23 @@ int RunNativeTests() {
     return 0;
 }
 
-int main() {
-    try { return RunNativeTests(); }
+int main(int argc, char** argv) {
+    try {
+#ifdef _WIN32
+        if (argc == 3 && std::string(argv[1]) == "--staging-interruption") {
+            const auto ready = reinterpret_cast<HANDLE>(std::stoull(argv[2]));
+            ccode::RuntimeStagingFile staging(std::filesystem::current_path());
+            const std::string partial = "interrupted-staging-bytes";
+            staging.Write(reinterpret_cast<const unsigned char*>(partial.data()), partial.size());
+            if (!SetEvent(ready)) throw std::runtime_error("E_TEST_INTERRUPTION_SIGNAL");
+            Sleep(INFINITE); // Parent must forcibly terminate, never graceful destruction.
+            return 74;
+        }
+#else
+        (void)argc; (void)argv;
+#endif
+        return RunNativeTests();
+    }
     catch (const std::exception& error) {
         const std::string code = error.what();
         // Only fixed neutral library codes may escape; filesystem exceptions

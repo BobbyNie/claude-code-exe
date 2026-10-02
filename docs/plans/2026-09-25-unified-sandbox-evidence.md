@@ -3726,3 +3726,20 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - Both DNS gates still fail. Other test steps, both workspace-boundary jobs and
   cross-version succeed. Annotations are exit1 and Node deprecation, not billing.
   Actual Windows11 endpoint, formal signer and full matrix remain incomplete.
+
+### 2026-10-02 — runtime pre-activation forced-interruption probe
+
+- Add Windows-native child fixture that writes/flushes staging bytes, signals
+  readiness through an inherited event, then remains alive holding staging and
+  parent handles. Parent uses TerminateProcess, waits for termination and checks
+  exit73, verifies original runtime size/hash, verifies interrupted staging bytes,
+  then uses a fresh RuntimeStagingFile to truncate/rewrite/activate and reverify.
+  Event readiness prevents a merely pre-created file being mistaken for a crash.
+- Test-only entry, no production change. Portable native suite and Python160
+  tests (5 skipped) pass; Windows test branch is pending actual CI, not locally
+  GREEN. This is an explicit test-first probe; fix only if native evidence is RED.
+- Scope correction: the earlier SEC_IMAGE coverage is runtime activation/update
+  supplemental evidence (A20), not migration A15 evidence. Neither this crash
+  probe nor SEC_IMAGE proves profile migration, active-pointer interruption,
+  disk-full, hardware power-loss, complete update rollback or Win11 acceptance.
+  All those wider gaps remain open. No fallback or cleanup error is ignored.
