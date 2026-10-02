@@ -1,0 +1,24 @@
+"""Supplementary wiring checks; Win32 behavior is exercised by the build script."""
+from pathlib import Path
+import unittest
+
+ROOT = Path(__file__).resolve().parents[1]
+
+class EnterpriseStartupWiringTests(unittest.TestCase):
+    def test_enterprise_gate_precedes_every_entry_point(self):
+        source = (ROOT / 'scripts/ccode/launcher.cpp').read_text()
+        main = source[source.index('int Main('):source.index('int wmain(')]
+        gate = main.index('NativeEnterpriseGate<CompiledSignerPolicy> enterpriseGate')
+        self.assertLess(gate, main.index('return PermissionServer()'))
+        self.assertLess(gate, main.index('L"--help"'))
+        self.assertLess(gate, main.index('auto metadata = Metadata()'))
+        self.assertLess(gate, main.index('fs::create_directories(options.data)'))
+        self.assertIn('#ifdef CCODE_ENTERPRISE_REQUIRED', source)
+
+    def test_build_exposes_paired_explicit_policy_and_runs_native_entry_tests(self):
+        source = (ROOT / 'scripts/ccode/build.ps1').read_text()
+        self.assertIn('$SignerSpkiPath', source)
+        self.assertIn('$ApprovedSignerPin', source)
+        self.assertIn('generate_enterprise_policy.py', source)
+        self.assertIn('/DCCODE_ENTERPRISE_REQUIRED', source)
+        self.assertIn('test-enterprise-startup.ps1', source)

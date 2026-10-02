@@ -2934,3 +2934,26 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - Signature install convention documented in design; launcher/build/lifecycle
   entry points are NOT wired yet. Therefore normal launches do not yet enforce
   this bootstrap, and no startup-gate/A20 completion is asserted.
+
+### Enterprise launcher/build entry-point integration (engineering slice)
+
+- Supplementary wiring checks first failed because launcher had no startup gate
+  and build had no explicit signer parameters; after integration both pass.
+  These source checks do not prove Win32 behavior.
+- build.ps1 accepts paired SignerSpkiPath / ApprovedSignerPin, generates a fixed
+  header and links Monocypher with CCODE_ENTERPRISE_REQUIRED only for that
+  explicit enterprise build. Omitting both deliberately builds the public
+  edition, not an unsigned fallback inside an enterprise executable.
+- Enterprise launcher retains NativeEnterpriseGate on the Main stack before
+  permission worker, help, metadata and normal option parsing/side effects.
+  No environment or CLI option can turn this compiled gate off.
+- Every build also compiles an ephemeral enterprise launcher using independent
+  RFC8032 public test material (never the output edition's trust policy), and
+  runs real subprocess refusal tests for missing manifest.sig across help,
+  version, package/boundary metadata, self-test, permission worker and print.
+  Requires exit64, E_MANIFEST_FILE, empty stdout, no program-tree changes and
+  bounded termination. Actual Windows execution of this new test is pending CI.
+- Approved signer, valid-signed enterprise launcher subprocess coverage,
+  installation of signature, external-data enforcement, retained runtime-use
+  integrity and Win11 ordinary-account acceptance remain incomplete. This is
+  not an A20/startup acceptance completion claim.

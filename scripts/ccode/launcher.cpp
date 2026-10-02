@@ -25,10 +25,20 @@
 #include "concurrency.hpp"
 #include "workspace-boundary.hpp"
 #include "permission.hpp"
+#ifdef CCODE_ENTERPRISE_REQUIRED
+#include "enterprise-policy.hpp"
+#include "native-enterprise-gate.hpp"
+#endif
 
 namespace fs = std::filesystem;
 using ccode::Json;
 namespace {
+#ifdef CCODE_ENTERPRISE_REQUIRED
+struct CompiledSignerPolicy {
+    inline static constexpr auto SignerSpki = ccode::enterprise_policy::SignerSpki;
+    inline static constexpr auto SignerPin = ccode::enterprise_policy::SignerPin;
+};
+#endif
 struct Handle {
     HANDLE value = INVALID_HANDLE_VALUE;
     explicit Handle(HANDLE h = INVALID_HANDLE_VALUE) : value(h) {}
@@ -570,8 +580,13 @@ void PickSession(const fs::path& profile, const fs::path& workspace, std::string
 }
 int Main(int argc, wchar_t** argv, std::string* failureCode) {
     SetConsoleOutputCP(CP_UTF8); SetConsoleCP(CP_UTF8);
-    if (argc == 2 && std::wstring(argv[1]) == L"--ccode-permission-server") return PermissionServer();
     auto module = Module();
+#ifdef CCODE_ENTERPRISE_REQUIRED
+    // Own all authenticated static handles until this entire invocation returns.
+    // No help, metadata or permission-worker shortcut may precede this gate.
+    ccode::NativeEnterpriseGate<CompiledSignerPolicy> enterpriseGate(module.parent_path());
+#endif
+    if (argc == 2 && std::wstring(argv[1]) == L"--ccode-permission-server") return PermissionServer();
     if (argc == 2 && (std::wstring(argv[1]) == L"--help" || std::wstring(argv[1]) == L"-h")) {
         std::cout << "ccode - portable coding assistant\n"
             "Usage: ccode [options] [prompt]\n"

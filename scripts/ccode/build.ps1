@@ -6,7 +6,11 @@ param(
     [string]$AdapterRevision,
 
     [Parameter(Mandatory = $false)]
-    [string]$OutputDir = "."
+    [string]$OutputDir = ".",
+
+    # Paired explicit public trust inputs. Omitting both builds the public edition.
+    [string]$SignerSpkiPath = "",
+    [string]$ApprovedSignerPin = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -18,6 +22,8 @@ $officialPayloadUrl = "$baseUrl/win32-x64/claude.exe"
 if ($AdapterRevision -notmatch '^[0-9a-fA-F]{40}([0-9a-fA-F]{24})?$') {
     throw "AdapterRevision must be a full 40- or 64-character hexadecimal commit ID"
 }
+if ([bool]$SignerSpkiPath -ne [bool]$ApprovedSignerPin) { throw "E_SIGNER_POLICY" }
+if ($SignerSpkiPath) { $SignerSpkiPath = (Resolve-Path -LiteralPath $SignerSpkiPath).Path }
 $normalizedAdapterRevision = $AdapterRevision.ToLowerInvariant()
 $work = Join-Path ([System.IO.Path]::GetTempPath()) "ccode-build-$([Guid]::NewGuid().ToString('N'))"
 $payload = Join-Path $work "aa-runtime.exe"
@@ -82,9 +88,27 @@ try {
 "@ | Set-Content -Path $resourceScript -Encoding ASCII
     Invoke-Checked rc.exe /nologo "/fo$resourceObject" $resourceScript
 
+    $cryptoObjects = @()
+    foreach ($unit in @("monocypher", "monocypher-ed25519")) {
+        $object = Join-Path $work "$unit.obj"
+        Invoke-Checked cl.exe /nologo /O2 /MT /c /TC `
+            (Join-Path $PSScriptRoot "vendor\monocypher\$unit.c") "/Fo:$object"
+        $cryptoObjects += $object
+    }
+
+    $policyGenerator = Join-Path $PSScriptRoot "generate_enterprise_policy.py"
+    $enterpriseFlags = @()
+    $launcherObjects = @()
+    if ($SignerSpkiPath) {
+        Invoke-Checked python $policyGenerator --spki $SignerSpkiPath --approved-pin $ApprovedSignerPin `
+            --output (Join-Path $work "enterprise-policy.hpp")
+        $enterpriseFlags = @("/DCCODE_ENTERPRISE_REQUIRED", "/I$work")
+        $launcherObjects = $cryptoObjects
+    }
     $launcherArgs = @(
         "/nologo", "/std:c++17", "/O2", "/EHsc", "/MT", "/utf-8", "/DUNICODE", "/D_UNICODE",
-        (Join-Path $PSScriptRoot "launcher.cpp"), $resourceObject,
+        (Join-Path $PSScriptRoot "launcher.cpp"), $resourceObject
+    ) + $enterpriseFlags + $launcherObjects + @(
         "/Fe:$output", "/link", "bcrypt.lib", "/SUBSYSTEM:CONSOLE"
     )
     Invoke-Checked cl.exe @launcherArgs
@@ -97,19 +121,30 @@ try {
     }
 
     # Native verifier engineering tests. No Node runtime is linked into ccode.
-    # Production startup/update integration and approved trust policy remain pending.
-    $cryptoObjects = @()
-    foreach ($unit in @("monocypher", "monocypher-ed25519")) {
-        $object = Join-Path $work "$unit.obj"
-        Invoke-Checked cl.exe /nologo /O2 /MT /c /TC `
-            (Join-Path $PSScriptRoot "vendor\monocypher\$unit.c") "/Fo:$object"
-        $cryptoObjects += $object
-    }
+    # Approved real signer policy and lifecycle integration remain pending.
     $signatureTest = Join-Path $work "ccode-signature-tests.exe"
     Invoke-Checked cl.exe /nologo /std:c++17 /O2 /EHsc /MT /utf-8 `
         (Join-Path $PSScriptRoot "..\..\tests\ccode\signature-tests.cpp") `
         @cryptoObjects "/Fe:$signatureTest" /link bcrypt.lib
     Invoke-Checked $signatureTest $output $metadataPath
+
+    # Independent public RFC8032 fixture: used only for an ephemeral test executable.
+    # Never used as the output edition's trust policy or as approval evidence.
+    $fixtureDir = Join-Path $work "fixture-policy"
+    New-Item -ItemType Directory -Path $fixtureDir | Out-Null
+    $fixtureKey = Join-Path $fixtureDir "public.der"
+    [IO.File]::WriteAllBytes($fixtureKey, [Convert]::FromHexString(
+        "302a300506032b6570032100d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"))
+    Invoke-Checked python $policyGenerator --spki $fixtureKey `
+        --approved-pin "06e3fd8fda29bb60ab59557de61edb0aecdb231134be30e75b455f8e1b792fa9" `
+        --output (Join-Path $fixtureDir "enterprise-policy.hpp")
+    $fixtureExe = Join-Path $work "enterprise-startup.exe"
+    $fixtureArgs = @("/nologo", "/std:c++17", "/O2", "/EHsc", "/MT", "/utf-8",
+        "/DUNICODE", "/D_UNICODE", "/DCCODE_ENTERPRISE_REQUIRED", "/I$fixtureDir",
+        (Join-Path $PSScriptRoot "launcher.cpp"), $resourceObject) + $cryptoObjects + @(
+        "/Fe:$fixtureExe", "/link", "bcrypt.lib", "/SUBSYSTEM:CONSOLE")
+    Invoke-Checked cl.exe @fixtureArgs
+    & (Join-Path $PSScriptRoot "..\..\tests\ccode\test-enterprise-startup.ps1") -Executable $fixtureExe
 
     $info = Get-Item $output
     if ($info.Length -le (Get-Item $payload).Length) {
