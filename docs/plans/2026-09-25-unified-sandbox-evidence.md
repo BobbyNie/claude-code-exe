@@ -3670,3 +3670,22 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   from portable results. Any required production fix follows actual native RED.
 - Hosted CI remains supplemental, not Windows11 ordinary-account evidence.
   Existing actual-engine DNS and legacy TLS failures remain unresolved.
+
+### 2026-10-02 — real image-section contention native result
+
+- Run37021564275 /0bb7c2e completed/failure. Both native builds/tests succeed
+  (jobs110885663048 and110885663436). Their staging log reaches the checkpoint
+  after the unconditional Windows SEC_IMAGE block and ends with native isolation
+  tests passed. The explicit stagingCheck checks are not disabled by NDEBUG.
+- Thus the actual image-section fixture proves bounded fail-closed activation,
+  unchanged original size/hash, checked unmap/close, and successful replacement
+  after release, on these hosted runners. Existing implementation is already
+  GREEN for this new test; no production change or fabricated RED is needed.
+  This is specific A15 supplemental coverage, not the full A15 matrix or Windows11
+  ordinary-account acceptance. Disk-full/interruption and other gaps stay open.
+- Both actual DNS steps still fail distinct classification. Old2.1.221 TLS still
+  fails failed-handshake evidence; new2.1.282 TLS passes. All workspace-boundary
+  and cross-version jobs succeed. Check-run annotations show step exit1 and Node
+  deprecation warnings, not billing. No rerun, error-policy weakening or raw
+  sensitive event logging was introduced. Record evidence with skip CI because
+  this documentation does not change the tested binaries or acceptance tests.
