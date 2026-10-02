@@ -2826,3 +2826,15 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - Directory handles do not prohibit adding children, lock file bytes or enforce
   launcher startup. Complete enumeration, nested static directory locking,
   embedded resources and actual production gate integration remain required.
+
+### Correction: directory metadata-only handles did not block rename
+
+- Run 36966569736 at 0fbaa8f failed both native builds at the assertion that
+  renaming the retained candidate directory must fail. This is authoritative
+  behavioral RED, contradicting the earlier intended lock property; downstream
+  artifact failures are consequences, not quota failures.
+- Changed the desired directory access from metadata-only FILE_READ_ATTRIBUTES
+  to FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES so directory read access
+  participates in share-access checking. Kept the failing rename assertions.
+  Local standalone header syntax checks do not prove the fix; Windows behavioral
+  GREEN remains pending the next CI run. No parent-lock acceptance is claimed.

@@ -18,7 +18,7 @@ class LockedCandidateDirectories {
     };
     std::vector<std::unique_ptr<DirectoryHandle>> handles_;
     void Lock(const std::filesystem::path& path) {
-        HANDLE handle = CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES,
+        HANDLE handle = CreateFileW(path.c_str(), FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES,
             FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
             FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
         if (handle == INVALID_HANDLE_VALUE) throw std::runtime_error("E_MANIFEST_DIRECTORY");
