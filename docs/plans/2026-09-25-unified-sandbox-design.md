@@ -200,3 +200,20 @@ A05 的正式資料分離／程式搬移／重新打包證據必須以 `scripts/
 性能門檻在 POC 前以目標機基線協定，不捏造通過數值。正確性門檻是所有必選案例通過、零未解釋的資料遺失、名稱掃描符合已確定範圍。本文不代表新沙箱已完成或原錯誤全部修復。
 
 詳見 [驗收矩陣](2026-09-25-unified-sandbox-acceptance.md) 及 [決策記錄](../adr/2026-09-25-execution-boundary.md)。
+
+### 原生企業 gate 的安裝控制檔契約（實施中）
+
+原生 gate 從 program root 的固定 `manifest.sig` 讀取 detached signature，
+只接受 build-time policy type 提供的公鑰與獨立 pin；不接受 CLI／環境
+信任 override。簽章是安裝控制檔，不列入自身簽署清單的 hash，以避免
+循環。fresh candidate／ZIP audit 白名單保持原樣，安裝／驗收入口須在
+核對外部簽章後另行放置同一 signature；入口整合完成前不宣稱可用。
+
+Fresh 驗證不允許任何 runtime 殘留。Installed 驗證只額外允許固定
+signature 控制檔及已確認為非 reparse directory 的 `runtime/` 動態
+範圍，並持有該目錄 handle；不因此允許 data/profile/session/temp
+進入 program root。runtime 子樹仍須經獨立 extraction／使用前驗證，
+不得將忽略其交付名稱掃描冒稱為完整 runtime 防篡改。原生 gate 必須
+在 help、metadata、permission-worker 及正常啟動的任何副作用之前執行，
+並在整個 invocation 保持所有靜態候選與簽章 handles；launcher／build
+尚未完成這一接線時 A20 仍是未完成。

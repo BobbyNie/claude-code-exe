@@ -3,6 +3,7 @@
 #include "../../scripts/ccode/locked-candidate-file.hpp"
 #include "../../scripts/ccode/authenticated-candidate-files.hpp"
 #include <memory>
+#include "../../scripts/ccode/native-enterprise-gate.hpp"
 #include "../../scripts/ccode/pe-image-contract.hpp"
 #include "../../scripts/ccode/locked-candidate-package.hpp"
 #include "../../scripts/ccode/locked-candidate-directories.hpp"
@@ -19,6 +20,12 @@ std::vector<unsigned char> Hex(const std::string& text) {
         bytes.push_back(static_cast<unsigned char>(std::stoul(text.substr(i, 2), nullptr, 16)));
     return bytes;
 }
+// Public engineering key only. Production must use the generated approved policy.
+struct FixtureSignerPolicy {
+    inline static const std::vector<unsigned char> SignerSpki = Hex(
+        "302a300506032b6570032100d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a");
+    inline static constexpr char SignerPin[] = "06e3fd8fda29bb60ab59557de61edb0aecdb231134be30e75b455f8e1b792fa9";
+};
 int main(int argc, char** argv) {
     std::string peFixture(512, '\0');
     auto put16 = [&](size_t offset, unsigned value) {
@@ -383,6 +390,38 @@ int main(int argc, char** argv) {
     std::filesystem::copy_file(std::filesystem::path(argv[1]), packageFixture / L"ccode.exe",
         std::filesystem::copy_options::overwrite_existing);
     { std::ofstream file(packageFixture / L"manifest.json", std::ios::binary); file << packageBytes; }
+    {
+        std::ofstream signatureFile(packageFixture / L"manifest.sig", std::ios::binary);
+        signatureFile.write(reinterpret_cast<const char*>(packageSignature.data()), packageSignature.size());
+    }
+    std::filesystem::create_directory(packageFixture / L"runtime");
+    {
+        ccode::NativeEnterpriseGate<FixtureSignerPolicy> gate(packageFixture);
+        assert(gate.Manifest() == packageDocument);
+        assert(!DeleteFileW((packageFixture / L"manifest.sig").c_str()));
+    }
+    { std::ofstream signatureFile(packageFixture / L"manifest.sig", std::ios::binary);
+      signatureFile << std::string(64, '\0'); }
+    bool badStartupSignatureRejected = false;
+    try { ccode::NativeEnterpriseGate<FixtureSignerPolicy> gate(packageFixture); }
+    catch (const std::runtime_error& error) {
+        badStartupSignatureRejected = std::string(error.what()) == "E_MANIFEST_SIGNATURE";
+    }
+    assert(badStartupSignatureRejected);
+    std::filesystem::remove(packageFixture / L"manifest.sig");
+    bool unsignedStartupRejected = false;
+    try { ccode::NativeEnterpriseGate<FixtureSignerPolicy> gate(packageFixture); }
+    catch (const std::runtime_error& error) {
+        unsignedStartupRejected = std::string(error.what()) == "E_MANIFEST_FILE";
+    }
+    assert(unsignedStartupRejected);
+    bool freshRuntimeRejected = false;
+    try { ccode::LockedCandidatePackage package(packageFixture, packageSignature, validDer, pin); }
+    catch (const std::runtime_error& error) {
+        freshRuntimeRejected = std::string(error.what()) == "E_MANIFEST_INVENTORY";
+    }
+    assert(freshRuntimeRejected);
+    std::filesystem::remove(packageFixture / L"runtime");
     { std::ofstream file(packageFixture / L"extra.txt"); file << "extra"; }
     bool extraFileRejected = false;
     try { ccode::LockedCandidatePackage package(packageFixture, packageSignature, validDer, pin); }

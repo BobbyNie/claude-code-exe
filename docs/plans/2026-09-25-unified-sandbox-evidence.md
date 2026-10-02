@@ -2915,3 +2915,22 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   public fixture remains engineering-only. This generator is not yet wired into
   build.ps1/launcher: approved real signer material and mandatory enterprise
   startup/update gate still remain open. No A20 release claim.
+
+### Native enterprise bootstrap and installed inventory mode
+
+- Missing bootstrap header compile RED -> portable native GREEN. NativeEnterpriseGate
+  obtains its public key/pin only from a build-time policy type, reads exactly
+  bounded detached signature from fixed manifest.sig through a retained handle,
+  then owns the complete candidate verification result for its lifetime.
+- Installed mode allows only the signature control file and an existing runtime
+  directory additionally; retains the non-reparse runtime directory before
+  pruning its dynamic subtree. Fresh mode still rejects runtime residue. Other
+  extra program files/directories are not allowed. Snapshot checks are not an
+  atomic insertion defense; dynamic runtime contents are not authenticated here.
+- Windows tests use the actual built PE, engineering public policy, valid signed
+  candidate and empty existing runtime; require retained signature deletion denial,
+  missing/bad signature refusal and fresh-runtime rejection. Actual Win32 behavior
+  is pending CI. Native/Python139 (5 skips)/diff-check pass locally.
+- Signature install convention documented in design; launcher/build/lifecycle
+  entry points are NOT wired yet. Therefore normal launches do not yet enforce
+  this bootstrap, and no startup-gate/A20 completion is asserted.

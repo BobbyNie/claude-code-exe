@@ -7,10 +7,13 @@
 #include <set>
 
 namespace ccode {
+enum class CandidateInventoryMode { Fresh, Installed };
 // A fresh static candidate, not an already-running program tree. Runtime/data
 // exclusions are not permission to carry dynamic files into a new candidate.
 class LockedCandidatePackage {
     std::filesystem::path root_;
+    CandidateInventoryMode mode_;
+    bool runtimePresent_ = false;
     LockedCandidateDirectories ancestors_;
     LockedCandidateFile manifestFile_;
     nlohmann::json manifest_;
@@ -21,6 +24,11 @@ class LockedCandidatePackage {
         std::set<std::filesystem::path> expected{
             std::filesystem::path(L"manifest.json"), std::filesystem::path(L"docs"),
             std::filesystem::path(L"notices")};
+        if (mode_ == CandidateInventoryMode::Installed) {
+            expected.insert(std::filesystem::path(L"manifest.sig"));
+            if (runtimePresent_)
+                expected.insert(std::filesystem::path(L"runtime"));
+        }
         for (const auto& entry : manifest_["files"])
             expected.insert(std::filesystem::u8path(entry["path"].get<std::string>()));
         std::set<std::filesystem::path> actual;
@@ -32,6 +40,8 @@ class LockedCandidatePackage {
             // Check before descending: never traverse an unexpected directory.
             if (!expected.count(relative)) throw std::runtime_error("E_MANIFEST_INVENTORY");
             actual.insert(relative);
+            if (mode_ == CandidateInventoryMode::Installed && relative == std::filesystem::path(L"runtime"))
+                it.disable_recursion_pending();
             it.increment(error);
             if (error) throw std::runtime_error("E_MANIFEST_INVENTORY");
         }
@@ -41,12 +51,17 @@ public:
     LockedCandidatePackage(const std::filesystem::path& root,
             const std::vector<unsigned char>& signature,
             const std::vector<unsigned char>& publicKeyDer,
-            const std::string& compiledTrustedPin)
-        : root_(root), ancestors_(root), manifestFile_(root / L"manifest.json") {
+            const std::string& compiledTrustedPin,
+            CandidateInventoryMode mode = CandidateInventoryMode::Fresh)
+        : root_(root), mode_(mode), ancestors_(root), manifestFile_(root / L"manifest.json") {
         const auto bytes = manifestFile_.ReadBounded(1048576);
         manifest_ = AuthenticateManifestDocument(bytes, signature, publicKeyDer, compiledTrustedPin);
         for (const auto& name : {L"docs", L"notices"})
             staticDirectories_.push_back(std::make_unique<LockedCandidateDirectories>(root_ / name));
+        if (mode_ == CandidateInventoryMode::Installed && std::filesystem::exists(root_ / L"runtime")) {
+            staticDirectories_.push_back(std::make_unique<LockedCandidateDirectories>(root_ / L"runtime"));
+            runtimePresent_ = true;
+        }
         CheckInventory();
         files_ = std::make_unique<AuthenticatedCandidateFiles<LockedCandidateFile>>(
             bytes, signature, publicKeyDer, compiledTrustedPin,
