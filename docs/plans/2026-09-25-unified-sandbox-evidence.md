@@ -2838,3 +2838,22 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   participates in share-access checking. Kept the failing rename assertions.
   Local standalone header syntax checks do not prove the fix; Windows behavioral
   GREEN remains pending the next CI run. No parent-lock acceptance is claimed.
+
+### Integrated Windows fresh-candidate verifier
+
+- Added LockedCandidatePackage composition: retains root/ancestor directories,
+  reads bounded manifest.json through its own retained handle, authenticates
+  original bytes, retains docs/notices directory handles, acquires and verifies
+  every signed static file, and checks exact enumerated paths before and after
+  file acquisition. Unexpected files/directories and missing paths reject.
+- Header-missing compile RED preceded implementation. Conditional Windows
+  tests assemble a complete signed synthetic candidate, assert manifest/file
+  deletion and directory rename denial while retained, reject an extra root file
+  and a same-size tampered notice. These require CI execution; portable native
+  GREEN cannot prove Windows behavior. Python 135 tests/5 skips and diff-check
+  pass. The ancestor sharing fix b1f75c7 is still pending behavioral GREEN.
+- Scope is a fresh static candidate, not a running program tree with generated
+  runtime. Inventory checks are snapshots: they do not prevent an attacker
+  inserting an extra child after enumeration. No atomic-directory safety claim.
+  This composition still lacks embedded payload/metadata resource verification,
+  compiled approved signer policy and mandatory launcher/update enforcement.

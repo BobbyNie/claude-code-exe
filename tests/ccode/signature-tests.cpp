@@ -3,6 +3,7 @@
 #include "../../scripts/ccode/locked-candidate-file.hpp"
 #include "../../scripts/ccode/authenticated-candidate-files.hpp"
 #include <memory>
+#include "../../scripts/ccode/locked-candidate-package.hpp"
 #include "../../scripts/ccode/locked-candidate-directories.hpp"
 #include <filesystem>
 #include <fstream>
@@ -273,6 +274,46 @@ int main() {
 
 
 #ifdef _WIN32
+    auto packageFixture = std::filesystem::temp_directory_path() /
+        (L"ccode-authenticated-package-" + std::to_wstring(GetCurrentProcessId()));
+    std::filesystem::create_directories(packageFixture / L"docs");
+    std::filesystem::create_directories(packageFixture / L"notices");
+    auto packageDocument = rootManifest;
+    for (auto& entry : packageDocument["files"]) {
+        entry["size"] = 7;
+        entry["sha256"] = "f16d05ec6b29248d2c61adb1e9263f78e4f7bace1b955014a2d17872cfe4064d";
+        std::ofstream file(packageFixture / std::filesystem::u8path(entry["path"].get<std::string>()), std::ios::binary);
+        file << "fixture";
+        if (entry["path"] == "ccode.exe") packageDocument["executable"] = entry;
+        if (entry["path"] == "notices/LICENSE.txt") packageDocument["notices"][0] = entry;
+    }
+    const auto packageBytes = packageDocument.dump();
+    { std::ofstream file(packageFixture / L"manifest.json", std::ios::binary); file << packageBytes; }
+    const auto packageSignature = signDocument(packageBytes);
+    {
+        ccode::LockedCandidatePackage package(packageFixture, packageSignature, validDer, pin);
+        assert(package.Manifest() == packageDocument);
+        assert(!DeleteFileW((packageFixture / L"manifest.json").c_str()));
+        assert(!DeleteFileW((packageFixture / L"notices" / L"LICENSE.txt").c_str()));
+        assert(!MoveFileW(packageFixture.c_str(), (packageFixture.wstring() + L"-moved").c_str()));
+
+    }
+    { std::ofstream file(packageFixture / L"extra.txt"); file << "extra"; }
+    bool extraFileRejected = false;
+    try { ccode::LockedCandidatePackage package(packageFixture, packageSignature, validDer, pin); }
+    catch (const std::runtime_error& error) {
+        extraFileRejected = std::string(error.what()) == "E_MANIFEST_INVENTORY";
+    }
+    assert(extraFileRejected);
+    std::filesystem::remove(packageFixture / L"extra.txt");
+    { std::ofstream file(packageFixture / L"notices" / L"LICENSE.txt", std::ios::binary); file << "tamper!"; }
+    bool packageTamperRejected = false;
+    try { ccode::LockedCandidatePackage package(packageFixture, packageSignature, validDer, pin); }
+    catch (const std::runtime_error& error) {
+        packageTamperRejected = std::string(error.what()) == "E_MANIFEST_FILE_MISMATCH";
+    }
+    assert(packageTamperRejected);
+    std::filesystem::remove_all(packageFixture);
     auto directoryFixture = std::filesystem::temp_directory_path() /
         (L"ccode-locked-directory-" + std::to_wstring(GetCurrentProcessId()));
     auto nestedFixture = directoryFixture / L"candidate";
