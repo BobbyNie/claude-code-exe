@@ -3,6 +3,7 @@
 #include "../../scripts/ccode/locked-candidate-file.hpp"
 #include "../../scripts/ccode/authenticated-candidate-files.hpp"
 #include <memory>
+#include "../../scripts/ccode/locked-candidate-directories.hpp"
 #include <filesystem>
 #include <fstream>
 #include "../../scripts/ccode/stream-sha256.hpp"
@@ -272,6 +273,29 @@ int main() {
 
 
 #ifdef _WIN32
+    auto directoryFixture = std::filesystem::temp_directory_path() /
+        (L"ccode-locked-directory-" + std::to_wstring(GetCurrentProcessId()));
+    auto nestedFixture = directoryFixture / L"candidate";
+    std::filesystem::create_directories(nestedFixture);
+    auto ordinaryFile = nestedFixture / L"not-a-directory";
+    { std::ofstream file(ordinaryFile); file << "fixture"; }
+    for (const auto& invalid : std::vector<std::filesystem::path>{
+            ordinaryFile, nestedFixture / L"..", std::filesystem::path(L"relative")}) {
+        bool directoryRejected = false;
+        try { ccode::LockedCandidateDirectories directories(invalid); }
+        catch (const std::runtime_error& error) {
+            directoryRejected = std::string(error.what()) == "E_MANIFEST_DIRECTORY";
+        }
+        assert(directoryRejected);
+    }
+
+    {
+        ccode::LockedCandidateDirectories directories(nestedFixture);
+        assert(!MoveFileW(directoryFixture.c_str(), (directoryFixture.wstring() + L"-moved").c_str()));
+        assert(!MoveFileW(nestedFixture.c_str(), (nestedFixture.wstring() + L"-moved").c_str()));
+    }
+    assert(MoveFileW(nestedFixture.c_str(), (nestedFixture.wstring() + L"-moved").c_str()));
+    std::filesystem::remove_all(directoryFixture);
     auto fixturePath = std::filesystem::temp_directory_path() /
         (L"ccode-locked-file-" + std::to_wstring(GetCurrentProcessId()) + L".txt");
     { std::ofstream fixture(fixturePath, std::ios::binary); fixture << "fixture"; }

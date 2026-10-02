@@ -2805,3 +2805,24 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - Production opener still must secure candidate and ancestor identity and reject
   unlisted package files; this composition does not implement those requirements,
   load embedded resources or enforce startup. A20 remains incomplete.
+
+### Retained candidate ancestor directory handles
+
+- Missing directory-lock header produced Windows-target compile RED. Added
+  outward local-drive ancestor traversal with retained directory handles that
+  omit delete sharing; rejects non-directories, reparse attributes, relative /
+  device / UNC namespaces and dot/trailing-dot/trailing-space components rather
+  than normalizing traversal across unverified ancestors. Fixed neutral errors.
+- New Windows fixtures attempt rename of candidate and parent while retained,
+  require successful rename after release, and reject file/relative/traversal
+  paths. Actual execution awaits MSVC CI; compile RED is not behavioral RED.
+- Standalone header Windows cross-target syntax check passes. Full-suite MinGW
+  syntax check is unavailable with the local older BCrypt headers (missing
+  BCRYPT_SHA256_ALG_HANDLE); no fake SDK constants were used. macOS native suite
+  and diff-check pass, but cannot prove these Windows-only assertions.
+- Prior run 36965632548 is completed/failure: job 110708658490 log confirms native
+  suite passed; TLS handshake acceptance still fails. Cross-version and both
+  workspace-boundary jobs passed. No Windows 11 acceptance or rerun claim.
+- Directory handles do not prohibit adding children, lock file bytes or enforce
+  launcher startup. Complete enumeration, nested static directory locking,
+  embedded resources and actual production gate integration remain required.
