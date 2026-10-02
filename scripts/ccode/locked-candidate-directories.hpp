@@ -52,6 +52,9 @@ public:
             Lock(current);
         }
     }
+    // Borrowed only while this noncopyable owner remains alive. Allows fixed
+    // child operations to resolve against the already verified directory object.
+    HANDLE BorrowedLeafHandle() const { return handles_.back()->value; }
     std::filesystem::path CanonicalPath() const {
         const auto handle = handles_.back()->value;
         const auto size = GetFinalPathNameByHandleW(handle, nullptr, 0, FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);

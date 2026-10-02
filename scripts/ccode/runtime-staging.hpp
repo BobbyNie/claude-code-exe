@@ -69,17 +69,20 @@ public:
                 (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0,
                 (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0, info.nNumberOfLinks);
         }
-        const auto nameBytes = destination.size() * sizeof(wchar_t);
+        // Resolve the fixed sibling against the retained directory object, not
+        // a second full-DOS-path conversion inside the rename operation.
+        const std::wstring leaf = L"engine.exe";
+        const auto nameBytes = leaf.size() * sizeof(wchar_t);
         const auto length = sizeof(FILE_RENAME_INFO) + nameBytes + sizeof(wchar_t);
         // operator new supplies alignment suitable for FILE_RENAME_INFO.
         void* storage = ::operator new(length);
         auto* rename = new(storage) FILE_RENAME_INFO{};
         rename->ReplaceIfExists = TRUE;
-        rename->RootDirectory = nullptr;
+        rename->RootDirectory = parents_.BorrowedLeafHandle();
         rename->FileNameLength = static_cast<DWORD>(nameBytes);
         // FileNameLength excludes NUL, but provide an explicit terminator too:
         // never let the Win32 path conversion observe uninitialized tail bytes.
-        std::memcpy(rename->FileName, destination.c_str(), nameBytes + sizeof(wchar_t));
+        std::memcpy(rename->FileName, leaf.c_str(), nameBytes + sizeof(wchar_t));
         const bool activated = SetFileInformationByHandle(file_, FileRenameInfo, rename,
             static_cast<DWORD>(length)) != FALSE;
         const auto error = activated ? ERROR_SUCCESS : GetLastError();

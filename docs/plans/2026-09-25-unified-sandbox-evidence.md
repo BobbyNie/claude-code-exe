@@ -3180,3 +3180,17 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   is retained defensively; actual runtime recovery remains unproven.
 - Local portable native suite and diff-check pass. Windows phase diagnostics
   remain pending; do not weaken path/share checks to force a green result.
+
+### 2026-10-02 — retained-directory-relative activation
+
+- Run36975542524 at6511eb1 completed RED: both suites emitted BEGIN,
+  FIRST_ACTIVATE, then E_EXTRACT_ACCESS; the long Unicode fixture was not reached.
+  This localizes the current failure to first activation, not Unicode writing.
+- Rename now uses fixed leaf engine.exe relative to the already validated,
+  retained parent directory handle. LockedCandidateDirectories exposes a borrowed
+  leaf handle with ownership/lifetime retained by the caller. Destination sharing
+  verification still occurs before rename and final reader hashing still occurs
+  before execution; no checks were removed. This avoids re-converting full DOS
+  destination names within rename. Windows behavior remains to be verified.
+- Portable native GREEN, staging MinGW syntax and diff-check pass. These do not
+  establish actual Windows activation or Win11 acceptance.
