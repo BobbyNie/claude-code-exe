@@ -3600,3 +3600,20 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   rerun with permission. Windows native regression and actual MCP cleanup remain
   pending in next CI. No cleanup retry/ignore, TLS policy or acceptance relaxation.
   Actual Windows11 ordinary-account acceptance and approved signer remain open.
+
+### 2026-10-02 — process-tree native regression result
+
+- Commit0b2968e / Run37011672909 authoritatively completed/failure. New2.1.282
+  job110852627552 is fully successful: native process-tree shutdown suite passes,
+  actual MCP discover/call and unapproved-server denial both pass without the
+  preceding cleanup lock error. Both workspace-boundary and cross-version jobs
+  pass. This supports the lifecycle fix but one run cannot prove all historical
+  intermittent permission/console/cleanup races resolved; A12 stays open.
+- Old2.1.221 job110852627222 fails only actual gateway rejection: two completed
+  TLS1.3 handshakes, zero HTTP requests, exit1 and E_ENGINE rather than the
+  required failed-handshake evidence/E_GATEWAY_TLS. No assertion relaxed.
+- Rechecked repository runner inventory: total_count=0. Hosted Windows results
+  remain supplemental; no Windows11 ordinary-account endpoint evidence exists.
+  Formal signer/pin, legal approvals and full matrix remain prerequisites.
+- This is evidence-only recording of the tested code revision. Skip CI on the
+  documentation commit to avoid repeating the same unchanged binaries/tests.
