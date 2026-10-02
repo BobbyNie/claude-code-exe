@@ -4,6 +4,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -50,6 +51,18 @@ class PackageInputSnapshotTests(unittest.TestCase):
                 with self.assertRaises(builder.PackageBuildError) as failure:
                     builder._regular_bytes(source)
             self.assertEqual(failure.exception.code, 'E_INPUT_READ')
+
+    def test_cross_api_stamp_uses_creation_time_when_available(self):
+        path = SimpleNamespace(st_size=7, st_mtime_ns=100, st_ctime_ns=10, st_birthtime_ns=10)
+        handle = SimpleNamespace(st_size=7, st_mtime_ns=100, st_ctime_ns=90, st_birthtime_ns=10)
+        self.assertEqual(builder._cross_api_stamp(path), builder._cross_api_stamp(handle))
+        handle.st_mtime_ns = 101
+        self.assertNotEqual(builder._cross_api_stamp(path), builder._cross_api_stamp(handle))
+        handle.st_mtime_ns = 100
+        handle.st_birthtime_ns = 11
+        self.assertNotEqual(builder._cross_api_stamp(path), builder._cross_api_stamp(handle))
+        legacy = SimpleNamespace(st_size=7, st_mtime_ns=100, st_ctime_ns=10)
+        self.assertEqual(builder._cross_api_stamp(legacy), (7, 100, 10))
 
     def test_notice_names_reject_superscript_device_aliases(self):
         for prefix in ('COM', 'lpt'):

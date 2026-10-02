@@ -88,6 +88,14 @@ def _sha256(contents):
     return hashlib.sha256(contents).hexdigest()
 
 
+def _cross_api_stamp(status):
+    # CPython3.12 Windows pathname stat keeps ctime as creation time, whereas
+    # descriptor stat can expose change time. Compare explicit birthtime across
+    # APIs when available; retain descriptor ctime for before/after-read checks.
+    return (status.st_size, status.st_mtime_ns,
+            getattr(status, "st_birthtime_ns", status.st_ctime_ns))
+
+
 def _regular_bytes(path):
     path = Path(path)
     try:
@@ -103,8 +111,7 @@ def _regular_bytes(path):
             if (not stat.S_ISREG(opened.st_mode) or
                     (opened.st_dev, opened.st_ino) != (status.st_dev, status.st_ino)):
                 raise PackageBuildError("E_INPUT_TYPE")
-            if ((status.st_size, status.st_mtime_ns, status.st_ctime_ns) !=
-                    (opened.st_size, opened.st_mtime_ns, opened.st_ctime_ns)):
+            if _cross_api_stamp(status) != _cross_api_stamp(opened):
                 raise PackageBuildError("E_INPUT_READ")
             contents = stream.read()
             after = os.fstat(stream.fileno())

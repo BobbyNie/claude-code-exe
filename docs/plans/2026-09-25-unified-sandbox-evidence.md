@@ -3300,3 +3300,19 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   alias coverage, not a complete Unicode/Windows namespace acceptance claim.
 - Native signature suite passes; full Python152 tests pass with5 platform skips.
   Actual Windows11 ordinary-account path evidence remains outstanding.
+
+### 2026-10-02 — Windows CPython cross-API timestamp correction
+
+- Run36978965055/b28bcf5 Python contracts failed on normal package assembly with
+  E_INPUT_READ. This contradicts the earlier local-only green result; Windows
+  snapshot assembly is not marked passed.
+- Checked CPython v3.12.10 Modules/posixmodule.c win32_xstat copies birthtime into
+  ctime; Python/fileutils.c _Py_fstat_noraise passes FileBasicInfo to the conversion
+  without that compatibility copy. Comparing pathname/descriptor ctime directly
+  can therefore reject unchanged objects.
+- RED: new cross-API stamp test failed on the missing comparison policy. GREEN:
+  compare size/mtime plus explicit birthtime_ns where available, else ctime.
+  Retain identity checks and same-descriptor size/mtime/ctime before/after reads.
+  Both swapped-object and same-object mutation regression tests remain passing.
+- Local Python153 tests pass with5 platform skips. Actual Windows assembly
+  recovery is pending CI; no metadata-only immutability claim is made.
