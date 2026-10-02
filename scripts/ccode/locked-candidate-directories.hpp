@@ -52,6 +52,19 @@ public:
             Lock(current);
         }
     }
+    std::filesystem::path CanonicalPath() const {
+        const auto handle = handles_.back()->value;
+        const auto size = GetFinalPathNameByHandleW(handle, nullptr, 0, FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
+        if (!size || size > 32768) throw std::runtime_error("E_MANIFEST_DIRECTORY");
+        std::wstring path(size, L'\0');
+        const auto written = GetFinalPathNameByHandleW(handle, path.data(), size, FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
+        if (!written || written >= size) throw std::runtime_error("E_MANIFEST_DIRECTORY");
+        path.resize(written);
+        // Only local DOS drives are supported, never UNC/volume/device aliases.
+        if (path.size() < 7 || path.compare(0, 4, L"\\\\?\\") != 0 || path[5] != L':' || path[6] != L'\\')
+            throw std::runtime_error("E_MANIFEST_DIRECTORY");
+        return std::filesystem::path(path.substr(4));
+    }
     LockedCandidateDirectories(const LockedCandidateDirectories&) = delete;
     LockedCandidateDirectories& operator=(const LockedCandidateDirectories&) = delete;
 };

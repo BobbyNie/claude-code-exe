@@ -26,3 +26,8 @@ class EnterpriseStartupWiringTests(unittest.TestCase):
     def test_build_runs_signed_enterprise_launcher_fixture(self):
         source = (ROOT / 'scripts/ccode/build.ps1').read_text()
         self.assertIn('Invoke-Checked $signatureTest $fixtureExe $metadataPath --enterprise-launcher', source)
+
+    def test_enterprise_data_gate_precedes_persistent_side_effects(self):
+        source = (ROOT / 'scripts/ccode/launcher.cpp').read_text()
+        self.assertLess(source.index('LockedEnterpriseData enterpriseData'),
+                        source.index('fs::create_directories(options.data)'))

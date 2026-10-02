@@ -1,5 +1,6 @@
 #include "../../scripts/ccode/common.hpp"
 #include "../../scripts/ccode/runtime-paths.hpp"
+#include "../../scripts/ccode/enterprise-data.hpp"
 #include "../../scripts/ccode/extraction-errors.hpp"
 #include "../../scripts/ccode/concurrency.hpp"
 #include "../../scripts/ccode/workspace-boundary.hpp"
@@ -11,6 +12,37 @@
 
 int main() {
     using namespace ccode;
+    const auto programPath = std::filesystem::absolute("enterprise-program");
+    for (const auto& dataPath : {programPath, programPath / "data", programPath.parent_path()}) {
+        bool rejected = false;
+        try { RequireDisjointEnterpriseData(programPath, dataPath); }
+        catch (const std::runtime_error& error) { rejected = std::string(error.what()) == "E_ENTERPRISE_DATA"; }
+        assert(rejected);
+    }
+    RequireDisjointEnterpriseData(programPath, programPath.parent_path() / "enterprise-program-data");
+    RequireDisjointEnterpriseData(programPath, programPath.parent_path() / "external-data");
+    bool caseAliasRejected = false;
+    try { RequireDisjointEnterpriseData(programPath, programPath.parent_path() / "ENTERPRISE-PROGRAM"); }
+    catch (const std::runtime_error& error) { caseAliasRejected = std::string(error.what()) == "E_ENTERPRISE_DATA"; }
+    assert(caseAliasRejected);
+#ifdef _WIN32
+    const auto enterpriseRoot = std::filesystem::temp_directory_path() /
+        (L"ccode-data-boundary-" + std::to_wstring(GetCurrentProcessId()));
+    const auto enterpriseProgram = enterpriseRoot / L"program";
+    const auto enterpriseData = enterpriseRoot / L"external" / L"nested";
+    std::filesystem::create_directories(enterpriseProgram);
+    {
+        LockedEnterpriseData data(enterpriseProgram, enterpriseData);
+        assert(std::filesystem::is_directory(enterpriseData));
+        assert(!MoveFileW(enterpriseData.c_str(), (enterpriseData.wstring() + L"-moved").c_str()));
+        assert(!MoveFileW(enterpriseData.parent_path().c_str(),
+                         (enterpriseData.parent_path().wstring() + L"-moved").c_str()));
+    }
+    assert(MoveFileW(enterpriseData.c_str(), (enterpriseData.wstring() + L"-moved").c_str()));
+    std::filesystem::remove_all(enterpriseRoot);
+#endif
+
+
     assert(std::string(ExtractionActivationError(5)) == "E_EXTRACT_ACCESS");
     assert(std::string(ExtractionActivationError(32)) == "E_EXTRACT_SHARING");
     assert(std::string(ExtractionActivationError(33)) == "E_EXTRACT_LOCKED");

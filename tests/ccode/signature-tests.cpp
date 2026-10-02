@@ -407,6 +407,8 @@ int main(int argc, char** argv) {
         // package. This catches gate/PE-loader/share-mode integration failures
         // that constructing NativeEnterpriseGate alone cannot demonstrate.
         const auto executable = packageFixture / L"ccode.exe";
+        SetEnvironmentVariableW(L"CCODE_DATA_DIR", nullptr);
+        assert(GetEnvironmentVariableW(L"CCODE_DATA_DIR", nullptr, 0) == 0); // no ambient override
         auto runEntry = [&](const wchar_t* option) {
             std::wstring command = L"\"" + executable.wstring() + L"\" " + option;
             STARTUPINFOW startup{}; startup.cb = sizeof(startup);
@@ -427,6 +429,24 @@ int main(int argc, char** argv) {
         for (const auto option : {L"--help", L"--version", L"--package-manifest",
                                  L"--boundary-manifest", L"--ccode-self-test"})
             assert(runEntry(option) == 0);
+        assert(!std::filesystem::exists(packageFixture / L"data"));
+        assert(std::filesystem::is_empty(packageFixture / L"runtime"));
+        // Signed startup alone must not allow persistent state inside the
+        // authenticated program tree, including the historical public default.
+        assert(runEntry(L"--sessions") == 64);
+        for (const auto& forbiddenData : {packageFixture, packageFixture / L"runtime",
+                                         packageFixture / L"data", packageFixture.parent_path()}) {
+            const auto arguments = L"--sessions --data-dir \"" + forbiddenData.wstring() + L"\"";
+            assert(runEntry(arguments.c_str()) == 64);
+        }
+        assert(!std::filesystem::exists(packageFixture / L"data"));
+        const auto externalData = packageFixture.parent_path() /
+            (L"ccode-external-data-" + std::to_wstring(GetCurrentProcessId()));
+        assert(!std::filesystem::exists(externalData));
+        const auto externalArguments = L"--sessions --data-dir \"" + externalData.wstring() + L"\"";
+        assert(runEntry(externalArguments.c_str()) == 0);
+        assert(std::filesystem::is_directory(externalData));
+        std::filesystem::remove_all(externalData);
         assert(!std::filesystem::exists(packageFixture / L"data"));
         assert(std::filesystem::is_empty(packageFixture / L"runtime"));
         {

@@ -28,6 +28,7 @@
 #ifdef CCODE_ENTERPRISE_REQUIRED
 #include "enterprise-policy.hpp"
 #include "native-enterprise-gate.hpp"
+#include "enterprise-data.hpp"
 #endif
 
 namespace fs = std::filesystem;
@@ -634,6 +635,9 @@ int Main(int argc, wchar_t** argv, std::string* failureCode) {
         std::cout << "ccode self-test ok\n"; return 0;
     }
     auto options = Parse(argc, argv, module);
+#ifdef CCODE_ENTERPRISE_REQUIRED
+    ccode::LockedEnterpriseData enterpriseData(module.parent_path(), options.data);
+#endif
     fs::create_directories(options.data);
     const bool exclusiveProfile = RequiresExclusiveProfile(options);
     auto coordinationLock = AcquireFileLock(options.data / L"active-profile.lock", !exclusiveProfile, 0,

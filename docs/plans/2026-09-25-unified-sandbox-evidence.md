@@ -2979,3 +2979,30 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   execution. Engineering RFC8032 signing does not imply real signer approval.
   External-data, installed-signature lifecycle, runtime retention and all actual
   Windows 11 acceptance gaps remain open.
+
+### Enterprise external persistent-data boundary
+
+- Run 36969869332 (350c22f) both Build reported runtime version steps succeeded,
+  including the valid-signed enterprise launcher subprocesses and invalid
+  signature/notice/raw-manifest mutation refusal tests. Hosted Windows evidence
+  proves this tested integration, not Windows 11 ordinary-account acceptance.
+- Missing enterprise-data.hpp native compile RED -> portable native GREEN.
+  Enterprise launcher now constructs LockedEnterpriseData before persistent
+  data/profile creation; historical program/data/cc default is rejected rather
+  than silently redirecting or polluting the signed program tree.
+- Requires disjoint program/data roots (equal, descendant and ancestor rejected;
+  component comparisons are case-insensitive, not string-prefix matches).
+  Existing ancestor chains are locked as non-reparse directories before any
+  creation. Compare handle-derived normalized local DOS paths to resolve caller
+  spelling aliases; reject unsupported namespaces. Create missing components
+  one at a time and retain each new chain before descending, never recurse
+  through an unchecked concurrently inserted intermediate directory.
+- Holds final data/ancestor chains until Main returns. This is root identity
+  retention, not a guarantee that all data descendants cannot be modified.
+  Existing profile/session integrity safeguards still apply separately.
+- Windows tests require nested external data creation and ancestor/root rename
+  denial until guard release. Signed launcher tests require default/equal/
+  child/ancestor rejection without program data writes, and successful sessions
+  initialization in an explicit sibling external root with no engine extraction.
+  New Win32 behavior is pending CI. Header Windows cross-target syntax passes;
+  portable behavior tests pass. No new Win11 acceptance claim.
