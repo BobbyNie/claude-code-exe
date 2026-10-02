@@ -3167,3 +3167,16 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   UNKNOWN code). No raw filesystem exception/path is logged and tests still fail.
 - Local native suite and diff-check pass. This is diagnostic progress against
   actual CI RED, not recovery or any acceptance completion claim.
+
+### 2026-10-02 — access failure is observed, phase still unresolved
+
+- Run36975227657 atda21296 completed RED: both native suites now expose
+  E_EXTRACT_ACCESS rather than an opaque abort. This is not yet proof which
+  open/activation failed. Add fixed staging phase markers (no paths/bytes) to
+  distinguish the original fixture from long Unicode open/write/activation.
+- Microsoft FILE_RENAME_INFO documentation was fetched directly: FileNameLength
+  is bytes and a terminating NUL is not required. Thus the prior missing-NUL
+  hypothesis must not be treated as confirmed root cause. An explicit terminator
+  is retained defensively; actual runtime recovery remains unproven.
+- Local portable native suite and diff-check pass. Windows phase diagnostics
+  remain pending; do not weaken path/share checks to force a green result.

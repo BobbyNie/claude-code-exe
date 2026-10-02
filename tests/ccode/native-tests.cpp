@@ -91,12 +91,14 @@ int RunNativeTests() {
     auto stagingCheck = [](bool condition, const char* checkpoint) {
         if (!condition) { std::cerr << checkpoint << std::endl; std::exit(1); }
     };
+    std::cerr << "E_TEST_STAGING_BEGIN" << std::endl;
     const auto stagingPath = runtimeEngine.parent_path() / L"engine.new";
     { std::ofstream stale(stagingPath, std::ios::binary); stale << "stale-long-tail"; }
     {
         RuntimeStagingFile staging(runtimeEngine.parent_path());
         staging.Write(reinterpret_cast<const unsigned char*>("fixture"), 7);
         stagingCheck(!DeleteFileW(stagingPath.c_str()), "E_TEST_STAGING_1");
+        std::cerr << "E_TEST_STAGING_FIRST_ACTIVATE" << std::endl;
         staging.Activate();
         stagingCheck(!DeleteFileW(runtimeEngine.c_str()), "E_TEST_STAGING_2");
     }
@@ -130,12 +132,15 @@ int RunNativeTests() {
         staging.Activate();
     }
     { RetainedRuntimePayload engine(runtimeEngine, 7, fixtureRuntimeHash); }
+    std::cerr << "E_TEST_STAGING_LONG_BEGIN" << std::endl;
     const auto namedRuntime = runtimeRoot / (L"runtime 中文 with spaces " + std::wstring(80, L'x'));
     std::filesystem::create_directory(namedRuntime);
     const std::string largePayload(131073, 'q');
     {
         RuntimeStagingFile staging(namedRuntime);
+        std::cerr << "E_TEST_STAGING_LONG_WRITE" << std::endl;
         staging.Write(reinterpret_cast<const unsigned char*>(largePayload.data()), largePayload.size());
+        std::cerr << "E_TEST_STAGING_LONG_ACTIVATE" << std::endl;
         staging.Activate();
     }
     {
