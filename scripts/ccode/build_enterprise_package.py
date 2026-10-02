@@ -20,6 +20,7 @@ WINDOWS_RESERVED = {
     "con", "prn", "aux", "nul",
     *(f"com{number}" for number in range(1, 10)),
     *(f"lpt{number}" for number in range(1, 10)),
+    *(prefix + digit for prefix in ("com", "lpt") for digit in "¹²³"),
 }
 BOUNDARY_DOCUMENT = {
     "schemaVersion": 1,

@@ -51,6 +51,15 @@ class PackageInputSnapshotTests(unittest.TestCase):
                     builder._regular_bytes(source)
             self.assertEqual(failure.exception.code, 'E_INPUT_READ')
 
+    def test_notice_names_reject_superscript_device_aliases(self):
+        for prefix in ('COM', 'lpt'):
+            for digit in ('¹', '²', '³'):
+                with self.subTest(prefix=prefix, digit=digit):
+                    with self.assertRaises(builder.PackageBuildError) as failure:
+                        builder._notice_name(Path(prefix + digit + '.txt'))
+                    self.assertEqual(failure.exception.code, 'E_NOTICE_NAME')
+        self.assertEqual(builder._notice_name(Path('中文 通知.txt')), '中文 通知.txt')
+
     def test_unchanged_regular_input_preserves_exact_bytes(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / 'input'

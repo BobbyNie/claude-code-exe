@@ -3289,3 +3289,14 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - Fixture certificate has IP SAN127.0.0.1 and validity2026-09-25 to2126-09-01.
   Local Python151 tests pass with5 platform skips. Actual native differential
   result and gateway/TLS acceptance remain pending.
+
+### 2026-10-02 — superscript device-alias parity
+
+- RED: Python notice validation accepted all six COM/LPT superscript1/2/3
+  aliases; native manifest entry assertions failed on the same paths.
+- GREEN: reject those stems case-insensitively in both assembly and native
+  manifest validation, including names with extensions. Normal Chinese/space
+  notice names remain accepted by the assembly test. This is additional path
+  alias coverage, not a complete Unicode/Windows namespace acceptance claim.
+- Native signature suite passes; full Python152 tests pass with5 platform skips.
+  Actual Windows11 ordinary-account path evidence remains outstanding.

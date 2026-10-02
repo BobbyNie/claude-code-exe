@@ -131,7 +131,9 @@ int main(int argc, char** argv) {
     for (const auto& path : {"../ccode.exe", "C:/ccode.exe", "notices/", "notices/.",
             "notices/..", "notices/nested/a", "notices/a\\b", "notices/a:stream",
             "notices/CON.txt", "notices/lPt9", "notices/NUL", "notices/a.",
-            "notices/a ", "notices/a?", "notices/a\n"}) {
+            "notices/a ", "notices/a?", "notices/a\n",
+            u8"notices/COM¹.txt", u8"notices/com²", u8"notices/COM³.txt",
+            u8"notices/lpt¹.txt", u8"notices/LPT²", u8"notices/lpt³.txt"}) {
         fileEntry["path"] = path;
         assert(!ccode::ValidManifestFileEntry(fileEntry));
     }

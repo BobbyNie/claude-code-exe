@@ -58,6 +58,11 @@ inline bool ValidManifestFileEntry(const nlohmann::json& entry) {
     if (stem == "con" || stem == "prn" || stem == "aux" || stem == "nul" ||
         (stem.size() == 4 && (stem.substr(0, 3) == "com" || stem.substr(0, 3) == "lpt") &&
          stem[3] >= '1' && stem[3] <= '9')) return false;
+    for (const auto* prefix : {"com", "lpt"}) {
+        for (const auto* digit : {u8"¹", u8"²", u8"³"}) {
+            if (stem == std::string(prefix) + digit) return false;
+        }
+    }
     return true;
 }
 
