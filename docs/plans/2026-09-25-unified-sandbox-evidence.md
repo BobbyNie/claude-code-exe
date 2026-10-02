@@ -2646,3 +2646,16 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - Hosted Windows CI is not Windows 11 x64 ordinary-account real-machine
   acceptance. A20 integration, approved signer, remaining failure matrices
   and Win11 evidence remain open; overall delivery is not accepted.
+
+### Native authenticated-document parser foundation
+
+- TDD added native manifest parser/duplicate-key contract: compilation failed
+  for missing parser (RED), then native signature suite passed (GREEN).
+- Parser limits original bytes to 1MiB and nesting depth to 32, rejects malformed
+  JSON, non-object roots, trailing input and duplicate keys at every object
+  scope. Exceptions expose only E_MANIFEST_DOCUMENT, not candidate contents.
+  Native regressions cover nested duplicates, sibling object scopes and limits.
+- This is a parser foundation only, not full inventory/schema validation,
+  signature authentication, candidate file locking or startup/update enforcement.
+  These remain required before A20 can pass. Local C++17 suite and diff-check
+  passed; MSVC execution of this new parser remains pending.

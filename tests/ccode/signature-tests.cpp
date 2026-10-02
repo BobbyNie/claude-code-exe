@@ -1,4 +1,5 @@
 #include "../../scripts/ccode/manifest-signature.hpp"
+#include "../../scripts/ccode/manifest-inventory.hpp"
 #include <cassert>
 #include <iostream>
 #include <vector>
@@ -51,5 +52,26 @@ int main() {
     assert(!ccode::VerifyManifestSignature(manifest, {}, der, pin));
     der[0] ^= 1;
     assert(!ccode::VerifyManifestSignature(manifest, signedManifest, der, "b9a74897c46397ae141e353a00e27ec5984f60d90ca065bfb3b732f0eea77e20"));
+    assert(ccode::ParseManifestDocument("{\"schemaVersion\":1}").at("schemaVersion") == 1);
+    bool duplicateRejected = false;
+    try { ccode::ParseManifestDocument("{\"schemaVersion\":1,\"schemaVersion\":2}"); }
+    catch (const std::runtime_error& error) {
+        duplicateRejected = std::string(error.what()) == "E_MANIFEST_DOCUMENT";
+    }
+    assert(duplicateRejected);
+    for (const auto& invalid : std::vector<std::string>{
+            "", "[]", "null", "{", "{} trailing",
+            "{\"nested\":{\"x\":1,\"x\":2}}",
+            "{\"x\":1,\"\u0078\":2}",
+            std::string(1048577, ' '),
+            std::string("{\"x\":") + std::string(40, '[') + "0" + std::string(40, ']') + "}"}) {
+        bool rejected = false;
+        try { ccode::ParseManifestDocument(invalid); }
+        catch (const std::runtime_error& error) {
+            rejected = std::string(error.what()) == "E_MANIFEST_DOCUMENT";
+        }
+        assert(rejected);
+    }
+    assert(ccode::ParseManifestDocument("{\"a\":{\"x\":1},\"b\":{\"x\":2}}").size() == 2);
     std::cout << "native signature tests passed\n";
 }
