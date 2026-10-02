@@ -113,7 +113,7 @@ try {
     )
     Invoke-Checked cl.exe @launcherArgs
 
-    foreach ($suite in @("native", "profile", "environment", "frontend", "session", "permission", "diagnostic")) {
+    foreach ($suite in @("process-tree", "native", "profile", "environment", "frontend", "session", "permission", "diagnostic")) {
         $testExe = Join-Path $work "ccode-$suite-tests.exe"
         Invoke-Checked cl.exe /nologo /std:c++17 /O2 /EHsc /MT /utf-8 `
             (Join-Path $PSScriptRoot "..\..\tests\ccode\$suite-tests.cpp") "/Fe:$testExe" /link bcrypt.lib

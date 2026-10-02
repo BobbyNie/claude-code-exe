@@ -25,6 +25,7 @@
 #include "workspaces.hpp"
 #include "session-index.hpp"
 #include "concurrency.hpp"
+#include "process-tree.hpp"
 #include "workspace-boundary.hpp"
 #include "permission.hpp"
 #ifdef CCODE_ENTERPRISE_REQUIRED
@@ -532,9 +533,19 @@ int RunTurn(const fs::path& module, const fs::path& payload, const fs::path& dat
         catch (...) { protocolError = "E_PROTOCOL"; TerminateJobObject(job, 65); break; }
     }
     WaitForSingleObject(process, INFINITE);
+    DWORD code = 1; GetExitCodeProcess(process, &code);
+    // Closing a kill-on-close job only requests asynchronous termination.
+    // Reap descendants before returning and releasing the session/workspace.
+    bool treeStopped = true;
+    try { ccode::StopNativeProcessTree(job, code); }
+    catch (...) { treeStopped = false; }
     writer.join();
     activeJob.store(nullptr);
-    DWORD code = 1; GetExitCodeProcess(process, &code);
+    if (!treeStopped) {
+        if (failureCode) *failureCode = "E_PROCESS_TREE";
+        std::cerr << "[E_PROCESS_TREE: process tree shutdown failed]\n";
+        return 71;
+    }
     if (ccode::ValidSessionId(reader.session)) session = reader.session;
     if (code == 130) {
         if (failureCode) *failureCode = "E_CANCELLED";

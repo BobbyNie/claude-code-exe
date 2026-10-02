@@ -3579,3 +3579,24 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   integrity, exit64, error status, UUID and false privacy flags. Reports stay
   outside the program directory. Native execution remains pending in CI;
   local unit success is not a Windows11 ordinary-account or signer approval.
+
+### 2026-10-02 — explicit process-tree shutdown before turn return
+
+- Run37009478272 is completed/failure. Cross-version and both workspace-boundary
+  jobs pass. Enterprise unsigned entry diagnostic checks pass. New2.1.282 MCP
+  discovery/call succeeds but TemporaryDirectory cleanup fails with WinError32;
+  old2.1.221 gateway TLS assertion still fails. Neither is billing blockage.
+- RunTurn previously waited only for the engine root and relied on job-handle
+  destruction to kill descendants. Add explicit termination followed by a
+  bounded (10s) ActiveProcesses==0 barrier before returning/releasing locks.
+  Failure reports existing E_PROCESS_TREE, exit71; normal engine exit preserved.
+  This addresses a plausible orphan/cleanup race, not yet proven root cause.
+- TDD RED: new process-tree contract test cannot compile without implementation.
+  GREEN: local portable test verifies termination precedes observation, waits
+  until zero, rejects termination failure and rejects deadline exhaustion.
+  Build now runs this suite on Windows, including a real root process that
+  spawns a surviving descendant; native termination must remove that descendant.
+- Local Python157 tests pass (5 skipped); initial sandbox loopback errors were
+  rerun with permission. Windows native regression and actual MCP cleanup remain
+  pending in next CI. No cleanup retry/ignore, TLS policy or acceptance relaxation.
+  Actual Windows11 ordinary-account acceptance and approved signer remain open.
