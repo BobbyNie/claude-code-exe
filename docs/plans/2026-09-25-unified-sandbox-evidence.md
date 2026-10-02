@@ -2621,3 +2621,28 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   No rerun performed; MSVC native verifier remains unverified.
 - Startup/update integration, approved public signer policy, candidate locking,
   signed schema inventory validation and real Win11 x64 acceptance remain open.
+
+### 2026-10-02 billing restored: executed Windows CI evidence
+
+- User restarted run 36942361219 at commit 9d51e45 after resolving spending
+  limit. Authoritative final status is completed/failure; no agent rerun.
+- Both 2.1.221 and 2.1.282 jobs executed successfully through MSVC build,
+  native manifest signature contracts, Python contracts, native runtime/resume,
+  portable frontend, actual engine tools/MCP/Skill/subagent, workspace aliases,
+  embedded payload tamper rejection and session concurrency. Native signature
+  helpers are now MSVC-tested, not merely macOS-tested; this does not establish
+  startup/update signature enforcement or an approved signer.
+- Both workspace-boundary jobs and cross-version job passed. Cross-version
+  logs report real 2.1.221 -> 2.1.282 -> 2.1.221 history/data preservation,
+  rollback activation, incompatible profile refusal and relocation checks.
+- Both primary jobs failed only actual gateway TLS rejection acceptance.
+  Old engine: two completed default TLS1.3 handshakes and two TLS1.2-only
+  handshakes. New engine: zero completed handshakes in both probe modes;
+  gateway fixture reports transport resets (10054), not certificate alerts.
+  Both engines: HTTP requests zero, exit 1, structured TLS code false,
+  certificate-text hint true and exact-message inventory unmatched. These
+  observations do not prove a distinct neutral certificate failure cause.
+  TLS acceptance remains failed; no assertion or trust policy weakened.
+- Hosted Windows CI is not Windows 11 x64 ordinary-account real-machine
+  acceptance. A20 integration, approved signer, remaining failure matrices
+  and Win11 evidence remain open; overall delivery is not accepted.
