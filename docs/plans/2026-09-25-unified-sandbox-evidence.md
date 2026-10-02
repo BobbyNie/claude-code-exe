@@ -3123,3 +3123,18 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - Portable native tests and MinGW staging syntax pass. Actual Windows GREEN is
   pending, not inferred. This is not atomic protection against newly inserted
   directory entries; final retained hashing still precedes execution.
+
+### 2026-10-02 — runtime open diagnostics after sharing GREEN
+
+- Run36973432428 at1c978cc completed failure overall. Both build steps passed,
+  including native staging sharing/retry/sentinel tests, and Python contracts
+  passed. Actual runtime/resume, tool and other real-engine integration failed,
+  predominantly E_MANIFEST_FILE; this is an active integration regression.
+  Workspace boundary supplemental jobs passed; none establishes Win11 acceptance.
+- Runtime retained reader now uses explicit RuntimePayload file purpose, mapping
+  failed CreateFile errors to fixed MISSING/PATH/ACCESS/SHARING/FILE categories.
+  Manifest files retain their prior behavior. Invalid runtime file observations
+  are PATH. No OS number/private path is emitted, no retries or weaker sharing
+  were added. This will discriminate causes before a speculative behavior fix.
+- RED observed absent RuntimePayloadOpenError; portable native/signature GREEN
+  and diff-check pass. Actual integration recovery remains pending Windows CI.

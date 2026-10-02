@@ -24,7 +24,7 @@ class RetainedRuntimePayload {
     LockedCandidateFile engine_;
 public:
     RetainedRuntimePayload(const std::filesystem::path& path, uint64_t size, const std::string& hash)
-        : path_(path), parents_(path.parent_path()), engine_(path) {
+        : path_(path), parents_(path.parent_path()), engine_(path, LockedFilePurpose::RuntimePayload) {
         try { RequireRuntimePayloadObservation(size, hash, engine_.Size(), engine_.Sha256()); }
         catch (...) { throw std::runtime_error("E_RUNTIME_INTEGRITY"); }
     }

@@ -6,6 +6,7 @@
 #include <algorithm>
 #include "stream-sha256.hpp"
 #include "manifest-inventory.hpp"
+#include "runtime-errors.hpp"
 #ifdef _WIN32
 #include <windows.h>
 
@@ -16,17 +17,23 @@ class LockedCandidateFile {
     HANDLE handle_ = INVALID_HANDLE_VALUE;
     uint64_t size_ = 0;
 public:
-    explicit LockedCandidateFile(const std::filesystem::path& path) {
+    explicit LockedCandidateFile(const std::filesystem::path& path,
+                                 LockedFilePurpose purpose = LockedFilePurpose::Manifest) {
         handle_ = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
             OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
-        if (handle_ == INVALID_HANDLE_VALUE) throw std::runtime_error("E_MANIFEST_FILE");
+        if (handle_ == INVALID_HANDLE_VALUE) {
+            const auto error = GetLastError();
+            throw std::runtime_error(purpose == LockedFilePurpose::RuntimePayload
+                ? RuntimePayloadOpenError(error) : "E_MANIFEST_FILE");
+        }
         BY_HANDLE_FILE_INFORMATION info{};
         if (!GetFileInformationByHandle(handle_, &info) ||
             GetFileType(handle_) != FILE_TYPE_DISK ||
             (info.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) ||
             info.nNumberOfLinks != 1) {
             CloseHandle(handle_); handle_ = INVALID_HANDLE_VALUE;
-            throw std::runtime_error("E_MANIFEST_FILE");
+            throw std::runtime_error(purpose == LockedFilePurpose::RuntimePayload
+                ? "E_RUNTIME_PATH" : "E_MANIFEST_FILE");
         }
         size_ = (uint64_t(info.nFileSizeHigh) << 32) | info.nFileSizeLow;
     }

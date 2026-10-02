@@ -14,6 +14,11 @@
 
 int main() {
     using namespace ccode;
+    assert(std::string(RuntimePayloadOpenError(2)) == "E_RUNTIME_MISSING");
+    assert(std::string(RuntimePayloadOpenError(3)) == "E_RUNTIME_PATH");
+    assert(std::string(RuntimePayloadOpenError(5)) == "E_RUNTIME_ACCESS");
+    assert(std::string(RuntimePayloadOpenError(32)) == "E_RUNTIME_SHARING");
+    assert(std::string(RuntimePayloadOpenError(999999)) == "E_RUNTIME_FILE");
     RequireRuntimeStagingObservation(true, false, false, 1);
     for (const auto& invalid : std::vector<std::array<unsigned, 4>>{
             {0, 0, 0, 1}, {1, 1, 0, 1}, {1, 0, 1, 1}, {1, 0, 0, 2}}) {
