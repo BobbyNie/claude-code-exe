@@ -16,6 +16,7 @@
 #include "environment.hpp"
 #include "runtime-paths.hpp"
 #include "retained-runtime.hpp"
+#include "runtime-staging.hpp"
 #include "extraction-errors.hpp"
 #include "profile.hpp"
 #include "snapshot.hpp"
@@ -215,7 +216,12 @@ ccode::RetainedRuntimePayload PrepareRuntime(const fs::path& directory, const Js
     if (hash != metadata.at("engineSha256").get<std::string>()) throw std::runtime_error("E_CHECKSUM");
     ccode::ValidateRuntimePaths(directory, hash);
     auto runtime = directory / L"runtime" / Wide(hash);
-    fs::create_directories(runtime);
+    ccode::LockedCandidateDirectories programParents(directory);
+    fs::create_directory(directory / L"runtime");
+    ccode::LockedCandidateDirectories runtimeParents(directory / L"runtime");
+    fs::create_directory(runtime);
+    ccode::LockedCandidateDirectories hashParents(runtime);
+    ccode::ValidateRuntimePaths(directory, hash);
     // Preparation is a short shared-runtime critical section, not a session
     // writer conflict. Wait for another frontend to finish verifying/extracting
     // the immutable payload, then independently verify the bytes under the lock.
@@ -233,15 +239,9 @@ ccode::RetainedRuntimePayload PrepareRuntime(const fs::path& directory, const Js
         }
     }
     if (!equal) {
-        auto temporary = runtime / L"engine.new";
-        std::ofstream file(temporary, std::ios::binary | std::ios::trunc);
-        file.write(reinterpret_cast<const char*>(resource.bytes), resource.size);
-        file.close();
-        if (!file) throw std::runtime_error("E_EXTRACT_WRITE");
-        if (!MoveFileExW(temporary.c_str(), payload.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
-            const auto error = GetLastError();
-            throw std::runtime_error(ccode::ExtractionActivationError(error));
-        }
+        ccode::RuntimeStagingFile staging(runtime);
+        staging.Write(resource.bytes, resource.size);
+        staging.Activate();
     }
     // Acquire and independently hash through retained handles before releasing
     // prepare.lock. Caller owns this guard throughout actual engine use.

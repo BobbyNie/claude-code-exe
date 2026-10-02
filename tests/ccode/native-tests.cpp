@@ -2,6 +2,7 @@
 #include "../../scripts/ccode/runtime-paths.hpp"
 #include "../../scripts/ccode/enterprise-data.hpp"
 #include "../../scripts/ccode/retained-runtime.hpp"
+#include "../../scripts/ccode/runtime-staging.hpp"
 #include "../../scripts/ccode/extraction-errors.hpp"
 #include "../../scripts/ccode/concurrency.hpp"
 #include "../../scripts/ccode/workspace-boundary.hpp"
@@ -13,6 +14,14 @@
 
 int main() {
     using namespace ccode;
+    RequireRuntimeStagingObservation(true, false, false, 1);
+    for (const auto& invalid : std::vector<std::array<unsigned, 4>>{
+            {0, 0, 0, 1}, {1, 1, 0, 1}, {1, 0, 1, 1}, {1, 0, 0, 2}}) {
+        bool stagingRejected = false;
+        try { RequireRuntimeStagingObservation(invalid[0], invalid[1], invalid[2], invalid[3]); }
+        catch (const std::runtime_error& error) { stagingRejected = std::string(error.what()) == "E_RUNTIME_PATH"; }
+        assert(stagingRejected);
+    }
     const std::string fixtureRuntimeHash = "f16d05ec6b29248d2c61adb1e9263f78e4f7bace1b955014a2d17872cfe4064d";
     RequireRuntimePayloadObservation(7, fixtureRuntimeHash, 7, fixtureRuntimeHash);
     for (const auto& observation : std::vector<std::pair<uint64_t, std::string>>{
@@ -72,6 +81,43 @@ int main() {
         assert(writer == INVALID_HANDLE_VALUE);
     }
     assert(DeleteFileW(runtimeEngine.c_str()));
+    const auto stagingPath = runtimeEngine.parent_path() / L"engine.new";
+    { std::ofstream stale(stagingPath, std::ios::binary); stale << "stale-long-tail"; }
+    {
+        RuntimeStagingFile staging(runtimeEngine.parent_path());
+        staging.Write(reinterpret_cast<const unsigned char*>("fixture"), 7);
+        assert(!DeleteFileW(stagingPath.c_str()));
+        staging.Activate();
+        assert(!DeleteFileW(runtimeEngine.c_str()));
+    }
+    { RetainedRuntimePayload engine(runtimeEngine, 7, fixtureRuntimeHash); }
+    assert(DeleteFileW(runtimeEngine.c_str()));
+    const auto sentinel = runtimeRoot / L"sentinel";
+    { std::ofstream original(sentinel, std::ios::binary); original << "sentinel"; }
+    assert(CreateHardLinkW(stagingPath.c_str(), sentinel.c_str(), nullptr));
+    bool hardlinkRejected = false;
+    try { RuntimeStagingFile staging(runtimeEngine.parent_path()); }
+    catch (const std::runtime_error& error) { hardlinkRejected = std::string(error.what()) == "E_RUNTIME_PATH"; }
+    assert(hardlinkRejected);
+    { std::ifstream original(sentinel, std::ios::binary); std::string value;
+      original >> value; assert(value == "sentinel"); }
+    assert(DeleteFileW(stagingPath.c_str()));
+    { std::ofstream original(runtimeEngine, std::ios::binary); original << "fixture"; }
+    {
+        RetainedRuntimePayload original(runtimeEngine, 7, fixtureRuntimeHash);
+        RuntimeStagingFile staging(runtimeEngine.parent_path());
+        staging.Write(reinterpret_cast<const unsigned char*>("replacement"), 11);
+        bool blocked = false;
+        try { staging.Activate(); } catch (const std::runtime_error&) { blocked = true; }
+        assert(blocked);
+    }
+    { RetainedRuntimePayload original(runtimeEngine, 7, fixtureRuntimeHash); }
+    {
+        RuntimeStagingFile staging(runtimeEngine.parent_path());
+        staging.Write(reinterpret_cast<const unsigned char*>("fixture"), 7);
+        staging.Activate();
+    }
+    { RetainedRuntimePayload engine(runtimeEngine, 7, fixtureRuntimeHash); }
     std::filesystem::remove_all(runtimeRoot);
 
 #endif

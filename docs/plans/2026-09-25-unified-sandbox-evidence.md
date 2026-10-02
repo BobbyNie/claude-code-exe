@@ -3061,3 +3061,27 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   succeeded (jobs110724974170/110724974388); no full-workflow/Win11 acceptance claim.
 - Runtime preparation temporary-file safety, interruption/disk-full/sharing fault
   matrix, approved signer and actual Win11 ordinary-account evidence remain open.
+
+### 2026-10-02 — retained runtime staging and preparation ancestors
+
+- Reconfirmed RED: native suite fails to compile without runtime-staging.hpp.
+  Added regular/disk/non-reparse/single-link staging observation requirements.
+- PrepareRuntime now retains program/runtime/hash ancestor chains and creates
+  runtime directories one component at a time, with revalidation under locks.
+  Staging opens engine.new without truncation, verifies its opened object before
+  writing, flushes, and activates through FileRenameInfo while retaining the
+  source handle. No close-then-path-based source rename remains.
+- Writer closes before RetainedRuntimePayload is acquired. This is not an atomic
+  writer-to-reader handoff: final retained hashing detects substituted bytes
+  before execution; concurrent interference can still cause safe failure.
+- Added Windows behavior tests for stale staging truncation, exact resulting
+  payload, deletion denial, hardlink sentinel preservation, target sharing
+  conflict preserving original bytes, and successful activation after release.
+  Their actual execution is pending Windows CI, not proven by local tests.
+- Local portable native suite passes; staging header MinGW syntax check passes;
+  Python145 passes with5 Windows skips; diff-check passes. Full A15 disk-full,
+  interruption, update/rollback fault matrix remains incomplete.
+- Run36971631513 at10e41a9 completed failure: builds and native runtime succeeded,
+  Python default cp1252 decoding failed (fixed/pushed separately in c3ce0ab),
+  and actual TLS gateway rejection still lacks the required certificate evidence.
+  Neither this hosted run nor local checks establish Win11 acceptance.
