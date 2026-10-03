@@ -120,6 +120,12 @@ try {
         Invoke-Checked $testExe
     }
 
+    $gatewayTrustTest = Join-Path $work "ccode-gateway-trust-tests.exe"
+    Invoke-Checked cl.exe /nologo /std:c++17 /O2 /EHsc /MT /utf-8 `
+        (Join-Path $PSScriptRoot "..\..\tests\ccode\gateway-trust-tests.cpp") `
+        "/Fe:$gatewayTrustTest" /link crypt32.lib
+    Invoke-Checked $gatewayTrustTest (Join-Path $PSScriptRoot "..\..\tests\ccode\fixtures")
+
     $gatewayProbe = Join-Path $work "ccode-gateway-bridge-probe.exe"
     Invoke-Checked cl.exe /nologo /std:c++17 /O2 /EHsc /MT /utf-8 `
         (Join-Path $PSScriptRoot "..\..\tests\ccode\gateway-bridge-probe.cpp") `

@@ -3827,3 +3827,20 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - Local clang C++17 contract suite passes. Add real Windows probe coverage for
   chunked input preserving body and authorization through the upstream request;
   its Windows execution remains pending CI, not asserted by portable tests.
+
+### 2026-10-03 — streaming Windows GREEN and scoped TLS policy foundation
+
+- Run37082623497 (8a2947b), Build in jobs111086229161/111086229362
+  succeeds. The required real bridge probe therefore passes streaming, chunked
+  forwarding, concurrency, capability rejection, no redirect, DNS and cancellation
+  on both Windows builds. Subsequent engine acceptance is still in progress.
+- Add invocation-local certificate policy tests: explicit CA success, default
+  trust rejection, wrong host rejection, trusted-issuer expired leaf rejection,
+  malformed bundle rejection and no persistent root-store mutation. Missing
+  policy header was RED; implementation cross-compiles with warnings as errors.
+  Windows execution of these new tests is pending; no runtime GREEN claimed.
+- Policy builds a memory-only root set from system roots plus explicit PEM input
+  and applies native SSL hostname/EKU/time/chain policy without ignore flags.
+  This is a foundation, not an integrated HTTPS transport: launcher still routes
+  HTTPS through the original engine. Schannel connection integration, custom CA
+  loading, proxy parity and real positive/negative TLS handshakes remain required.
