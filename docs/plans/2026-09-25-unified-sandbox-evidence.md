@@ -1,5 +1,19 @@
 # A 方案實施與驗收證據台帳
 
+## 2026-10-03 五产品统一 Release：实际发布验证通过
+
+- 代码提交 `4e56bf858b57ad1539ffdc96db753d8ba07882af`，已推送 `main`。
+- 发布流程 `37108695225`、Windows 回归流程 `37108695267`、发布后完整性检查 `37109425268` 均为 success。
+- 公开标签 `ai-tools-claude-2.1.288-qwen-0.24.7-codex-app-26.930.3930.0-codex-cli-0.160.0`，非 draft，12 个必需附件齐全。
+- 已读取公开 `ccode-provenance.json` 和 `SHA256SUMS.txt`，并与 GitHub asset digest 逐项核对；来源记录中的 adapterRevision 等于上述代码提交。
+- `ccode.exe` SHA256：`57fd7469ca2f5f8c0c60104cb511ef2d4d807fb8e249caa74f15925cbd7779fc`。
+- 内嵌 Claude Code 2.1.288 的 SHA256：`84304f7d4b0cd0ebcbe8318695a260151b48991a6659c3366fdd5da290c0ab91`，与同 Release 的 `claude.exe` 一致。
+- 首次流程 `37108123506` 在六工具 Bash 测试遇到上游 auto mode 分类器阻挡。通过 RED→GREEN 添加权限参数测试，前端显式选择 default 模式，保留已有批准/拒绝 worker 及用户显式 plan/acceptEdits；未绕过权限或删除工具验收。修复后的最新引擎完整发布验收通过。
+- `c26a7a6` 将附件检查从 push 抢跑改为发布成功后触发，仍保留每日检查及手动检查；旧失败流程未重跑或篡改。
+- 本地回归：203 tests，5 项平台限定跳过；另 7 项发布契约测试通过，原生权限 C++ 测试编译并运行通过。
+- 验收平台为 GitHub hosted Windows x64（build 26100，server product type，administrator token），不是 Windows 11 普通账户实机证据。普通版成功不代表完整企业方案通过；延期及不支持的 HTTPS 代理组合保持原有边界。
+
+
 ## 2026-10-03 发布形式更新：五产品同一 Release
 
 使用者进一步明确要求：ccode 与 Claude Code、Qwen Code、Codex App、Codex CLI
