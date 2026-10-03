@@ -1,5 +1,6 @@
 """Subagent acceptance requires child context and parent tool result evidence."""
 import importlib.util
+import json
 from pathlib import Path
 import unittest
 from types import SimpleNamespace
@@ -18,8 +19,29 @@ class SubagentFixtureTests(unittest.TestCase):
         with self.assertRaises(AssertionError) as error:
             fixture.require_tool_process_success(failed)
         self.assertEqual(str(error.exception),
-            'Tool process failed: {"exit_code": 65, "protocol_order_error": true}')
+            'Tool process failed: {"exit_code": 65, "protocol_order_error": true, "event_order": ["init", "task_notification", "init"]}')
         fixture.require_tool_process_success(SimpleNamespace(returncode=0, stdout='', stderr=''))
+
+    def test_failure_event_order_is_bounded_and_allowlisted(self):
+        for diagnostic in ('[Event order: init,private-token]', '[Event order: ]',
+                           '[Event order: ' + ','.join(['init'] * 33) + ']',
+                           '[Event order: init]\n[Event order: result]',
+                           '[Event order: init] private-path',
+                           '[Event order: init,task_notification\x1b]'):
+            with self.subTest(diagnostic=diagnostic):
+                with self.assertRaises(AssertionError) as error:
+                    fixture.require_tool_process_success(SimpleNamespace(
+                        returncode=65, stdout='private', stderr=diagnostic))
+                payload = json.loads(str(error.exception).removeprefix('Tool process failed: '))
+                self.assertNotIn('event_order', payload)
+                self.assertNotIn('private', str(error.exception))
+        labels = ['init', 'task_started', 'parent_assistant', 'child_assistant',
+                  'task_notification', 'result', 'other']
+        with self.assertRaises(AssertionError) as error:
+            fixture.require_tool_process_success(SimpleNamespace(returncode=65, stdout='',
+                stderr='[Event order: ' + ','.join(labels) + ']'))
+        payload = json.loads(str(error.exception).removeprefix('Tool process failed: '))
+        self.assertEqual(payload['event_order'], labels)
 
     def test_subagent_requires_independent_child_request_and_successful_result(self):
         parent = {'tools': [{'name': 'Agent'}], 'system': 'parent-only',

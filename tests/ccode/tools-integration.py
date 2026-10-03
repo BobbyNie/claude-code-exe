@@ -19,11 +19,21 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 def require_tool_process_success(result):
     if result.returncode != 0:
         # No stdout, stderr, tool payload, agent identifier or temporary path
-        # is copied into CI assertions. This flag is diagnostic, not a verdict
+        # is copied into CI assertions. Fixed labels are diagnostic, not a verdict
         # about the cause or legitimacy of any engine-controlled text.
         summary = {'exit_code': result.returncode,
                    'protocol_order_error': '[E_PROTOCOL_ORDER: invalid engine event]'
                        in result.stderr.splitlines()}
+        # Accept exactly one bounded, fully allowlisted frontend diagnostic.
+        # Reject the whole sequence on unexpected text; never echo that text.
+        prefix = '[Event order: '
+        orders = [line for line in result.stderr.splitlines() if line.startswith(prefix)]
+        allowed = {'init', 'task_started', 'task_notification', 'parent_assistant',
+                   'child_assistant', 'result', 'other'}
+        if len(orders) == 1 and orders[0].endswith(']') and len(orders[0]) <= 640:
+            labels = orders[0][len(prefix):-1].split(',')
+            if 1 <= len(labels) <= 32 and all(label in allowed for label in labels):
+                summary['event_order'] = labels
         raise AssertionError('Tool process failed: ' + json.dumps(summary))
 
 
