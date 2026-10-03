@@ -4029,3 +4029,28 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   Native descendant test now runs from a copied PE and requires immediate deletion
   after tree shutdown (while deletion before shutdown must fail). Cross-compiles;
   Windows runtime GREEN and the real expiry cleanup gate remain pending.
+
+### 2026-10-03 — latest Windows result and interrupted-snapshot cleanup observation
+
+- Run37088051390 / 6dd4564d13aa7fd37de32305d2ae66203405cfff completed/failure.
+  2.1.282 full job, both workspace-boundary jobs and cross-version job succeed.
+  Both engines pass actual subagent, DNS, expired-certificate and gateway gates,
+  including expiry cleanup. Native descendant handle/image tests also pass.
+- The sole failed step is 2.1.221 portable frontend: forced snapshot interruption
+  and fresh snapshot assertions print PASS, then TemporaryDirectory removal fails
+  with WinError32 on ccode.exe (not the earlier engine.exe). File owner is unknown;
+  no evidence yet establishes antivirus, retained handles or a product process.
+  Check annotation is exit1; Node deprecation warning is unrelated, not billing.
+- Predecessor diagnostic run37087818928 / a1f10ab completes successfully. Its
+  native probes for both engines observe init, parent_assistant, task_started,
+  child_assistant, task_notification, parent_assistant, result, init,
+  parent_assistant, result. This supported order does not reproduce the earlier
+  intermittent E_PROTOCOL_ORDER; do not claim that failure conclusively fixed.
+- Extend the existing privacy-safe Restart Manager observation to the previously
+  uncovered interrupted-snapshot cleanup scope. Preserve the original exception;
+  do not retry deletion, suppress errors, or change acceptance assertions.
+  TDD: injected cleanup failure lacks observation (RED); scoped diagnostic wrapper
+  yields GREEN, seven fixture tests run with one Windows-only skip locally.
+  Actual Windows occupancy evidence remains pending the next changed-code run.
+- Latest public daily release still targets main and is not the unified branch
+  release. Unified release and remaining approvals/acceptance gates remain open.

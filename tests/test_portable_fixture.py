@@ -28,6 +28,32 @@ class PortableFixtureTests(unittest.TestCase):
                 self.assertNotIn('private-path-marker', str(output.call_args))
                 self.assertIn('process_count', str(output.call_args))
 
+    def test_interrupted_snapshot_cleanup_reports_occupancy_without_swallowing_failure(self):
+        error = PermissionError('private-snapshot-marker')
+        original_temporary_directory = tempfile.TemporaryDirectory
+        class FailingCleanup(original_temporary_directory):
+            def __exit__(self, *args):
+                super().__exit__(*args)
+                raise error
+        with original_temporary_directory() as folder:
+            executable = Path(folder) / 'fixture.exe'
+            executable.write_bytes(b'fixture')
+            process = Mock()
+            process.poll.return_value = 0
+            with unittest.mock.patch.object(fixture.tempfile, 'TemporaryDirectory', FailingCleanup), \
+                    unittest.mock.patch.object(fixture.subprocess, 'Popen', return_value=process), \
+                    unittest.mock.patch.object(fixture, 'interrupt_snapshot', side_effect=RuntimeError('stop fixture')), \
+                    unittest.mock.patch.object(fixture, 'file_occupancy', return_value={
+                        'available': True, 'process_count': 1, 'test_process_present': False}) as probe, \
+                    unittest.mock.patch('builtins.print') as output:
+                with self.assertRaises(PermissionError) as caught:
+                    fixture.check_interrupted_snapshot(executable)
+                self.assertIs(caught.exception, error)
+                probe.assert_called_once()
+                self.assertEqual(probe.call_args.args[0].name, 'ccode.exe')
+                self.assertNotIn('private-snapshot-marker', str(output.call_args))
+                self.assertIn('process_count', str(output.call_args))
+
     @unittest.skipUnless(os.name == 'nt', 'Restart Manager requires Windows')
     def test_restart_manager_observes_actual_test_executable_without_identifiers(self):
         observation = fixture.file_occupancy(Path(sys.executable))

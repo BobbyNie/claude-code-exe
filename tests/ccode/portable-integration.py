@@ -114,7 +114,8 @@ def interrupt_snapshot(process, snapshots, *, timeout=30):
 
 def check_interrupted_snapshot(executable):
     """Real launcher termination, not simulated pending files or a power-loss claim."""
-    with tempfile.TemporaryDirectory(prefix='ccode-snapshot-interrupt-') as folder:
+    root = None
+    with diagnose_cleanup(lambda: root / 'ccode.exe'), tempfile.TemporaryDirectory(prefix='ccode-snapshot-interrupt-') as folder:
         root = Path(folder)
         app = root / 'ccode.exe'
         shutil.copy2(executable, app)
