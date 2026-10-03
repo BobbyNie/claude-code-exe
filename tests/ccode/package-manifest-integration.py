@@ -4,6 +4,7 @@ import ctypes
 from datetime import datetime, timezone
 import hashlib
 import json
+import platform
 from pathlib import Path
 import subprocess
 import sys
@@ -49,12 +50,32 @@ def sha256(contents):
     return hashlib.sha256(contents).hexdigest()
 
 
-def check(executable, expected_version, adapter_revision, evidence_path):
+def environment_record(version, machine, bits, administrator, target):
+    if machine.upper() not in ('AMD64', 'X86_64') or bits != 64:
+        raise ValueError('Acceptance requires Windows x64 and a 64-bit verifier')
+    if target not in ('github-hosted', 'windows11-ordinary'):
+        raise ValueError('Unknown acceptance target')
+    if target == 'windows11-ordinary' and (
+            version.major != 10 or version.build < 22000 or version.product_type != 1 or administrator):
+        raise ValueError('Windows 11 ordinary-account evidence requires that actual environment')
+    return {'acceptanceTarget': ('GitHub hosted Windows x64' if target == 'github-hosted'
+                                else 'Windows 11 x64 ordinary account'),
+        'osMajor': version.major, 'osMinor': version.minor, 'osBuild': version.build,
+        'windowsProductType': version.product_type, 'architecture': 'x64',
+        'processBits': bits, 'administratorToken': administrator}
+
+
+def check(executable, expected_version, adapter_revision, evidence_path, target="windows11-ordinary"):
     if sys.platform != "win32":
         raise RuntimeError("Windows package acceptance requires Windows")
     if not (len(adapter_revision) in (40, 64) and all(ch in "0123456789abcdefABCDEF" for ch in adapter_revision)):
         raise ValueError("Adapter revision must be a full hexadecimal commit ID")
 
+    shell = ctypes.WinDLL("shell32", use_last_error=True)
+    shell.IsUserAnAdmin.argtypes = []
+    shell.IsUserAnAdmin.restype = ctypes.c_int
+    environment = environment_record(sys.getwindowsversion(), platform.machine(),
+        ctypes.sizeof(ctypes.c_void_p) * 8, bool(shell.IsUserAnAdmin()), target)
     executable = Path(executable).resolve(strict=True)
     adapter_revision = adapter_revision.lower()
     payload, metadata_bytes = load_resources(executable)
@@ -115,7 +136,8 @@ def check(executable, expected_version, adapter_revision, evidence_path):
     evidence = {
         "schemaVersion": 1,
         "recordedAtUtc": datetime.now(timezone.utc).isoformat(),
-        "acceptanceTarget": "Windows 11 x64 ordinary account",
+        "acceptanceTarget": environment["acceptanceTarget"],
+        "environment": environment,
         "packageExecutableSha256": sha256(executable.read_bytes()),
         "embeddedManifestSha256": sha256(metadata_bytes),
         "extractedEngineSha256": extracted_hash,
@@ -134,8 +156,10 @@ def main():
     parser.add_argument("--expected-version", required=True)
     parser.add_argument("--adapter-revision", required=True)
     parser.add_argument("--evidence", required=True)
+    parser.add_argument("--acceptance-target", choices=("github-hosted", "windows11-ordinary"),
+                        default="windows11-ordinary")
     args = parser.parse_args()
-    check(args.executable, args.expected_version, args.adapter_revision, args.evidence)
+    check(args.executable, args.expected_version, args.adapter_revision, args.evidence, args.acceptance_target)
 
 
 if __name__ == "__main__":

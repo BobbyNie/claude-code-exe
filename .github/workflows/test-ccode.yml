@@ -34,6 +34,22 @@ jobs:
         id: build
         shell: pwsh
         run: ./scripts/ccode/build.ps1 -Version '${{ matrix.version }}' -AdapterRevision '${{ github.sha }}' -OutputDir .
+      - name: Verify and record hosted package provenance
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          python tests/ccode/package-manifest-integration.py ./ccode.exe `
+            --expected-version '${{ matrix.version }}' `
+            --adapter-revision '${{ github.sha }}' `
+            --acceptance-target github-hosted `
+            --evidence './hosted-evidence/${{ matrix.version }}/package-provenance.json'
+          if ($LASTEXITCODE -ne 0) { throw 'Hosted package provenance failed' }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        with:
+          name: ccode-hosted-provenance-${{ matrix.version }}
+          path: hosted-evidence/${{ matrix.version }}/package-provenance.json
+          if-no-files-found: error
       - name: Test manifest signature contracts
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         shell: pwsh

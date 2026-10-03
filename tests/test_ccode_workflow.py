@@ -6,6 +6,20 @@ import re
 
 
 class AcceptanceWorkflowTests(unittest.TestCase):
+    def test_hosted_workflow_records_and_uploads_verified_provenance(self):
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / '.github/workflows/test-ccode.yml').read_text(encoding='utf-8')
+        title = '      - name: Verify and record hosted package provenance'
+        self.assertIn(title, workflow)
+        step = workflow.split(title, 1)[1].split('      - ', 1)[0]
+        for required in ('package-manifest-integration.py ./ccode.exe',
+                         '--acceptance-target github-hosted', '--adapter-revision',
+                         '--expected-version', '--evidence', "steps.build.outcome == 'success'"):
+            self.assertIn(required, step)
+        self.assertIn('name: ccode-hosted-provenance-${{ matrix.version }}', workflow)
+        self.assertIn('path: hosted-evidence/${{ matrix.version }}/package-provenance.json', workflow)
+        self.assertNotIn('continue-on-error', workflow)
+
     def test_subagent_protocol_probe_preserves_required_frontend_gate(self):
         root = Path(__file__).resolve().parents[1]
         for name in ('test-ccode.yml', 'test-ccode-windows11-x64.yml'):

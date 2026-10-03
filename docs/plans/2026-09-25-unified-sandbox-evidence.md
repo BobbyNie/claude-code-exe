@@ -4090,3 +4090,21 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   suite cross-compiles (pre-existing range-loop-copy warning excluded in both).
   Full Python regression:166 tests,5 skipped, no failures. Windows failure-order
   evidence is pending; diagnostic instrumentation is not a claimed protocol fix.
+
+### 2026-10-03 — hosted package provenance and truthful environment record
+
+- Hosted workflow previously uploaded only the executable; the existing provenance
+  verifier ran only in the optional Windows11 workflow and hard-coded its target
+  label. Add an explicit github-hosted target, retaining the strict ordinary-client
+  default. Record actual OS major/minor/build/product type, x64 verifier width and
+  administrator token boolean without usernames, machine names or environment values.
+- Hosted workflow now runs the existing PE-resource/public-manifest comparison,
+  extracted hash/size checks and no-side-effects assertions against the exact engine
+  version and full commit, and uploads its JSON independently of later test results.
+  Missing evidence fails the upload; a Server result cannot claim ordinary Windows11.
+- TDD: missing environment-record API and missing hosted workflow step each fail
+  first; server/admin truthfulness, wrong architecture and ordinary-target rejection
+  pass after implementation.18 workflow contracts pass; full Python169 tests with
+  five platform skips pass locally. Actual hosted provenance artifact is pending CI.
+- This is source/host evidence, not formal signer authorization, offline acceptance,
+  redistribution approval or a release. Those requirements remain separate.
