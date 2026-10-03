@@ -4373,3 +4373,17 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   unchanged. This does NOT supply offline evidence: a bounded hosted disconnect,
   restoration and actual isolated harness run are still required before A01 passes.
 - No private key/trust approval or signed candidate is supplied by this change.
+
+### 2026-10-03 Native GREEN for matched background turn initialization
+
+- GitHub run `37095671895`, commit
+  `d41f8b0650f660c210a54690a6458d9f7afe6301`, is completed/success.
+- Both complete runtime jobs (2.1.221 and 2.1.282), both workspace-boundary jobs,
+  and cross-version upgrade/rollback passed. The previously failing required
+  subagent integration is included, not skipped or replaced by the native probe.
+- This closes the recorded RED→GREEN cycle for task_notification→init without an
+  intervening result. It is one successful native run, not proof that every
+  possible scheduling permutation is covered.
+- It does not prove later commits, signed enterprise candidate lifecycle,
+  disconnected hosted acceptance, formal trust/notice approval, or an independent
+  Release. Latest hosted-environment changes remain under separate CI validation.
