@@ -4345,3 +4345,16 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   result completion. This is not blanket duplicate-init acceptance.
 - Native integration GREEN remains pending a new Windows run. This local result
   does not prove that all intermittent native subagent failures are resolved.
+
+### 2026-10-03 Failure diagnostic minimization
+
+- Audited completed run `37094824983`: 2.1.282, both workspace-boundary jobs and
+  cross-version passed; 2.1.221 failed only the required subagent execution step.
+  This is historical evidence for `0a0e633`, not proof for a later candidate.
+- That failure assertion copied stdout, stderr and received tool payloads to CI,
+  including runtime-generated task metadata and temporary paths. Replaced this
+  process-exit assertion with exit code and a fixed protocol-order boolean only.
+  The diagnostic does not decide protocol validity and does not suppress failure.
+- New fixture test reproduced missing safe assertion helper (RED), then passed
+  after integration (GREEN), with private prompt/token/path markers excluded.
+  This change does not claim all other diagnostic paths have been audited.

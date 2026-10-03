@@ -16,6 +16,17 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
+def require_tool_process_success(result):
+    if result.returncode != 0:
+        # No stdout, stderr, tool payload, agent identifier or temporary path
+        # is copied into CI assertions. This flag is diagnostic, not a verdict
+        # about the cause or legitimacy of any engine-controlled text.
+        summary = {'exit_code': result.returncode,
+                   'protocol_order_error': '[E_PROTOCOL_ORDER: invalid engine event]'
+                       in result.stderr.splitlines()}
+        raise AssertionError('Tool process failed: ' + json.dumps(summary))
+
+
 def subagent_lifecycle_sequence(events):
     sequence = []
     for event in events:
@@ -606,7 +617,7 @@ def check(executable, short_path=False, lifecycle=None, permission=None, workspa
                                     env=env, input="", capture_output=True,
                                     text=True, encoding="utf-8", errors="replace", timeout=120)
             assert not handler_errors, handler_errors
-            assert result.returncode == 0, (result.returncode, result.stdout, result.stderr, received)
+            require_tool_process_success(result)
             assert "tools-acceptance-complete" in result.stdout, result.stdout
             assert len(received) == len(plan), received
             if subagent:

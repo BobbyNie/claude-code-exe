@@ -2,6 +2,7 @@
 import importlib.util
 from pathlib import Path
 import unittest
+from types import SimpleNamespace
 
 spec = importlib.util.spec_from_file_location('subagent_tools_fixture',
     Path(__file__).parent / 'ccode/tools-integration.py')
@@ -10,6 +11,16 @@ spec.loader.exec_module(fixture)
 
 
 class SubagentFixtureTests(unittest.TestCase):
+    def test_process_failure_diagnostic_contains_no_raw_output_or_tool_content(self):
+        failed = SimpleNamespace(returncode=65, stdout='private prompt and token',
+            stderr='[E_PROTOCOL_ORDER: invalid engine event]\n'
+                   '[Event order: init,task_notification,init]\nprivate path')
+        with self.assertRaises(AssertionError) as error:
+            fixture.require_tool_process_success(failed)
+        self.assertEqual(str(error.exception),
+            'Tool process failed: {"exit_code": 65, "protocol_order_error": true}')
+        fixture.require_tool_process_success(SimpleNamespace(returncode=0, stdout='', stderr=''))
+
     def test_subagent_requires_independent_child_request_and_successful_result(self):
         parent = {'tools': [{'name': 'Agent'}], 'system': 'parent-only',
                   'messages': [{'content': 'Use acceptance-probe'}]}
