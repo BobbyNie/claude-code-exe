@@ -69,6 +69,10 @@ jobs:
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         shell: pwsh
         run: python tests/ccode/tools-integration.py ./ccode.exe --subagent-only
+      - name: Observe native subagent protocol ordering
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        shell: pwsh
+        run: python tests/ccode/tools-integration.py ./ccode.exe --subagent-probe
       - name: Verify workspace aliases
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         shell: pwsh

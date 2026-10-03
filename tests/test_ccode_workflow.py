@@ -6,6 +6,20 @@ import re
 
 
 class AcceptanceWorkflowTests(unittest.TestCase):
+    def test_subagent_protocol_probe_preserves_required_frontend_gate(self):
+        root = Path(__file__).resolve().parents[1]
+        for name in ('test-ccode.yml', 'test-ccode-windows11-x64.yml'):
+            workflow = (root / '.github/workflows' / name).read_text(encoding='utf-8')
+            title = '      - name: Observe native subagent protocol ordering'
+            self.assertIn(title, workflow)
+            step = workflow.split(title, 1)[1].split('      - ', 1)[0]
+            self.assertIn("!cancelled() && steps.build.outcome == 'success'", step)
+            self.assertIn('python tests/ccode/tools-integration.py ./ccode.exe --subagent-probe', step)
+            self.assertNotIn('continue-on-error', workflow)
+            required = workflow.split('      - name: Verify actual subagent execution', 1)[1].split('      - ', 1)[0]
+            self.assertIn('--subagent-only', required)
+            self.assertNotIn('--subagent-foreground', required)
+
     def test_windows_workflow_actions_use_immutable_commit_references(self):
         root = Path(__file__).resolve().parents[1]
         for name in ('test-ccode.yml', 'test-ccode-windows11-x64.yml'):

@@ -3999,3 +3999,15 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   Proxy parity, TLS cancellation coverage, lifecycle/protocol failures and other
   release approvals/matrix requirements remain open. Hosted Windows acceptance
   remains the user-approved platform; no new physical Windows11 prerequisite.
+
+### 2026-10-03 — observe subagent ordering without relaxing the gate
+
+- Run37086850688's 2.1.282 subagent E_PROTOCOL_ORDER lacks the native event
+  sequence needed for a justified protocol change. Enable the existing verified
+  payload, contained native probe in both workflows, independently of the required
+  frontend subagent gate. It emits fixed lifecycle labels/counters only, never
+  transcripts, prompts, session/task IDs or credentials. Probe success is not
+  frontend acceptance; foreground substitution and continue-on-error are forbidden.
+- TDD: new workflow contract fails with the missing probe step (RED); add the
+  independent step, 17 workflow +8 subagent fixture tests pass (GREEN).
+  Actual Windows ordering evidence remains pending; no production guess applied.
