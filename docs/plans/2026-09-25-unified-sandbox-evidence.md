@@ -4180,3 +4180,34 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - Full local Python regression:170 tests,5 platform skips, no failures. This is
   the engine-to-loopback hop only; upstream HTTP/HTTPS proxy transport remains
   unfinished and is not inferred from this bypass or the hosted fixture.
+
+### 2026-10-03 — hosted trailer/bypass results and HTTP CONNECT slice
+
+- Runs 37091696842 (d19f616) and 37092140958 (bd11b44) are completed/success.
+  The latter's two engine-version jobs, two workspace-boundary jobs and
+  cross-version job all pass. Downloaded completed logs; the inspected 2.1.282
+  annotation is the existing Node20 action deprecation warning, not billing.
+  These runs validate their own commits, not the following unrun proxy changes.
+- Add bounded proxy URI/Basic-auth parsing, HTTPS_PROXY precedence with HTTP_PROXY
+  fallback, scoped NO_PROXY matching and an incremental CONNECT response parser.
+  HTTPS origin requests connect to the selected HTTP proxy, authenticate CONNECT
+  only to that proxy, and then retain the existing origin-hostname Schannel trust
+  checks. Rejection never falls back to a direct origin connection or replays a
+  model request. HTTPS proxy URLs fail closed for now: nested TLS is unfinished.
+- RED recorded before implementation: missing gateway-proxy header and missing
+  connect_proxy fixture. GREEN: portable C++ proxy suite under ASAN/UBSAN,
+  Windows proxy-suite cross-compilation, two fixture rejection tests, and full
+  Python regression (172 tests,5 platform skips). No local Windows execution.
+- Add hosted native cases for authenticated CONNECT, credential isolation,
+  proxy407 without fallback, port-scoped bypass, origin hostname rejection, and
+  cancellation of stalled CONNECT. WinHTTP HTTP routing additionally has proxy407
+  and explicit-bypass cases. These new Windows cases are pending, not passed;
+  successful authenticated plaintext HTTP proxy forwarding is not yet proven.
+- The real-engine loopback-bypass fixture now excludes only its upstream fixture
+  host:port in the parent NO_PROXY. The child bridge has a different port and
+  still requires its invocation-local 127.0.0.1 bypass. This keeps the test valid
+  when upstream proxy policy is respected instead of ignored.
+- Remaining gates include HTTPS-proxy TLS nesting, complete transport parity,
+  isolated offline evidence, signed standalone lifecycle/data safety, formal
+  signer/pin and redistribution/notices approval. No independent unified Release
+  is published or claimed complete by this slice.

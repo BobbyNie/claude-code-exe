@@ -9,6 +9,9 @@ from pathlib import Path
 import subprocess
 import ssl
 import socket
+import socketserver
+import select
+import os
 import sys
 import threading
 import time
@@ -16,10 +19,10 @@ from urllib.parse import urlsplit
 
 
 @contextmanager
-def bridge(executable, upstream, ca=None):
+def bridge(executable, upstream, ca=None, *, env=None):
     command = [str(executable), upstream] + ([str(ca)] if ca else [])
     process = subprocess.Popen(command, stdin=subprocess.PIPE,
-                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
     try:
         # This test-only capability never goes to the public CI log.
         with ThreadPoolExecutor(max_workers=1) as pool:
@@ -39,6 +42,77 @@ def bridge(executable, upstream, ca=None):
                 process.kill()
                 process.communicate()
                 raise AssertionError("Native transport cleanup exceeded deadline") from None
+
+
+def proxy_environment(uri, bypass=""):
+    env = {key: value for key, value in os.environ.items()
+           if key.lower() not in {"http_proxy", "https_proxy", "all_proxy", "no_proxy"}}
+    env.update(HTTP_PROXY=uri, HTTPS_PROXY=uri, NO_PROXY=bypass)
+    return env
+
+
+@contextmanager
+def connect_proxy(target, *, deny=False, authorization="", authority_host=None, stall=False):
+    """Local test proxy: fixed target only, connection counts, no private logs."""
+    authority = f"{authority_host or target[0]}:{target[1]}"
+
+    class Handler(socketserver.BaseRequestHandler):
+        def handle(self):
+            self.server.connections += 1
+            self.request.settimeout(5)
+            header = bytearray()
+            while not header.endswith(b"\r\n\r\n"):
+                byte = self.request.recv(1)
+                if not byte:
+                    return
+                header.extend(byte)
+                if len(header) > 65536:
+                    raise AssertionError("Proxy request header limit exceeded")
+            lines = bytes(header).decode("ascii").split("\r\n")
+            valid = lines[0] == f"CONNECT {authority} HTTP/1.1"
+            credentials = [line.partition(":")[2].strip() for line in lines[1:]
+                           if line.partition(":")[0].lower() == "proxy-authorization"]
+            valid &= credentials == ([authorization] if authorization else [])
+            self.server.started.set()
+            if stall:
+                assert self.server.stopped.wait(10), "Proxy stall fixture did not clean up"
+                return
+            if deny or not valid:
+                self.request.sendall(b"HTTP/1.1 407 Proxy Authentication Required\r\nContent-Length: 0\r\n\r\n")
+                return
+            with socket.create_connection(target, timeout=5) as upstream:
+                self.server.tunnels += 1
+                self.request.sendall(b"HTTP/1.1 200 Connection established\r\n\r\n")
+                peers = (self.request, upstream)
+                while not self.server.stopped.is_set():
+                    readable, _, _ = select.select(peers, [], [], 0.1)
+                    for source in readable:
+                        try:
+                            chunk = source.recv(16384)
+                            if not chunk:
+                                return
+                            (upstream if source is self.request else self.request).sendall(chunk)
+                        except ConnectionError:
+                            return  # Expected when the bridge rejects TLS or cancels a request.
+
+    class Server(socketserver.ThreadingTCPServer):
+        def handle_error(self, *_):
+            self.handler_failed = True  # Never print an exception containing peer data.
+
+    server = Server(("127.0.0.1", 0), Handler)
+    server.connections = server.tunnels = 0
+    server.handler_failed = False
+    server.started, server.stopped = threading.Event(), threading.Event()
+    server.worker = threading.Thread(target=server.serve_forever, daemon=True)
+    server.worker.start()
+    try:
+        yield server
+    finally:
+        server.stopped.set()
+        server.shutdown()
+        server.server_close()
+        server.worker.join(timeout=5)
+        assert not server.worker.is_alive() and not server.handler_failed, "Proxy fixture failed or did not clean up"
 
 
 def request(url, method="POST", suffix="/echo", body=b'{"test":"private-body"}', *, authorized=True):
@@ -92,6 +166,8 @@ def main(executable):
             pass
 
         def do_POST(self):
+            if self.headers.get("Proxy-Authorization"):
+                self.server.proxy_credentials_seen = True
             body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
             records.append((self.path, body, self.headers.get("Authorization")))
             if self.path.endswith("/redirect"):
@@ -133,6 +209,22 @@ def main(executable):
     thread.start()
     try:
         upstream = f"http://127.0.0.1:{server.server_port}/base/"
+        # Verify WinHTTP named-proxy rejection does not fall back to origin.
+        with connect_proxy(("127.0.0.1", server.server_port), deny=True) as proxy:
+            env = proxy_environment(f"http://127.0.0.1:{proxy.server_address[1]}")
+            with bridge(executable, upstream, env=env) as (process, url):
+                assert request(url)[0] == 407
+                assert proxy.connections == 1 and proxy.tunnels == 0 and not records
+                stdout, stderr = process.communicate("stop\n", timeout=5)
+                assert process.returncode == 0 and not stdout.strip() and not stderr.strip()
+            env = proxy_environment(f"http://127.0.0.1:{proxy.server_address[1]}",
+                                    f"127.0.0.1:{server.server_port}")
+            with bridge(executable, upstream, env=env) as (process, url):
+                assert request(url)[0] == 200 and proxy.connections == 1
+                stdout, stderr = process.communicate("stop\n", timeout=5)
+                assert process.returncode == 0 and not stdout.strip() and not stderr.strip()
+            assert len(records) == 1
+            records.clear()
         with bridge(executable, upstream) as (process, url):
             assert request(url, authorized=False)[0] == 400
             assert not records, "Unauthorized loopback request reached upstream"
@@ -225,6 +317,45 @@ def main(executable):
         tls_thread = threading.Thread(target=tls_server.serve_forever, daemon=True)
         tls_thread.start()
         try:
+            target = ("127.0.0.1", tls_server.server_port)
+            for deny in (False, True):
+                with connect_proxy(target, deny=deny, authorization="Basic dXNlcjpwQHNz") as proxy:
+                    env = proxy_environment(f"http://user:p%40ss@127.0.0.1:{proxy.server_address[1]}")
+                    before = len(records)
+                    with bridge(executable, f"https://127.0.0.1:{tls_server.server_port}/base/",
+                                certificates / "expired-test-ca.pem", env=env) as (process, url):
+                        result = request(url)
+                        assert result[0] == (502 if deny else 200)
+                        assert proxy.connections == 1 and proxy.tunnels == (0 if deny else 1)
+                        assert len(records) == before + (0 if deny else 1), "Proxy denial fell back to origin"
+                        assert not getattr(tls_server, "proxy_credentials_seen", False), "Proxy credentials reached origin"
+                        stdout, stderr = process.communicate("stop\n", timeout=5)
+                        assert process.returncode == 0 and stdout.strip() == ("E_NETWORK" if deny else "") and not stderr.strip()
+            with connect_proxy(target) as proxy:
+                env = proxy_environment(f"http://127.0.0.1:{proxy.server_address[1]}",
+                                        f"127.0.0.1:{tls_server.server_port}")
+                with bridge(executable, f"https://127.0.0.1:{tls_server.server_port}/base/",
+                            certificates / "expired-test-ca.pem", env=env) as (process, url):
+                    assert request(url)[0] == 200 and proxy.connections == 0
+                    stdout, stderr = process.communicate("stop\n", timeout=5)
+                    assert process.returncode == 0 and not stdout.strip() and not stderr.strip()
+            with connect_proxy(target, authority_host="localhost") as proxy:
+                before = len(records)
+                env = proxy_environment(f"http://127.0.0.1:{proxy.server_address[1]}")
+                with bridge(executable, f"https://localhost:{tls_server.server_port}/base/",
+                            certificates / "expired-test-ca.pem", env=env) as (process, url):
+                    assert request(url)[0] == 502
+                    assert proxy.connections == proxy.tunnels == 1 and len(records) == before
+                    stdout, stderr = process.communicate("stop\n", timeout=5)
+                    assert process.returncode == 0 and stdout.strip() == "E_GATEWAY_TLS" and not stderr.strip()
+            with connect_proxy(target, stall=True) as proxy:
+                env = proxy_environment(f"http://127.0.0.1:{proxy.server_address[1]}")
+                with bridge(executable, f"https://127.0.0.1:{tls_server.server_port}/base/",
+                            certificates / "expired-test-ca.pem", env=env) as (process, url):
+                    with ThreadPoolExecutor(max_workers=1) as pool:
+                        pending = pool.submit(request, url)
+                        cancel_request(process, pending, proxy.started)
+            print("PASS: actual HTTPS CONNECT, proxy auth isolation, denial without fallback, scoped bypass, TLS rejection and cancellation")
             with bridge(executable, f"https://127.0.0.1:{tls_server.server_port}/base/",
                         certificates / "expired-test-ca.pem") as (process, url):
                 assert request(url) == (200, b'{"test":"private-body"}', "application/json")

@@ -10,6 +10,7 @@
 #include <atomic>
 #include <array>
 #include "gateway-trust.hpp"
+#include "gateway-proxy.hpp"
 
 namespace ccode {
 struct GatewayTlsRead { std::string bytes; bool ended = false, authenticated = false; };
@@ -69,7 +70,7 @@ class GatewayTls {
         }
         throw std::runtime_error("E_NETWORK");
     }
-    void Connect(unsigned short port) {
+    void Connect(const std::wstring& connectHost, unsigned short port) {
         ADDRINFOEXW hints{}; hints.ai_family = AF_UNSPEC; hints.ai_socktype = SOCK_STREAM;
         hints.ai_protocol = IPPROTO_TCP;
         PADDRINFOEXW addresses = nullptr;
@@ -78,7 +79,7 @@ class GatewayTls {
         HANDLE cancel = nullptr;
         timeval timeout{10, 0};
         const auto service = std::to_wstring(port);
-        int result = GetAddrInfoExW(hostname.c_str(), service.c_str(), NS_ALL, nullptr, &hints,
+        int result = GetAddrInfoExW(connectHost.c_str(), service.c_str(), NS_ALL, nullptr, &hints,
             &addresses, &timeout, &operation, nullptr, &cancel);
         if (result == WSA_IO_PENDING) {
             const auto deadline = GetTickCount64() + 10000;
@@ -171,12 +172,29 @@ class GatewayTls {
         if (haveCredentials) { FreeCredentialsHandle(&credentials); haveCredentials = false; }
     }
 public:
-    GatewayTls(const std::wstring& host, unsigned short port, const GatewayTrust& policy, const std::atomic<bool>& cancelled)
+    GatewayTls(const std::wstring& host, unsigned short port, const GatewayTrust& policy, const std::atomic<bool>& cancelled,
+               const GatewayProxy& proxy = {})
         : trust(policy), stopping(cancelled), hostname(host) {
         SecInvalidateHandle(&context);
         SecInvalidateHandle(&credentials);
         try {
-            Connect(port);
+            // HTTPS proxy transport is not implemented yet: never silently dial
+            // the origin when the caller explicitly requested that route.
+            if (proxy.secure) throw std::runtime_error("E_NETWORK");
+            Connect(proxy.active() ? std::wstring(proxy.host.begin(), proxy.host.end()) : hostname,
+                    proxy.active() ? proxy.port : port);
+            if (proxy.active()) {
+                const auto request = GatewayConnectRequest(std::string(hostname.begin(), hostname.end()), port,
+                                                           proxy.authorization);
+                WireSend(request.data(), request.size());
+                GatewayConnectResponse response;
+                while (true) {
+                    if (!WireRead()) throw std::runtime_error("E_NETWORK");
+                    const bool connected = response.Feed(encrypted);
+                    encrypted.clear();
+                    if (connected) break;
+                }
+            }
             SCHANNEL_CRED config{}; config.dwVersion = SCHANNEL_CRED_VERSION;
             config.dwFlags = SCH_CRED_MANUAL_CRED_VALIDATION | SCH_CRED_NO_DEFAULT_CREDS | SCH_USE_STRONG_CRYPTO;
             TimeStamp expiry{};

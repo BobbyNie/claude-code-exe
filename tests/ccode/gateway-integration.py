@@ -401,7 +401,8 @@ def check_rejection(executable, status_code, error_type, diagnostic, stream_cut=
             env = {key: value for key, value in env.items()
                    if key.lower() not in {"http_proxy", "https_proxy", "all_proxy", "no_proxy"}}
             proxy_url = f"http://127.0.0.1:{proxy.server_address[1]}"
-            env.update(HTTP_PROXY=proxy_url, HTTPS_PROXY=proxy_url, ALL_PROXY=proxy_url, NO_PROXY="")
+            env.update(HTTP_PROXY=proxy_url, HTTPS_PROXY=proxy_url, ALL_PROXY=proxy_url,
+                       NO_PROXY=f"127.0.0.1:{server.server_port}")
         try:
             tool_options = ["--tools", "Write", "--allowedTools", "Write"] if stream_cut else ["--tools", ""]
             report_path = root / "failure.json"

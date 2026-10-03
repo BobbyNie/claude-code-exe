@@ -91,7 +91,8 @@ class GatewayBridge {
     struct Worker { SOCKET socket; std::thread thread; std::atomic<bool> done{false}; };
     std::wstring host, basePath;
     INTERNET_PORT port = 0;
-    bool secure = false;
+    bool secure = false, configuredProxyPolicy = false;
+    GatewayProxy proxy;
     std::unique_ptr<GatewayTrust> scopedTrust;
     std::string capability;
     SOCKET listener = INVALID_SOCKET;
@@ -143,7 +144,7 @@ class GatewayBridge {
     void ForwardScopedTls(SOCKET client, const GatewayRequest& incoming) {
         bool responded = false;
         try {
-            GatewayTls upstream(host, port, *scopedTrust, stopping);
+            GatewayTls upstream(host, port, *scopedTrust, stopping, proxy);
             const auto target = NarrowHeader(basePath) + incoming.target;
             if (target.find_first_of(" \t\r\n\\") != std::string::npos) throw std::runtime_error("E_NETWORK");
             auto authority = NarrowHeader(host);
@@ -174,8 +175,12 @@ class GatewayBridge {
     }
     void Forward(SOCKET client, const GatewayRequest& incoming) {
         if (scopedTrust) { ForwardScopedTls(client, incoming); return; }
-        InternetHandle session(WinHttpOpen(L"ccode", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
-            WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, WINHTTP_FLAG_ASYNC));
+        if (proxy.secure) throw std::runtime_error("E_NETWORK");
+        const auto proxyAddress = Wide((proxy.host.find(':') == std::string::npos ? proxy.host : "[" + proxy.host + "]") +
+                                       ":" + std::to_string(proxy.port));
+        InternetHandle session(WinHttpOpen(L"ccode", proxy.active() ? WINHTTP_ACCESS_TYPE_NAMED_PROXY :
+            configuredProxyPolicy ? WINHTTP_ACCESS_TYPE_NO_PROXY : WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+            proxy.active() ? proxyAddress.c_str() : WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, WINHTTP_FLAG_ASYNC));
         if (!session.value || !WinHttpSetTimeouts(session.value, 10000, 10000, 10000, 600000))
             throw std::runtime_error("E_NETWORK");
         InternetHandle connection(WinHttpConnect(session.value, host.c_str(), port, 0));
@@ -190,6 +195,8 @@ class GatewayBridge {
             !WinHttpSetOption(operation.request, WINHTTP_OPTION_AUTOLOGON_POLICY, &logon, sizeof(logon)))
             throw std::runtime_error("E_NETWORK");
         std::wstring headers = L"Accept-Encoding: identity\r\nConnection: close\r\n";
+        if (proxy.active() && !proxy.authorization.empty())
+            headers += L"Proxy-Authorization: " + Wide(proxy.authorization) + L"\r\n";
         for (const auto& header : incoming.headers)
             headers += Wide(header.first) + L": " + Wide(header.second) + L"\r\n";
         auto failed = [&] {
@@ -329,6 +336,20 @@ public:
             scopedTrust = std::make_unique<GatewayTrust>(pem);
         }
         host.assign(parts.lpszHostName, parts.dwHostNameLength); port = parts.nPort;
+        const auto environment = [](const wchar_t* name) {
+            const DWORD size = GetEnvironmentVariableW(name, nullptr, 0);
+            if (!size) return std::string();
+            if (size > 32768) throw std::runtime_error("E_NETWORK");
+            std::vector<wchar_t> value(size);
+            const DWORD copied = GetEnvironmentVariableW(name, value.data(), size);
+            if (!copied || copied >= size) throw std::runtime_error("E_NETWORK");
+            return NarrowHeader(std::wstring(value.data(), copied));
+        };
+        // Windows environment names are case-insensitive. Values stay in memory.
+        const auto httpsProxy = environment(L"HTTPS_PROXY"), httpProxy = environment(L"HTTP_PROXY");
+        const auto exclusions = environment(L"NO_PROXY");
+        configuredProxyPolicy = !httpsProxy.empty() || !httpProxy.empty() || !exclusions.empty();
+        proxy = SelectGatewayProxy(NarrowHeader(host), port, httpsProxy, httpProxy, exclusions);
         if (parts.dwUrlPathLength) basePath.assign(parts.lpszUrlPath, parts.dwUrlPathLength);
         while (!basePath.empty() && basePath.back() == L'/') basePath.pop_back();
         std::array<unsigned char, 32> random{};
