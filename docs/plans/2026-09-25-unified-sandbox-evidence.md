@@ -4069,3 +4069,24 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   Python regression: 166 tests, five platform-specific skips, no failures.
   Actual Schannel concurrency/cancellation runtime verification remains pending CI;
   no claim that local fixture unit tests establish native Windows acceptance.
+
+### 2026-10-03 — actual frontend ordering evidence, not a protocol relaxation
+
+- Run37088915215 / a087357 completes successfully across all five jobs. Snapshot
+  cleanup did not reproduce, so no observed owner establishes its root cause.
+- Run37089098505 / 9932310: both native HTTPS concurrency/cancellation fixtures
+  print PASS; 2.1.221 full job and both workspace-boundary jobs succeed. 2.1.282
+  actual subagent fails again with E_PROTOCOL_ORDER; the independent native probe
+  still observes the already-supported order. Cross-version was still running at
+  this observation; do not describe the complete workflow as successful.
+- Add a bounded 32-label EventReader history and emit it only upon the existing
+  E_PROTOCOL_ORDER failure. Labels are fixed init/task_started/task_notification/
+  parent_assistant/child_assistant/result/other; no input labels, session/task IDs,
+  paths, text, bodies or tokens are retained in this history. Preserve exit65 and
+  all validation rules. This observes the actual failing frontend stream instead
+  of assuming a separate native probe has identical timing.
+- TDD: missing EventOrder API compile RED; content privacy, unknown-label mapping,
+  last32 bound and failing-event inclusion GREEN. Portable C++ suite runs; Windows
+  suite cross-compiles (pre-existing range-loop-copy warning excluded in both).
+  Full Python regression:166 tests,5 skipped, no failures. Windows failure-order
+  evidence is pending; diagnostic instrumentation is not a claimed protocol fix.

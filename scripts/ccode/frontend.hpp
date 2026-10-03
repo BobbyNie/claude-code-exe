@@ -41,9 +41,25 @@ class EventReader {
     std::set<std::string> seenTaskIds;
     bool interimResult = false;
     size_t queuedParentTurns = 0;
+    std::vector<std::string> eventOrder;
+    void Observe(const Json& event, const std::string& type) {
+        // Fixed vocabulary only. Never retain engine-controlled labels or content.
+        std::string label = "other";
+        if (type == "result") label = "result";
+        else if (type == "assistant")
+            label = event.contains("parent_tool_use_id") && !event.at("parent_tool_use_id").is_null()
+                ? "child_assistant" : "parent_assistant";
+        else if (type == "system" && event.contains("subtype") && event.at("subtype").is_string()) {
+            const auto subtype = event.at("subtype").get<std::string>();
+            if (subtype == "init" || subtype == "task_started" || subtype == "task_notification") label = subtype;
+        }
+        if (eventOrder.size() == 32) eventOrder.erase(eventOrder.begin());
+        eventOrder.push_back(label);
+    }
     std::string Event(const Json& event) {
         if (!event.is_object()) throw ProtocolError("E_PROTOCOL");
         const auto type = event.value("type", std::string());
+        Observe(event, type);
         if (complete && (type == "assistant" || type == "result")) throw ProtocolError("E_PROTOCOL_ORDER");
         // Native2.1.282's typed API cause comes from the local error adapter.
         // Both fields must be top-level wrapper siblings; never inspect content.
@@ -181,6 +197,14 @@ class EventReader {
         return "";
     }
 public:
+    std::string EventOrder() const {
+        std::string result;
+        for (const auto& label : eventOrder) {
+            if (!result.empty()) result += ',';
+            result += label;
+        }
+        return result;
+    }
     std::string session;
     std::string failureCode;
     bool complete = false, failed = false;

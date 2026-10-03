@@ -578,6 +578,8 @@ int RunTurn(const fs::path& module, const fs::path& payload, const fs::path& dat
     if (!protocolError.empty()) {
         if (failureCode) *failureCode = protocolError;
         std::cerr << ccode::ProtocolFailureMessage(protocolError);
+        if (protocolError == "E_PROTOCOL_ORDER")
+            std::cerr << "[Event order: " << reader.EventOrder() << "]\n";
         return 65;
     }
     try { reader.Finish(); }

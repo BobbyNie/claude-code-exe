@@ -10,6 +10,20 @@ void ExpectError(ccode::EventReader& reader, const std::string& wire, const std:
 }
 
 int main() {
+    // Bounded fixed labels describe the failing stream without copying engine data.
+    ccode::EventReader observed;
+    observed.Feed("{\"type\":\"system\",\"subtype\":\"init\",\"tools\":[],\"session_id\":\"private-id\"}\n");
+    for (int i = 0; i < 40; ++i)
+        observed.Feed("{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"private-body\"}]}}\n");
+    observed.Feed("{\"type\":\"result\",\"subtype\":\"success\"}\n");
+    ExpectError(observed, "{\"type\":\"assistant\",\"message\":{\"content\":[]}}\n", "E_PROTOCOL_ORDER");
+    const auto order = observed.EventOrder();
+    assert(order.find("private") == std::string::npos);
+    assert(order.find("result,parent_assistant") != std::string::npos);
+    assert(std::count(order.begin(), order.end(), ',') == 31);
+    ccode::EventReader unknownObserved;
+    unknownObserved.Feed("{\"type\":\"private-unknown-type\"}\n");
+    assert(unknownObserved.EventOrder() == "other");
     // Protocol errors are stable neutral codes, never parser diagnostics containing input.
     ccode::EventReader invalidJson;
     ExpectError(invalidJson, "{secret-token:bad}\n", "E_PROTOCOL_JSON");
