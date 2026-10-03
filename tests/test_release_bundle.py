@@ -10,6 +10,13 @@ def read(path: str) -> str:
 
 
 class ReleaseBundleTests(unittest.TestCase):
+    def test_main_changes_keep_native_regression_coverage(self):
+        workflow = read(".github/workflows/test-ccode.yml")
+        push = workflow.split("  push:", 1)[1].split("  pull_request:", 1)[0]
+        self.assertIn("'main'", push)
+        self.assertIn("'tests/**'", push)
+        self.assertIn("'scripts/ccode/**'", push)
+
     def test_auto_release_workflow_publishes_one_bundle_release(self):
         workflow = read(".github/workflows/auto-release.yml")
 

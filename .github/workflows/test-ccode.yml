@@ -2,9 +2,10 @@ name: Test ccode Windows runtime
 
 on:
   push:
-    branches: ['codex/fix-ccode-runtime-paths', 'codex/unified-sandbox-design']
+    branches: ['main', 'codex/fix-ccode-runtime-paths', 'codex/unified-sandbox-design']
+    paths: ['scripts/ccode/**', 'tests/**', '.github/workflows/test-ccode.yml']
   pull_request:
-    paths: ['scripts/ccode/**', 'tests/ccode/**', '.github/workflows/test-ccode.yml']
+    paths: ['scripts/ccode/**', 'tests/**', '.github/workflows/test-ccode.yml']
   workflow_dispatch:
 
 permissions:
