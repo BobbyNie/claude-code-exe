@@ -18,6 +18,7 @@ namespace ccode {
 // One actual upstream TLS connection, no preflight/replay and no root-store writes.
 class GatewayTls {
     std::unique_ptr<GatewaySocket> wire;
+    std::unique_ptr<GatewayTls> proxyTls;
     CredHandle credentials{};
     CtxtHandle context{};
     bool haveCredentials = false, haveContext = false;
@@ -36,9 +37,12 @@ class GatewayTls {
             throw std::runtime_error("E_GATEWAY_TLS");
         throw std::runtime_error("E_NETWORK");
     }
-    void WireSend(const char* bytes, size_t length) { wire->WireSend(bytes, length); }
+    void WireSend(const char* bytes, size_t length) {
+        if (proxyTls) proxyTls->Send(std::string(bytes, length));
+        else wire->WireSend(bytes, length);
+    }
     bool WireRead() {
-        auto record = wire->Read();
+        auto record = proxyTls ? proxyTls->Read() : wire->Read();
         if (record.ended) return false;
         if (record.bytes.size() > RecordLimit - encrypted.size()) throw std::runtime_error("E_NETWORK");
         encrypted += record.bytes;
@@ -97,6 +101,7 @@ class GatewayTls {
         throw std::runtime_error("E_NETWORK");
     }
     void Cleanup() noexcept {
+        proxyTls.reset();
         wire.reset();
         if (haveContext) { DeleteSecurityContext(&context); haveContext = false; }
         if (haveCredentials) { FreeCredentialsHandle(&credentials); haveCredentials = false; }
@@ -108,12 +113,16 @@ public:
         SecInvalidateHandle(&context);
         SecInvalidateHandle(&credentials);
         try {
-            // HTTPS proxy transport is not implemented yet: never silently dial
-            // the origin when the caller explicitly requested that route.
-            if (proxy.secure) throw std::runtime_error("E_NETWORK");
-            wire = std::make_unique<GatewaySocket>(
-                proxy.active() ? std::wstring(proxy.host.begin(), proxy.host.end()) : hostname,
-                proxy.active() ? proxy.port : port, stopping);
+            if (proxy.active() && proxy.secure) {
+                // Verify the proxy before releasing CONNECT credentials. This
+                // outer session has no proxy, so construction cannot recurse.
+                proxyTls = std::make_unique<GatewayTls>(
+                    std::wstring(proxy.host.begin(), proxy.host.end()), proxy.port, trust, stopping);
+            } else {
+                wire = std::make_unique<GatewaySocket>(
+                    proxy.active() ? std::wstring(proxy.host.begin(), proxy.host.end()) : hostname,
+                    proxy.active() ? proxy.port : port, stopping);
+            }
             if (proxy.active()) {
                 const auto request = GatewayConnectRequest(std::string(hostname.begin(), hostname.end()), port,
                                                            proxy.authorization);

@@ -4287,3 +4287,19 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   zero CONNECT/tunnels/origin requests, plus stalled TLS-proxy CONNECT cancellation.
   Native routing GREEN remains pending, and HTTPS-proxy positive is still expected
   RED until nesting is implemented. No independent Release claim.
+
+### 2026-10-03 HTTPS-proxy nested TLS: native RED and implementation candidate
+
+- Run `37094402759` at `6d26598` is completed/failure. Job `111121253486`
+  reached the HTTPS-proxy positive test after the HTTP proxy denial/bypass and
+  HTTP CONNECT cases: status 502, proxy connections/TLS/tunnels/origin requests
+  all zero. This is the explicit unimplemented secure-proxy branch, not billing.
+- `GatewayTls` now creates a separately verified outer TLS session to a secure
+  proxy, sends CONNECT only after proxy verification, and carries the independent
+  origin handshake/records inside it. The outer constructor has no proxy route;
+  both layers share cancellation and invocation-scoped trust but verify their own
+  hostname. Outer EOF is not promoted to authenticated inner EOF.
+- Existing native positive, 407/no-fallback, proxy invalid-certificate and stalled
+  CONNECT tests are the acceptance tests. Native GREEN remains pending CI; local
+  Python tests alone cannot prove Schannel nesting. HTTP origin through HTTPS
+  proxy remains a separate missing case. Independent Release is not complete.
