@@ -3918,3 +3918,24 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - New positive-loopback test first fails for missing fixture support, then passes.
   All 19 Python gateway fixture tests pass, including exact OpenSSL expiry code10
   and zero completed expired handshakes/HTTP. Native Windows policy still pending.
+
+### 2026-10-03 — actual Schannel transport integration, Windows GREEN pending
+
+- Run37084872321 passes the independent-issuer native certificate policy test
+  and reaches the bridge integration test. Both builds fail the unchanged
+  untrusted-handshake assertion. Missing build artifacts cause three downstream
+  failures; these are consequences, not three additional runtime regressions.
+- Replace actual HTTPS forwarding (including default roots) with Schannel plus
+  invocation-scoped chain policy. Check the actual peer before releasing the
+  next handshake token, and require successful validation before HTTP data.
+  No preliminary connection, TLS ignore flags, root installation or engine edits.
+- Wire extra-CA input through launcher/probe; preserve HTTP WinHTTP transport.
+  Add actual valid-chain, expired, wrong-host, credential/body and streamed-response
+  tests. Existing untrusted-handshake assertion remains unchanged (Windows RED).
+- Add bounded response framing with authenticated close-delimited EOF. Portable
+  tests progressed through missing implementation, chunk framing and malformed
+  header RED to GREEN. Chunk trailers fail closed pending supported parity.
+- Local response suite and cross-compiled native probe pass (SDK declaration shim
+  only for local MinGW); Python regression 162 tests OK, 5 skipped. These are not
+  Windows runtime GREEN. Proxy parity, additional TLS cancellation coverage and
+  full release approvals/acceptance remain open; no unified Release is claimed.

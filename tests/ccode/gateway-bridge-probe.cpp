@@ -3,9 +3,9 @@
 #include "../../scripts/ccode/gateway-bridge.hpp"
 #include <iostream>
 int wmain(int argc, wchar_t** argv) {
-    if (argc != 2) return 2;
+    if (argc != 2 && argc != 3) return 2;
     try {
-        ccode::GatewayBridge bridge(argv[1]);
+        ccode::GatewayBridge bridge(argv[1], argc == 3 ? argv[2] : L"");
         // Test executable only: report capability to the driving fixture.
         const auto url = bridge.Url();
         std::cout << std::string(url.begin(), url.end()) << std::endl;

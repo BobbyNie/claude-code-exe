@@ -6,6 +6,7 @@ import http.client
 import importlib.util
 from pathlib import Path
 import subprocess
+import ssl
 import sys
 import threading
 import time
@@ -13,8 +14,9 @@ from urllib.parse import urlsplit
 
 
 @contextmanager
-def bridge(executable, upstream):
-    process = subprocess.Popen([str(executable), upstream], stdin=subprocess.PIPE,
+def bridge(executable, upstream, ca=None):
+    command = [str(executable), upstream] + ([str(ca)] if ca else [])
+    process = subprocess.Popen(command, stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     try:
         # This test-only capability never goes to the public CI log.
@@ -138,6 +140,52 @@ def main(executable):
             assert request(url)[0] == 502
             stdout, stderr = process.communicate("stop\n", timeout=5)
             assert process.returncode == 0 and stdout.strip() == "E_GATEWAY_DNS" and not stderr.strip()
+        # Positive control must use the actual native TLS connection and scoped
+        # CA, not merely a certificate-policy helper or an engine substitute.
+        with fixture.untrusted_tls_endpoint(trusted_chain=True) as endpoint:
+            with bridge(executable, f"https://127.0.0.1:{endpoint.server_port}", endpoint.ca_certificate) as (process, url):
+                assert request(url)[0] == 503
+                stdout, stderr = process.communicate("stop\n", timeout=5)
+                assert process.returncode == 0 and not stdout.strip() and not stderr.strip()
+                assert endpoint.http_requests == 1 and endpoint.tls_handshakes_completed == 1
+        for expired, hostname in ((True, "127.0.0.1"), (False, "localhost")):
+            with fixture.untrusted_tls_endpoint(expired=expired) as endpoint:
+                with bridge(executable, f"https://{hostname}:{endpoint.server_port}", endpoint.ca_certificate) as (process, url):
+                    assert request(url)[0] == 502
+                    stdout, stderr = process.communicate("stop\n", timeout=5)
+                    assert process.returncode == 0 and stdout.strip() == "E_GATEWAY_TLS" and not stderr.strip()
+                    assert endpoint.handshake_failed.wait(5)
+                    assert endpoint.http_requests == 0 and endpoint.tls_handshakes_completed == 0
+        tls_server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        tls_server.daemon_threads = True
+        tls_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        certificates = Path(__file__).parent / "fixtures"
+        tls_context.load_cert_chain(certificates / "valid-test-cert.pem", certificates / "untrusted-test-key.pem")
+        tls_server.socket = tls_context.wrap_socket(tls_server.socket, server_side=True)
+        tls_thread = threading.Thread(target=tls_server.serve_forever, daemon=True)
+        tls_thread.start()
+        try:
+            with bridge(executable, f"https://127.0.0.1:{tls_server.server_port}/base/",
+                        certificates / "expired-test-ca.pem") as (process, url):
+                assert request(url) == (200, b'{"test":"private-body"}', "application/json")
+                assert records[-1] == ("/base/echo", b'{"test":"private-body"}', "Bearer private-fixture-token")
+                release_stream.clear()
+                connection = http.client.HTTPConnection(url.hostname, url.port, timeout=5)
+                try:
+                    connection.request("POST", url.path + "/stream", body=b"{}")
+                    response = connection.getresponse()
+                    assert response.read(9) == b"data: 1\n\n", "Scoped TLS transport buffered the stream"
+                    release_stream.set()
+                    assert response.read() == b"end"
+                finally:
+                    connection.close()
+                stdout, stderr = process.communicate("stop\n", timeout=5)
+                assert process.returncode == 0 and not stdout.strip() and not stderr.strip()
+        finally:
+            release_stream.set()
+            tls_server.shutdown()
+            tls_server.server_close()
+            tls_thread.join()
         release_stream.clear()
         with bridge(executable, upstream) as (process, url):
             with ThreadPoolExecutor(max_workers=1) as pool:

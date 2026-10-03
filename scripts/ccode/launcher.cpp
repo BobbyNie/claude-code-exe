@@ -471,8 +471,8 @@ int RunTurn(const fs::path& module, const fs::path& payload, const fs::path& dat
     std::unique_ptr<ccode::GatewayBridge> gateway;
     const auto upstream = Env(L"A_BASE_URL");
     if (ccode::StartsWithInsensitive(upstream, L"http://") ||
-        (ccode::StartsWithInsensitive(upstream, L"https://") && Env(L"NODE_EXTRA_CA_CERTS").empty()))
-        gateway = std::make_unique<ccode::GatewayBridge>(upstream);
+        ccode::StartsWithInsensitive(upstream, L"https://"))
+        gateway = std::make_unique<ccode::GatewayBridge>(upstream, Env(L"NODE_EXTRA_CA_CERTS"));
     auto environment = ChildEnvironment(profile, interactive, gateway ? gateway->Url() : std::wstring());
     Json mcp = {{"mcpServers", {{"ccode_permissions", {{"type", "stdio"},
         {"command", module.u8string()}, {"args", {"--ccode-permission-server"}}}}}}};

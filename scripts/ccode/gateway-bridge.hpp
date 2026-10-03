@@ -12,6 +12,9 @@
 #include <memory>
 #include <thread>
 #include "gateway-http.hpp"
+#include "gateway-response.hpp"
+#include "gateway-tls.hpp"
+#include <fstream>
 
 namespace ccode {
 class GatewayBridge {
@@ -89,6 +92,7 @@ class GatewayBridge {
     std::wstring host, basePath;
     INTERNET_PORT port = 0;
     bool secure = false;
+    std::unique_ptr<GatewayTrust> scopedTrust;
     std::string capability;
     SOCKET listener = INVALID_SOCKET;
     bool winsock = false;
@@ -136,7 +140,40 @@ class GatewayBridge {
         return offset == length;
     }
     bool Send(SOCKET socket, const std::string& text) { return Send(socket, text.data(), text.size()); }
+    void ForwardScopedTls(SOCKET client, const GatewayRequest& incoming) {
+        bool responded = false;
+        try {
+            GatewayTls upstream(host, port, *scopedTrust, stopping);
+            const auto target = NarrowHeader(basePath) + incoming.target;
+            if (target.find_first_of(" \t\r\n\\") != std::string::npos) throw std::runtime_error("E_NETWORK");
+            auto authority = NarrowHeader(host);
+            if (authority.find(':') != std::string::npos) authority = "[" + authority + "]";
+            if (port != 443) authority += ":" + std::to_string(port);
+            std::string request = incoming.method + " " + target + " HTTP/1.1\r\nHost: " + authority +
+                "\r\nConnection: close\r\nAccept-Encoding: identity\r\nContent-Length: " +
+                std::to_string(incoming.body.size()) + "\r\n";
+            for (const auto& header : incoming.headers) request += header.first + ": " + header.second + "\r\n";
+            upstream.Send(request + "\r\n");
+            upstream.Send(incoming.body);
+            GatewayResponseFraming framing(incoming.method == "HEAD");
+            while (!stopping.load()) {
+                auto record = upstream.Read();
+                if (record.ended) { framing.EndOfStream(record.authenticated); return; }
+                const bool complete = framing.Feed(record.bytes);
+                responded = true;
+                if (!Send(client, record.bytes) || complete) return;
+            }
+        } catch (const std::runtime_error& error) {
+            if (!stopping.load()) {
+                const std::string code = error.what();
+                int expected = 0;
+                failure.compare_exchange_strong(expected, code == "E_GATEWAY_TLS" ? 3 : code == "E_GATEWAY_DNS" ? 1 : 2);
+                if (!responded) Send(client, "HTTP/1.1 502 Gateway Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+            }
+        }
+    }
     void Forward(SOCKET client, const GatewayRequest& incoming) {
+        if (scopedTrust) { ForwardScopedTls(client, incoming); return; }
         InternetHandle session(WinHttpOpen(L"ccode", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
             WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, WINHTTP_FLAG_ASYNC));
         if (!session.value || !WinHttpSetTimeouts(session.value, 10000, 10000, 10000, 600000))
@@ -242,9 +279,9 @@ class GatewayBridge {
         }
     }
 public:
-    // Native OS trust for HTTPS. Explicit extra-CA configurations remain on the
-    // engine route until scoped Schannel trust is integrated; never ignore TLS errors.
-    explicit GatewayBridge(const std::wstring& upstream) {
+    // HTTPS always validates the actual Schannel peer before sending the final
+    // handshake token; optional extra roots remain invocation-scoped.
+    explicit GatewayBridge(const std::wstring& upstream, const std::wstring& extraCaPath = {}) {
         URL_COMPONENTS parts{}; parts.dwStructSize = sizeof(parts);
         parts.dwHostNameLength = parts.dwUrlPathLength = parts.dwExtraInfoLength =
             parts.dwUserNameLength = parts.dwPasswordLength = static_cast<DWORD>(-1);
@@ -253,6 +290,17 @@ public:
             parts.dwUserNameLength || parts.dwPasswordLength || parts.dwExtraInfoLength)
             throw std::runtime_error("E_GATEWAY");
         secure = parts.nScheme == INTERNET_SCHEME_HTTPS;
+        if (secure) {
+            std::string pem;
+            if (!extraCaPath.empty()) {
+                std::ifstream file(std::filesystem::path(extraCaPath), std::ios::binary | std::ios::ate);
+                if (!file || file.tellg() <= 0 || file.tellg() > 4 * 1024 * 1024) throw std::runtime_error("E_GATEWAY_TLS");
+                pem.resize(static_cast<size_t>(file.tellg()), '\0');
+                file.seekg(0);
+                if (!file.read(&pem[0], static_cast<std::streamsize>(pem.size()))) throw std::runtime_error("E_GATEWAY_TLS");
+            }
+            scopedTrust = std::make_unique<GatewayTrust>(pem);
+        }
         host.assign(parts.lpszHostName, parts.dwHostNameLength); port = parts.nPort;
         if (parts.dwUrlPathLength) basePath.assign(parts.lpszUrlPath, parts.dwUrlPathLength);
         while (!basePath.empty() && basePath.back() == L'/') basePath.pop_back();
