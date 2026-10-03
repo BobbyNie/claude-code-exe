@@ -29,6 +29,18 @@ def run_phase(name, action, *args, **kwargs):
     return result
 
 
+def report_harness_progress(result):
+    # Never relay raw PowerShell output/errors: they can contain local identities.
+    allowed = {'OFFLINE HARNESS: ' + stage for stage in (
+        'setup', 'platform', 'network-inventory', 'baseline', 'commands',
+        'post-inventory', 'evidence', 'cleanup')}
+    seen = set()
+    for line in result.stdout.splitlines():
+        if line in allowed and line not in seen:
+            print(line, flush=True)
+            seen.add(line)
+
+
 def require_host(platform, environment):
     if (platform != 'win32' or environment.get('GITHUB_ACTIONS') != 'true'
             or environment.get('RUNNER_ENVIRONMENT') != 'github-hosted'):
@@ -152,6 +164,7 @@ def execute(args):
                     '-AdapterRevision', args.revision, '-AcceptanceTarget', 'github-hosted',
                     '-EvidencePath', str(evidence)], cwd=Path(__file__).resolve().parents[2],
                     env=os.environ.copy(), input='', timeout=150)
+                report_harness_progress(result)
                 if result.returncode or not evidence.is_file():
                     raise RuntimeError('E_HOSTED_OFFLINE_ACCEPTANCE')
                 report = json.loads(evidence.read_text(encoding='utf-8-sig'))

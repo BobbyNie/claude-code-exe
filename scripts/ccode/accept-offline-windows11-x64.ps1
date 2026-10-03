@@ -193,6 +193,7 @@ function ConvertTo-SafeCommandEvidence {
     }
 }
 
+Write-Output "OFFLINE HARNESS: setup"
 $source = (Resolve-Path -LiteralPath $Executable).Path
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $platformGate = Join-Path $PSScriptRoot 'assert-windows11-x64.ps1'
@@ -229,11 +230,13 @@ Copy-Item -LiteralPath $source -Destination $app
 
 # Explicit platform scope never substitutes for the independent offline check.
 # The default still requires Windows 11 Client and an ordinary account.
+Write-Output "OFFLINE HARNESS: platform"
 & $platformGate -Executable $app -ExpectedEngineVersion $ExpectedEngineVersion `
     -AdapterRevision $AdapterRevision -EvidencePath $platformEvidencePath `
     -AcceptanceTarget $AcceptanceTarget | Out-Null
 $platformEvidence = Get-Content -LiteralPath $platformEvidencePath -Raw | ConvertFrom-Json
 
+Write-Output "OFFLINE HARNESS: network-inventory"
 $routeInventory = @(
     Get-NetRoute -ErrorAction Stop |
         Where-Object { $_.DestinationPrefix -in @('0.0.0.0/0', '::/0') } |
@@ -274,6 +277,7 @@ if ($nonLoopbackDefaultRoutes.Count -ne 0 -or $connectedNonLoopbackAdapters.Coun
     throw 'E_OFFLINE_ROUTE: disable or physically disconnect every non-loopback network adapter before acceptance'
 }
 
+Write-Output "OFFLINE HARNESS: baseline"
 $serviceBefore = Get-ServiceInventory
 $driverBefore = Get-DriverInventory
 $programBefore = Get-DirectoryManifest $programRoot
@@ -283,6 +287,7 @@ $packageManifest = $null
 $workspaceIdentity = $null
 
 try {
+    Write-Output "OFFLINE HARNESS: commands"
     $version = Invoke-RecordedProcess -FilePath $app -Arguments @('--version') -CurrentDirectory $workspaceRoot
     [void]$commands.Add($version)
     Assert-Success $version 'version'
@@ -322,6 +327,7 @@ catch {
     $failure = $_.Exception.Message
 }
 
+Write-Output "OFFLINE HARNESS: post-inventory"
 $programAfter = Get-DirectoryManifest $programRoot
 $dataRootManifest = Get-DirectoryManifest $dataRoot
 $workspaceManifest = Get-DirectoryManifest $workspaceRoot
@@ -425,8 +431,10 @@ $evidenceParent = Split-Path -Parent $evidenceDestination
 if ($evidenceParent) {
     New-Item -ItemType Directory -Path $evidenceParent -Force | Out-Null
 }
+Write-Output "OFFLINE HARNESS: evidence"
 $evidence | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $evidenceDestination -Encoding utf8NoBOM
 
+Write-Output "OFFLINE HARNESS: cleanup"
 if (-not $KeepWorkingDirectory) {
     Remove-Item -LiteralPath $acceptanceRoot -Recurse -Force
 }

@@ -4475,3 +4475,19 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - Latest GUID candidate `954018d` is under separate run `37098438283`; its offline
   outcome remains pending. Full acceptance, approved signed candidate and the
   independent unified Release remain incomplete.
+
+### 2026-10-03 GUID candidate advances to disconnected harness
+
+- Run `37098438283` (`954018dfcee843aed58f5e48d62685e58f36abd7`) completed:
+  both runtime jobs, both workspace-boundary jobs and cross-version passed.
+  Both offline jobs failed; this is not full acceptance or a released candidate.
+- Offline 2.1.221 job `111134686877` now completes adapter-validation and actual
+  disconnect, enters acceptance, then completes restoration before failing.
+  GUID normalization advanced the trial, but did not solve the harness failure.
+  Missing offline.json is a downstream evidence-upload failure, not a billing block.
+- Add fixed, allowlisted inner-harness progress labels and relay only exact unique
+  labels from captured stdout. Never print raw stdout/stderr, exception text,
+  paths, adapter identities or credentials. No acceptance check is removed.
+- Diagnostic regressions were RED before implementation; GREEN: 194 local tests,
+  5 existing platform skips. Native localization on the new commit is pending.
+  HTTPS-proxy-to-HTTPS remains deferred, not passed; independent Release unpublished.

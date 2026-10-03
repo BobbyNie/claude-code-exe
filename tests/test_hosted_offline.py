@@ -16,6 +16,42 @@ spec.loader.exec_module(module)
 
 
 class HostedOfflineTests(unittest.TestCase):
+    def test_harness_diagnostics_only_emit_bounded_exact_stage_labels(self):
+        output = io.StringIO()
+        result = SimpleNamespace(returncode=1,
+            stdout='private path\nOFFLINE HARNESS: platform\n'
+                   'OFFLINE HARNESS: network-inventory\nOFFLINE HARNESS: private-secret\n'
+                   'prefix OFFLINE HARNESS: cleanup\n', stderr='private credentials')
+        with redirect_stdout(output):
+            module.report_harness_progress(result)
+        self.assertEqual(output.getvalue(),
+                         'OFFLINE HARNESS: platform\nOFFLINE HARNESS: network-inventory\n')
+        output = io.StringIO()
+        result.stdout = 'OFFLINE HARNESS: setup\n' * 100
+        with redirect_stdout(output):
+            module.report_harness_progress(result)
+        self.assertEqual(output.getvalue(), 'OFFLINE HARNESS: setup\n')
+
+    def test_harness_reports_stages_before_sensitive_operations(self):
+        source = (Path(__file__).resolve().parents[1] /
+                  'scripts/ccode/accept-offline-windows11-x64.ps1').read_text()
+        for stage, operation in (
+                ('setup', '$source = (Resolve-Path'),
+                ('platform', '& $platformGate -Executable'),
+                ('network-inventory', '$routeInventory = @('),
+                ('baseline', '$serviceBefore = Get-ServiceInventory'),
+                ('commands', '$version = Invoke-RecordedProcess'),
+                ('post-inventory', '$programAfter = Get-DirectoryManifest'),
+                ('evidence', '$evidence | ConvertTo-Json'),
+                ('cleanup', 'if (-not $KeepWorkingDirectory)')):
+            label = f'Write-Output "OFFLINE HARNESS: {stage}"'
+            self.assertIn(label, source)
+            self.assertLess(source.index(label), source.index(operation))
+        controller = Path(module.__file__).read_text()
+        self.assertIn('report_harness_progress(result)', controller)
+        self.assertLess(controller.index('                report_harness_progress(result)'),
+                        controller.index('                if result.returncode'))
+
     def test_phase_diagnostics_are_fixed_labels_and_never_report_failed_phase_passed(self):
         output = io.StringIO()
         with redirect_stdout(output):
