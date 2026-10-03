@@ -52,6 +52,20 @@ def request(url, method="POST", suffix="/echo", body=b'{"test":"private-body"}',
         connection.close()
 
 
+def cancel_request(process, pending, request_started):
+    assert request_started.wait(5), "Upstream request did not start before cancellation"
+    start = time.monotonic()
+    stdout, stderr = process.communicate("stop\n", timeout=5)
+    assert time.monotonic() - start < 5 and process.returncode == 0
+    assert not stdout.strip() and not stderr.strip()
+    try:
+        pending.result(timeout=5)
+    except TimeoutError:
+        raise  # A stuck worker is not an expected connection closure.
+    except (ConnectionError, http.client.HTTPException):
+        pass  # Expected: cancellation closes the loopback connection.
+
+
 def main(executable):
     records = []
     release_stream, request_started = threading.Event(), threading.Event()
@@ -189,6 +203,9 @@ def main(executable):
                         certificates / "expired-test-ca.pem") as (process, url):
                 assert request(url) == (200, b'{"test":"private-body"}', "application/json")
                 assert records[-1] == ("/base/echo", b'{"test":"private-body"}', "Bearer private-fixture-token")
+                with ThreadPoolExecutor(max_workers=4) as pool:
+                    responses = list(pool.map(lambda _: request(url), range(4)))
+                assert responses == [(200, b'{"test":"private-body"}', "application/json")] * 4
                 release_stream.clear()
                 connection = http.client.HTTPConnection(url.hostname, url.port, timeout=5)
                 try:
@@ -201,30 +218,30 @@ def main(executable):
                     connection.close()
                 stdout, stderr = process.communicate("stop\n", timeout=5)
                 assert process.returncode == 0 and not stdout.strip() and not stderr.strip()
+            release_stream.clear()
+            request_started.clear()
+            with bridge(executable, f"https://127.0.0.1:{tls_server.server_port}/base/",
+                        certificates / "expired-test-ca.pem") as (process, url):
+                with ThreadPoolExecutor(max_workers=1) as pool:
+                    pending = pool.submit(request, url, suffix="/stall")
+                    cancel_request(process, pending, request_started)
         finally:
             release_stream.set()
             tls_server.shutdown()
             tls_server.server_close()
             tls_thread.join()
         release_stream.clear()
+        request_started.clear()
         with bridge(executable, upstream) as (process, url):
             with ThreadPoolExecutor(max_workers=1) as pool:
                 pending = pool.submit(request, url, suffix="/stall")
-                assert request_started.wait(5)
-                start = time.monotonic()
-                stdout, stderr = process.communicate("stop\n", timeout=5)
-                assert time.monotonic() - start < 5 and process.returncode == 0
-                assert not stdout.strip() and not stderr.strip()
-                try:
-                    pending.result(timeout=5)
-                except (OSError, http.client.HTTPException):
-                    pass  # Expected: cancellation closes the loopback connection.
+                cancel_request(process, pending, request_started)
     finally:
         release_stream.set()
         server.shutdown()
         server.server_close()
         thread.join()
-    print("PASS: native HTTP request forwarding, capability rejection, concurrency, streaming, no redirect, real DNS cause, cancellation cleanup")
+    print("PASS: native HTTP/HTTPS request forwarding, capability rejection, concurrency, streaming, no redirect, real DNS cause, cancellation cleanup")
 
 
 if __name__ == "__main__":

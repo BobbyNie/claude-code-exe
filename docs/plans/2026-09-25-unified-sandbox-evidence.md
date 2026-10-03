@@ -4054,3 +4054,18 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   Actual Windows occupancy evidence remains pending the next changed-code run.
 - Latest public daily release still targets main and is not the unified branch
   release. Unified release and remaining approvals/acceptance gates remain open.
+
+### 2026-10-03 — extend native HTTPS concurrency and cancellation evidence
+
+- Existing native bridge fixture exercised concurrent requests and cancellation
+  only over HTTP. Add four simultaneous actual scoped-CA HTTPS requests and a
+  separate stalled HTTPS request cancelled by Stop, requiring clean process exit
+  within five seconds and completion of the loopback request worker.
+- Share cancellation assertions between HTTP and HTTPS. Reset the upstream-start
+  event before each case so HTTP cannot reuse TLS evidence. Narrow expected socket
+  closure exceptions: TimeoutError and unexpected errors must remain failures.
+- TDD: missing cancellation assertion helper gives RED; clean-exit, pending worker,
+  nonzero/error output and timeout/error propagation tests give GREEN. Full local
+  Python regression: 166 tests, five platform-specific skips, no failures.
+  Actual Schannel concurrency/cancellation runtime verification remains pending CI;
+  no claim that local fixture unit tests establish native Windows acceptance.
