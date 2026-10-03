@@ -126,6 +126,71 @@ def connect_proxy(target, *, deny=False, authorization="", authority_host=None, 
         assert not server.worker.is_alive() and not server.handler_failed, "Proxy fixture failed or did not clean up"
 
 
+@contextmanager
+def forward_proxy(target, *, authorization):
+    """Bounded HTTP POST fixture; fixed destination and no credential logging."""
+    authority = f'{target[0]}:{target[1]}'
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *_):
+            pass
+
+        def do_POST(self):
+            self.connection.settimeout(5)
+            destination = urlsplit(self.path)
+            if (destination.scheme != 'http' or destination.netloc != authority
+                    or destination.fragment
+                    or self.headers.get_all('Proxy-Authorization', []) != [authorization]):
+                self.send_response(407)
+                self.send_header('Content-Length', '0')
+                self.end_headers()
+                return
+            length = int(self.headers.get('Content-Length', '0'))
+            if not 0 <= length <= 65536 or self.headers.get('Transfer-Encoding'):
+                raise ValueError('Unsupported fixture request framing')
+            body = self.rfile.read(length)
+            if len(body) != length:
+                raise ValueError('Incomplete fixture body')
+            connection = http.client.HTTPConnection(*target, timeout=5)
+            try:
+                path = destination.path or '/'
+                if destination.query:
+                    path += '?' + destination.query
+                headers = {key: self.headers[key] for key in ('Authorization', 'Content-Type')
+                           if key in self.headers}
+                connection.request('POST', path, body=body, headers=headers)
+                response = connection.getresponse()
+                payload = response.read(65537)
+                if len(payload) > 65536:
+                    raise ValueError('Fixture response limit exceeded')
+                self.server.forwarded += 1
+                self.send_response(response.status)
+                self.send_header('Content-Length', str(len(payload)))
+                if response.getheader('Content-Type'):
+                    self.send_header('Content-Type', response.getheader('Content-Type'))
+                self.end_headers()
+                self.wfile.write(payload)
+            finally:
+                connection.close()
+
+    class Server(ThreadingHTTPServer):
+        daemon_threads = False
+        def handle_error(self, *_):
+            self.handler_failed = True
+
+    server = Server(('127.0.0.1', 0), Handler)
+    server.forwarded = 0
+    server.handler_failed = False
+    server.worker = threading.Thread(target=server.serve_forever)
+    server.worker.start()
+    try:
+        yield server
+    finally:
+        server.shutdown()
+        server.server_close()
+        server.worker.join(timeout=5)
+        assert not server.worker.is_alive() and not server.handler_failed, 'HTTP proxy fixture failed cleanup'
+
+
 def request(url, method="POST", suffix="/echo", body=b'{"test":"private-body"}', *, authorized=True):
     connection = http.client.HTTPConnection(url.hostname, url.port, timeout=10)
     try:
@@ -232,7 +297,23 @@ def main(executable, *, include_deferred_https_proxy=False):
     thread.start()
     try:
         upstream = f"http://127.0.0.1:{server.server_port}/base/"
-        # Verify WinHTTP named-proxy rejection does not fall back to origin.
+        # Authenticated absolute-form HTTP forwarding must reach the proxy,
+        # preserve API credentials/body and never leak proxy credentials to origin.
+        server.proxy_credentials_seen = False
+        with forward_proxy(('127.0.0.1', server.server_port),
+                           authorization='Basic dXNlcjpwQHNz') as proxy:
+            env = proxy_environment(f'http://user:p%40ss@127.0.0.1:{proxy.server_port}')
+            with bridge(executable, upstream, env=env) as (process, url):
+                status, payload, _ = request(url)
+                assert status == 200 and payload == b'{"test":"private-body"}'
+                assert proxy.forwarded == 1
+                assert records == [('/base/echo', b'{"test":"private-body"}',
+                                    'Bearer private-fixture-token')]
+                assert not server.proxy_credentials_seen
+                stdout, stderr = process.communicate('stop\n', timeout=5)
+                assert process.returncode == 0 and not stdout.strip() and not stderr.strip()
+            records.clear()
+        # Named-proxy rejection must not fall back to origin.
         with connect_proxy(("127.0.0.1", server.server_port), deny=True) as proxy:
             env = proxy_environment(f"http://127.0.0.1:{proxy.server_address[1]}")
             with bridge(executable, upstream, env=env) as (process, url):

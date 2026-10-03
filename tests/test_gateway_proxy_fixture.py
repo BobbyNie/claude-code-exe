@@ -2,6 +2,9 @@
 import importlib.util
 from pathlib import Path
 import socket
+import http.client
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import ssl
 import gc
 import warnings
@@ -15,6 +18,55 @@ spec.loader.exec_module(fixture)
 
 
 class ProxyFixtureTests(unittest.TestCase):
+    def test_http_forwarding_requires_auth_and_strips_proxy_credentials(self):
+        seen = []
+        class Origin(BaseHTTPRequestHandler):
+            def log_message(self, *_):
+                pass
+            def do_POST(self):
+                body = self.rfile.read(int(self.headers['Content-Length']))
+                seen.append((self.path, body, self.headers.get('Authorization'),
+                             self.headers.get('Proxy-Authorization')))
+                self.send_response(200)
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+        origin = ThreadingHTTPServer(('127.0.0.1', 0), Origin)
+        worker = threading.Thread(target=origin.serve_forever)
+        worker.start()
+        try:
+            with fixture.forward_proxy(origin.server_address, authorization='Basic fixture') as proxy:
+                target = f'http://127.0.0.1:{origin.server_port}/base/echo?q=1'
+                for uri, auth, status in ((target, '', 407),
+                                          ('http://other.invalid/echo', 'Basic fixture', 407),
+                                          (target, 'Basic fixture', 200)):
+                    connection = http.client.HTTPConnection(*proxy.server_address, timeout=5)
+                    try:
+                        connection.request('POST', uri, body=b'fixture', headers={
+                            'Proxy-Authorization': auth, 'Authorization': 'Bearer fixture'})
+                        response = connection.getresponse()
+                        self.assertEqual(response.status, status)
+                        body = response.read()
+                        if status == 200:
+                            self.assertEqual(body, b'fixture')
+                    finally:
+                        connection.close()
+                self.assertEqual(proxy.forwarded, 1)
+                self.assertEqual(seen, [('/base/echo?q=1', b'fixture', 'Bearer fixture', None)])
+            self.assertFalse(proxy.worker.is_alive())
+        finally:
+            origin.shutdown()
+            origin.server_close()
+            worker.join(timeout=5)
+        self.assertFalse(worker.is_alive())
+
+    def test_native_suite_requires_authenticated_http_forwarding(self):
+        import inspect
+        source = inspect.getsource(fixture.main)
+        self.assertIn('with forward_proxy(', source)
+        self.assertIn('assert proxy.forwarded == 1', source)
+        self.assertIn('assert not server.proxy_credentials_seen', source)
+
     def test_release_proxy_scope_retains_http_and_requires_explicit_https_opt_in(self):
         args = fixture.parse_arguments(['probe.exe'])
         self.assertEqual(args.executable, Path('probe.exe'))
