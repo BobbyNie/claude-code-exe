@@ -10,13 +10,18 @@ def read(path: str) -> str:
 
 
 class ReleaseBundleTests(unittest.TestCase):
+    def test_release_schedule_is_weekly(self):
+        workflow = read(".github/workflows/auto-release.yml")
+        self.assertIn("cron: '0 0 * * 1'", workflow)
+        self.assertNotIn("cron: '0 0 * * *'", workflow)
+
     def test_release_verification_waits_for_publication(self):
         workflow = read(".github/workflows/check-releases.yml")
         self.assertIn("  workflow_run:", workflow)
         self.assertIn("Auto Release AI Tools Portable", workflow)
         self.assertIn("github.event.workflow_run.conclusion == 'success'", workflow)
         self.assertNotIn("  push:", workflow)
-        self.assertIn("cron: '0 1 * * *'", workflow)
+        self.assertIn("cron: '0 1 * * 1'", workflow)
 
     def test_main_changes_keep_native_regression_coverage(self):
         workflow = read(".github/workflows/test-ccode.yml")

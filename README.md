@@ -1,6 +1,6 @@
 # AI 终端工具 Windows 便携版
 
-自动将 **Claude Code**、**Qwen Code**、**Codex App** 与 **Codex CLI** 的 Windows 版本整理到同一个 GitHub Release 中，每天通过 GitHub Actions 自动发布最新组合。
+自动将 **Claude Code**、**Qwen Code**、**Codex App** 与 **Codex CLI** 的 Windows 版本整理到同一个 GitHub Release 中，每周通过 GitHub Actions 自动发布最新组合。
 
 ## 简介
 
@@ -17,7 +17,7 @@
 
 - **零安装**：下载即用
 - **便携性**：配置与运行数据集中在 `data\` 目录
-- **自动更新**：每天自动检测并发布最新版本
+- **自动更新**：每周自动检测并发布最新版本
 - **原汁原味**：使用官方二进制/独立包，仅做便携化封装
 
 ## 下载
@@ -220,21 +220,21 @@ codex-wrapper.bat
 
 ## 工作原理
 
-1. 每天从官方源检测四个产品的最新版本
+1. 每周从官方源检测四个产品的最新版本
 2. 下载 Claude/Qwen/Codex App/Codex CLI Windows 产物
 3. 为 CLI 工具添加便携启动脚本
 4. 用本次检测到的最新 Claude Code 版本构建普通版 `ccode.exe`，校验内嵌引擎与 `claude.exe` 完全一致并运行验收
 5. 按四个上游版本号生成组合标签；公开 Release 已存在且包含 `ccode.exe`、来源记录、校验清单及所有必需附件时跳过
 6. 有更新时将五个产品及便携脚本发布到同一个 GitHub Release；已有工具包缺少 ccode 时修复同一个 Release，不删除标签
 
-每日发布工作流在 `main` 上运行，计划时间为 UTC 00:00（澳门/北京时间 08:00）；
-GitHub 排队可能使实际执行时间延后。发布流程成功完成后自动核对已发布附件，并保留 UTC 01:00 的定时检查和手动检查；不在推送时抢先检查尚未发布的附件。
+每周发布工作流在 `main` 上运行，计划时间为每周一 UTC 00:00（澳门/北京时间 08:00）；
+GitHub 排队可能使实际执行时间延后。发布流程成功完成后自动核对已发布附件，并保留 每周一 UTC 01:00 的定时检查和手动检查；不在推送时抢先检查尚未发布的附件。
 也可以在 Actions 页面手动运行 `Auto Release AI Tools Portable`。
 
 `ccode` 普通版现在与 Claude Code、Qwen Code、Codex App、Codex CLI 一起发布。
 不使用旧的 `append-ccode-release.yml` 后置追加流程：构建、测试、来源校验全部通过后才发布。
 新 Release 先以草稿上传，核对远端附件大小和 SHA256 后公开；失败不会报告发布成功。
-2026-10-03 的独立 Release 仅作为历史版本保留，后续请下载每日混合工具包中的 `ccode.exe`。
+2026-10-03 的独立 Release 仅作为历史版本保留，后续请下载每周混合工具包中的 `ccode.exe`。
 `main` 上封装代码或测试变更会触发 Windows x64 回归测试；不使用企业签名材料作为普通版门槛。
 
 | 产品 | 工作流 | 版本源 | 发布产物 |
