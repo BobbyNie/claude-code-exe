@@ -4011,3 +4011,21 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - TDD: new workflow contract fails with the missing probe step (RED); add the
   independent step, 17 workflow +8 subagent fixture tests pass (GREEN).
   Actual Windows ordering evidence remains pending; no production guess applied.
+
+### 2026-10-03 — wait for native descendant process objects
+
+- Run37086850688: 2.1.221's expiry TLS assertions pass but immediate cleanup
+  encounters WinError32 on the extracted image. Native StopNativeProcessTree only
+  waits for zero job accounting; the diagnostic Python containment already retains
+  member handles and waits for them. Apply that missing native wait as a bounded
+  lifecycle correction, without claiming it identifies every possible file owner.
+- Enumerate members before termination, retain SYNCHRONIZE handles and verify job
+  membership to reject PID-reuse confusion. Wait every captured process object,
+  then require zero active job processes. Enumeration/query/wait failures remain
+  errors; no cleanup retry, swallowed deletion failure or TLS assertion change.
+- TDD: missing handle-wait helper gives RED; portable all-members/error/aggregate
+  deadline tests pass after implementation. A second RED proves termination time
+  was omitted from the accounting deadline; start that deadline before termination.
+  Native descendant test now runs from a copied PE and requires immediate deletion
+  after tree shutdown (while deletion before shutdown must fail). Cross-compiles;
+  Windows runtime GREEN and the real expiry cleanup gate remain pending.
