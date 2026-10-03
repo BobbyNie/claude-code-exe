@@ -32,6 +32,21 @@ class HostedOfflineTests(unittest.TestCase):
             module.report_harness_progress(result)
         self.assertEqual(output.getvalue(), 'OFFLINE HARNESS: setup\n')
 
+    def test_harness_error_location_is_numeric_bounded_and_message_free(self):
+        output = io.StringIO()
+        result = SimpleNamespace(stdout='OFFLINE HARNESS ERROR: line=247; category=7\n'
+            'OFFLINE HARNESS ERROR: line=3; category=0\n'
+            'OFFLINE HARNESS ERROR: line=99999999; category=7\n'
+            'OFFLINE HARNESS ERROR: line=247; category=private\n'
+            'OFFLINE HARNESS ERROR: line=247; category=7 secret\n', stderr='secret')
+        with redirect_stdout(output):
+            module.report_harness_progress(result)
+        self.assertEqual(output.getvalue(), 'OFFLINE HARNESS ERROR: line=247; category=7\n')
+        source = (Path(module.__file__).parent / 'accept-offline-windows11-x64.ps1').read_text()
+        self.assertIn('$_.InvocationInfo.ScriptLineNumber', source)
+        self.assertIn('[int]$_.CategoryInfo.Category', source)
+        self.assertIn('    throw\n}', source)
+
     def test_harness_reports_stages_before_sensitive_operations(self):
         source = (Path(__file__).resolve().parents[1] /
                   'scripts/ccode/accept-offline-windows11-x64.ps1').read_text()

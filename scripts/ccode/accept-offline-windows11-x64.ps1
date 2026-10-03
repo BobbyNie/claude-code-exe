@@ -24,6 +24,14 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+# Only code location and the numeric PowerShell category leave captured output.
+# Never publish exception messages, source statements, identities or local paths.
+trap {
+    Write-Output ("OFFLINE HARNESS ERROR: line={0}; category={1}" -f `
+        $_.InvocationInfo.ScriptLineNumber, [int]$_.CategoryInfo.Category)
+    throw
+}
+
 function Get-StringSha256 {
     param([Parameter(Mandatory = $true)][string]$Value)
 

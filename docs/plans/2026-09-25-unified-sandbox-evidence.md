@@ -4506,3 +4506,16 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   fixture; no upstream connection is opened. CONNECT without a body is unchanged.
 - GREEN: 195 local tests, 5 existing platform skips. Native confirmation pending;
   no transport expectation, TLS gate or cleanup failure has been weakened.
+
+### 2026-10-03 Inner offline failure localized to network inventory
+
+- Run `37099380162` completed. 2.1.221 runtime and workspace-boundary passed.
+  2.1.282 runtime failed HTTP proxy denial, so no 2.1.282 binary was uploaded;
+  its dependent artifact consumers failed and are not independent runtime defects.
+- Offline 2.1.221 job `111137403361` completes setup/platform and enters
+  network-inventory, but never reaches baseline. Network restoration completes.
+  Actual failing statement within inventory/offline assertion is still unproven.
+- Added a terminating-error trap that emits only numeric script line/category;
+  controller permits one strictly bounded numeric record and no raw exception text.
+  It rethrows; errors remain fatal. RED→GREEN regression and full local suite:
+  196 tests, 5 existing platform skips. Native diagnosis remains pending.

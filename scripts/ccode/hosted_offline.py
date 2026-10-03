@@ -9,6 +9,7 @@ import base64
 import json
 import importlib.util
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -35,10 +36,15 @@ def report_harness_progress(result):
         'setup', 'platform', 'network-inventory', 'baseline', 'commands',
         'post-inventory', 'evidence', 'cleanup')}
     seen = set()
+    error_reported = False
     for line in result.stdout.splitlines():
         if line in allowed and line not in seen:
             print(line, flush=True)
             seen.add(line)
+        elif not error_reported and re.fullmatch(
+                r'OFFLINE HARNESS ERROR: line=[1-9][0-9]{0,4}; category=(?:[0-9]|[12][0-9]|3[01])', line):
+            print(line, flush=True)
+            error_reported = True
 
 
 def require_host(platform, environment):
