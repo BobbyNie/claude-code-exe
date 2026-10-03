@@ -15,13 +15,18 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: daily-tools-bundle
+  cancel-in-progress: false
+
 jobs:
   check-and-release:
     runs-on: windows-latest
+    timeout-minutes: 35
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Check for new bundle release
         id: check_versions
@@ -96,6 +101,71 @@ jobs:
         run: |
           .\scripts\codex\download-cli.ps1 -Version ${{ steps.check_versions.outputs.codex_cli_version }} -OutputDir .
 
+      - name: Configure Node for ccode tests
+        if: steps.check_versions.outputs.new_release == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '22.23.3'
+          package-manager-cache: false
+
+      - name: Configure Bun for ccode tests
+        if: steps.check_versions.outputs.new_release == 'true'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: '1.3.0'
+
+      - name: Configure MSVC x64
+        if: steps.check_versions.outputs.new_release == 'true'
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
+        with:
+          arch: x64
+
+      - name: Build latest ccode
+        if: steps.check_versions.outputs.new_release == 'true'
+        shell: pwsh
+        run: |
+          ./scripts/ccode/build.ps1 -Version '${{ steps.check_versions.outputs.claude_version }}' `
+            -AdapterRevision '${{ github.sha }}' -OutputDir .
+
+      - name: Verify latest ccode
+        if: steps.check_versions.outputs.new_release == 'true'
+        shell: pwsh
+        run: |
+          python -m unittest discover -s tests -v
+          if ($LASTEXITCODE -ne 0) { throw 'Python contracts failed' }
+          python -m unittest discover -s tests/ccode -p 'test_*.py' -v
+          if ($LASTEXITCODE -ne 0) { throw 'Release contracts failed' }
+          node --test tests/ccode/manifest-signature.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Signature regression failed' }
+          ./scripts/ccode/test-windows.ps1 -Executable ./ccode.exe
+          python tests/ccode/package-manifest-integration.py ./ccode.exe `
+            --expected-version '${{ steps.check_versions.outputs.claude_version }}' `
+            --adapter-revision '${{ github.sha }}' --acceptance-target github-hosted `
+            --evidence ./ccode-provenance.json
+          if ($LASTEXITCODE -ne 0) { throw 'Latest engine provenance failed' }
+          $provenance = Get-Content ./ccode-provenance.json -Raw | ConvertFrom-Json
+          if ($provenance.extractedEngineSha256 -ne (Get-FileHash ./claude.exe -Algorithm SHA256).Hash.ToLowerInvariant()) {
+            throw 'ccode payload differs from the Claude Code asset'
+          }
+          foreach ($test in @('portable-integration.py', 'tools-integration.py',
+              'payload-integrity.py', 'gateway-integration.py', 'tls-probe.py', 'concurrency-integration.py')) {
+            python "tests/ccode/$test" ./ccode.exe
+            if ($LASTEXITCODE -ne 0) { throw "Required ccode gate failed: $test" }
+          }
+          foreach ($mode in @('--mcp-only', '--skill-only', '--subagent-only',
+              '--subagent-probe', '--workspace-aliases-only', '--workspace-boundary-only')) {
+            python tests/ccode/tools-integration.py ./ccode.exe $mode
+            if ($LASTEXITCODE -ne 0) { throw "Required extension/workspace gate failed: $mode" }
+          }
+          python tests/ccode/gateway-integration.py ./ccode.exe --dns-only
+          if ($LASTEXITCODE -ne 0) { throw 'DNS rejection failed' }
+          python tests/ccode/gateway-integration.py ./ccode.exe --expired-tls-only
+          if ($LASTEXITCODE -ne 0) { throw 'Expired TLS rejection failed' }
+          python scripts/ccode/hosted_offline.py --executable ./ccode.exe `
+            --version '${{ steps.check_versions.outputs.claude_version }}' --revision '${{ github.sha }}' `
+            --evidence ./offline-evidence/offline.json
+          if ($LASTEXITCODE -ne 0) { throw 'Offline acceptance or network restoration failed' }
+
       - name: Prepare release assets
         if: steps.check_versions.outputs.new_release == 'true'
         shell: pwsh
@@ -106,6 +176,8 @@ jobs:
           New-Item -ItemType Directory -Path release | Out-Null
 
           Copy-Item claude.exe release\claude.exe
+          Copy-Item ccode.exe release\ccode.exe
+          Copy-Item ccode-provenance.json release\ccode-provenance.json
           Copy-Item qwen.exe release\qwen.exe
           Copy-Item Codex.msix release\Codex.msix
           Copy-Item codex.exe release\codex.exe
@@ -120,16 +192,28 @@ jobs:
 
           Versions:
           - Claude Code: ${{ steps.check_versions.outputs.claude_version }}
+          - ccode (public edition, same engine): ${{ steps.check_versions.outputs.claude_version }}
           - Qwen Code: ${{ steps.check_versions.outputs.qwen_version }}
           - Codex App: ${{ steps.check_versions.outputs.codex_app_version }}
           - Codex CLI: ${{ steps.check_versions.outputs.codex_cli_version }}
 
           Assets:
           - claude.exe / claude-wrapper.bat
+          - ccode.exe / ccode-provenance.json / SHA256SUMS.txt
           - qwen.exe / qwen-wrapper.bat
           - Codex.msix
           - codex.exe / codex-wrapper.bat
+
+          ccode: public unsigned edition; no OS security sandbox.
+          API credentials: A_API_KEY or A_AUTH_TOKEN, and A_BASE_URL.
+          Run ccode.exe --help; preserve your data directory when updating.
+          HTTPS-proxy to HTTPS is deferred; HTTPS-proxy to HTTP is unsupported.
+          Accepted on GitHub-hosted Windows x64; not Windows 11 ordinary-user evidence.
+          Adapter revision: ${{ github.sha }}
           "@ | Out-File -Encoding UTF8 release\README.txt
+          Get-ChildItem release -File | Sort-Object Name | ForEach-Object {
+            "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name
+          } | Set-Content release\SHA256SUMS.txt -Encoding utf8NoBOM
 
       - name: Create Release
         if: steps.check_versions.outputs.new_release == 'true'
@@ -144,30 +228,22 @@ jobs:
           $codexAppVersion = "${{ steps.check_versions.outputs.codex_app_version }}"
           $codexCliVersion = "${{ steps.check_versions.outputs.codex_cli_version }}"
 
-          if (gh release view "$tag" 2>$null) {
-            Write-Output "Removing incomplete release $tag before republishing"
-            gh release delete "$tag" -y --cleanup-tag
-          }
-
           $notes = @"
           ## Versions
           - Claude Code: $claudeVersion
+          - ccode (public edition; same Claude Code engine): $claudeVersion
           - Qwen Code: $qwenVersion
           - Codex App: $codexAppVersion
           - Codex CLI: $codexCliVersion
+
+          ccode is built and tested in this workflow before publication. Its embedded engine
+          SHA256 matches claude.exe. See ccode-provenance.json and SHA256SUMS.txt.
+          Adapter revision: ${{ github.sha }}
+          Public edition: no enterprise signing claim or OS security sandbox.
+          HTTPS-proxy to HTTPS remains deferred; HTTPS-proxy to HTTP is unsupported.
+          Acceptance: GitHub-hosted Windows x64, not Windows 11 ordinary-account evidence.
           "@
 
-          gh release create "$tag" `
-            --title "$title" `
-            --notes "$notes" `
-            release\claude.exe `
-            release\qwen.exe `
-            release\Codex.msix `
-            release\codex.exe `
-            release\claude-wrapper.bat `
-            release\qwen-wrapper.bat `
-            release\codex-wrapper.bat `
-            release\qwen-launcher.revision `
-            release\README.txt
-
-          echo "Release $tag created successfully"
+          $notes | Set-Content ./bundle-notes.md -Encoding utf8NoBOM
+          ./scripts/publish-bundle.ps1 -Tag $tag -Repo '${{ github.repository }}' `
+            -AssetDirectory ./release -NotesPath ./bundle-notes.md -TargetCommit '${{ github.sha }}'

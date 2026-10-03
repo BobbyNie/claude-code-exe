@@ -6,18 +6,22 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class CcodeReleaseTests(unittest.TestCase):
-    def test_ccode_is_never_published_to_the_mixed_public_bundle(self):
-        legacy = ROOT / ".github/workflows/append-ccode-release.yml"
-        self.assertFalse(legacy.exists())
-
-        for workflow_path in (ROOT / ".github/workflows").glob("*.yml"):
-            workflow = workflow_path.read_text(encoding="utf-8")
-            publishes_ccode = "gh release upload" in workflow and "ccode.exe" in workflow
-            targets_mixed_bundle = "Auto Release AI Tools Portable" in workflow
-            self.assertFalse(
-                publishes_ccode and targets_mixed_bundle,
-                f"{workflow_path.name} still publishes ccode into the mixed bundle",
-            )
+    def test_ccode_is_built_and_tested_before_same_bundle_publication(self):
+        self.assertFalse((ROOT / ".github/workflows/append-ccode-release.yml").exists())
+        workflow = (ROOT / ".github/workflows/auto-release.yml").read_text(encoding="utf-8")
+        build = workflow.split("      - name: Build latest ccode", 1)[1].split("      - name:", 1)[0]
+        self.assertIn("steps.check_versions.outputs.claude_version", build)
+        self.assertIn("-AdapterRevision '${{ github.sha }}'", build)
+        self.assertNotIn("SignerSpkiPath", build)
+        self.assertLess(workflow.index("      - name: Verify latest ccode"),
+                        workflow.index("      - name: Create Release"))
+        for required in ("package-manifest-integration.py", "test-windows.ps1",
+                         "portable-integration.py", "gateway-integration.py",
+                         "tools-integration.py", "hosted_offline.py",
+                         "release\\ccode.exe", "ccode-provenance.json", "SHA256SUMS.txt"):
+            self.assertIn(required, workflow)
+        self.assertNotIn("continue-on-error", workflow)
+        self.assertNotIn("gh release delete", workflow)
 
     def test_native_tests_cover_public_isolation_rules(self):
         native_test = (ROOT / "tests/ccode/native-tests.cpp").read_text(encoding="utf-8")

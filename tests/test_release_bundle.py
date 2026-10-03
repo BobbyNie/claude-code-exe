@@ -100,14 +100,8 @@ class ReleaseBundleTests(unittest.TestCase):
         self.assertIn("check-all-versions.ps1", script)
         self.assertIn("Test-BundleReleaseComplete", script)
 
-        for required_asset in (
-            '"claude.exe"',
-            '"qwen.exe"',
-            '"Codex.msix"',
-            '"codex.exe"',
-            '"README.txt"',
-        ):
-            self.assertIn(required_asset, script)
+        self.assertIn("Get-BundleRequiredAssets", script)
+
 
 
 if __name__ == "__main__":

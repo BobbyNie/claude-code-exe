@@ -11,13 +11,7 @@ $Repo = if ($env:GITHUB_REPOSITORY) { $env:GITHUB_REPOSITORY } else {
 Write-Output "=== GitHub Bundle Release Check ($Repo) ==="
 
 $bundle = Get-LatestBundleInfo
-$requiredAssets = @(
-    "claude.exe",
-    "qwen.exe",
-    "Codex.msix",
-    "codex.exe",
-    "README.txt"
-)
+$requiredAssets = @(Get-BundleRequiredAssets)
 
 Write-Output "[Claude] Official latest: $($bundle.ClaudeVersion)"
 Write-Output "[Qwen] Official latest: $($bundle.QwenVersion)"

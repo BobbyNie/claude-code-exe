@@ -1,5 +1,15 @@
 # 統一執行邊界與免安裝封裝設計
 
+## 2026-10-03 发布形式更新：五产品同一 Release
+
+使用者进一步明确要求：ccode 与 Claude Code、Qwen Code、Codex App、Codex CLI
+合并到同一个 Release，且 ccode 使用最新 Claude Code。本更新取代此前“后续独立发布”的要求。
+每日流程只检测一次上游版本，以同一个 ClaudeVersion 下载 claude.exe 并构建普通版 ccode，
+验收及内嵌引擎 SHA256 一致性检查通过后一起发布。缺少 ccode 或校验材料的旧 bundle 不算完整。
+历史独立 Release 保留，不删除既有 Release/tag 来补齐工具包。不新增企业签名门槛；
+HTTPS 代理已知限制及 hosted 验收边界保持如实记录。实施不等于实际最新引擎验收已经通过。
+
+
 ## 2026-10-03 普通版发布范围更新
 
 使用者明确要求「按照普通版release就好了」。本次独立发布采用普通公开构建，

@@ -158,6 +158,13 @@ function New-BundleReleaseTag {
 function Get-BundleRequiredAssets {
     return @(
         "claude.exe",
+        "ccode.exe",
+        "ccode-provenance.json",
+        "SHA256SUMS.txt",
+        "claude-wrapper.bat",
+        "qwen-wrapper.bat",
+        "codex-wrapper.bat",
+        "qwen-launcher.revision",
         "qwen.exe",
         "Codex.msix",
         "codex.exe",
@@ -171,12 +178,13 @@ function Get-ReleaseAssetNames {
         [string]$RepoName = $(Get-RepoName)
     )
 
-    $releaseJson = gh release view "$Tag" --repo "$RepoName" --json assets 2>$null
+    $releaseJson = gh release view "$Tag" --repo "$RepoName" --json assets,isDraft 2>$null
     if (-not $?) {
         return @()
     }
 
     $release = $releaseJson | ConvertFrom-Json
+    if ($release.isDraft) { return @() }
     return @($release.assets | ForEach-Object { $_.name })
 }
 
