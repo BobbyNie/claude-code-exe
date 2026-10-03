@@ -4430,3 +4430,16 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - HTTP authenticated positive forwarding coverage was added in `abedf50` with
   fixed-target and credential-isolation checks; local 188 tests (5 skips) passed.
   Native coverage is pending. HTTPS-proxy-to-HTTPS deferral remains unchanged.
+
+### 2026-10-03 Explicit hosted scope for signed lifecycle harness
+
+- The signed lifecycle harness still unconditionally selected the historical
+  Windows11 ordinary-account gate. Added an explicit `AcceptanceTarget` with
+  `github-hosted` opt-in, retaining the existing default for physical trials.
+  The report records the selected scope and the actual platform/account evidence.
+- Signed inspection and signature installation still precede candidate execution;
+  platform selection does not waive signatures, pin approval, package audit,
+  data separation, move/resume or repack comparisons.
+- Wiring regression was RED on the missing option and is now GREEN locally.
+  This is not a signed hosted lifecycle execution: approved public signer/pin,
+  required notices/authorization and a signed candidate remain prerequisites.

@@ -14,6 +14,9 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$TrustedPin,
 
+    [ValidateSet('windows11-ordinary', 'github-hosted')]
+    [string]$AcceptanceTarget = 'windows11-ordinary',
+
     [string]$NodeCommand = 'node',
 
     [string]$PythonCommand = 'python',
@@ -242,7 +245,8 @@ $app = Join-Path $programRoot 'ccode.exe'
 $manifest = $inspection.manifest
 
 & $platformGate -Executable $app -ExpectedEngineVersion $manifest.provenance.engineVersion `
-    -AdapterRevision $manifest.provenance.adapterRevision -EvidencePath $platformEvidencePath | Out-Null
+    -AdapterRevision $manifest.provenance.adapterRevision -EvidencePath $platformEvidencePath `
+    -AcceptanceTarget $AcceptanceTarget | Out-Null
 $platformEvidence = Get-Content -LiteralPath $platformEvidencePath -Raw | ConvertFrom-Json
 
 $programBefore = Get-DirectoryManifest $programRoot
@@ -363,7 +367,10 @@ $evidence = [ordered]@{
     schemaVersion = 1
     collectedAtUtc = [DateTime]::UtcNow.ToString('o')
     acceptance = [ordered]@{
-        scope = 'Windows 11 x64 ordinary-account complete enterprise lifecycle trial'
+        scope = $(if ($AcceptanceTarget -eq 'github-hosted') {
+            'GitHub-hosted Windows x64 complete enterprise lifecycle trial'
+        } else { 'Windows 11 x64 ordinary-account complete enterprise lifecycle trial' })
+        acceptanceTarget = $AcceptanceTarget
         passed = -not [bool]$failure
         failure = ConvertTo-SafeText $failure
         loopbackFixture = [ordered]@{
@@ -404,4 +411,4 @@ $evidence | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $evidenceDestina
 
 if (-not $KeepWorkingDirectory) { Remove-Item -LiteralPath $acceptanceRoot -Recurse -Force }
 if ($failure) { throw $failure }
-Write-Output "Enterprise lifecycle Windows 11 x64 acceptance passed. Evidence: $evidenceDestination"
+Write-Output "Enterprise lifecycle acceptance passed ($AcceptanceTarget). Evidence: $evidenceDestination"

@@ -44,3 +44,14 @@ class EnterpriseStartupWiringTests(unittest.TestCase):
         self.assertIn('return ccode::RetainedRuntimePayload(payload, resource.size, hash)', source)
         self.assertNotIn('RunTurn(module, payload,', source)
         self.assertEqual(source.count('RunTurn(module, payload.Path(),'), 4)
+
+    def test_lifecycle_supports_explicit_hosted_target_without_removing_signature_gate(self):
+        source = (ROOT / 'scripts/ccode/accept-enterprise-lifecycle-windows11-x64.ps1').read_text(encoding='utf-8')
+        self.assertIn("[ValidateSet('windows11-ordinary', 'github-hosted')]", source)
+        self.assertIn("[string]$AcceptanceTarget = 'windows11-ordinary'", source)
+        gate = source.split('& $platformGate -Executable $app', 1)[1].split('| Out-Null', 1)[0]
+        self.assertIn('-AcceptanceTarget $AcceptanceTarget', gate)
+        self.assertIn('acceptanceTarget = $AcceptanceTarget', source)
+        self.assertIn("'GitHub-hosted Windows x64 complete enterprise lifecycle trial'", source)
+        self.assertIn("$lifecycleTool, 'inspect-signed'", source)
+        self.assertIn("$lifecycleTool, 'install-signature'", source)
