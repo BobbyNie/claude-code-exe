@@ -4458,3 +4458,20 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   GREEN preserves exact selected-adapter count and restoration requirements.
   Actual failing GUID values were not collected, so this is a candidate fix,
   not a proven complete diagnosis until native offline execution advances/passes.
+
+### 2026-10-03 Native GREEN for bounded late-result handoff
+
+- Run `37097846809`, commit `dbd587e9d84ef9bed26ae6be0e65c8f840a9e753`,
+  completed. Both full runtime jobs, both workspace-boundary jobs and cross-version
+  upgrade/rollback passed. Required subagent integration passed in both versions;
+  it was not replaced with the diagnostic-only protocol probe.
+- This supplies native GREEN after the observed `372ac2e` failure and local RED
+  for early-init followed by two results. One successful run is not proof of all
+  event scheduling permutations or later candidate commits.
+- Both offline jobs still failed before disconnect at adapter validation, as
+  expected for this commit preceding GUID normalization. 2.1.221 annotations
+  contain process exit 1 and absent evidence upload, plus a runtime deprecation
+  warning; no billing block is reported for this job.
+- Latest GUID candidate `954018d` is under separate run `37098438283`; its offline
+  outcome remains pending. Full acceptance, approved signed candidate and the
+  independent unified Release remain incomplete.
