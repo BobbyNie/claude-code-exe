@@ -4330,3 +4330,18 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   after task_notification. This remains a real release blocker independent of
   the deferred proxy combination. Full run and new scoped native CI still need
   verification; no Release completion claim.
+
+### 2026-10-03 Matched background completion without intermediate result
+
+- Run `37094824983`, 2.1.221 job `111122495117`, emitted task_notification then
+  init without an intervening result. The frontend required `complete` despite
+  already holding a matched background completion credit, causing E_PROTOCOL_ORDER.
+- Added portable regression coverage for both notification→init and
+  notification→result→init, including changed-session rejection and rejection of
+  a second unauthorized init. The new no-result case reproduced E_PROTOCOL_ORDER
+  before the fix; the ASAN/UBSAN frontend suite passes after it.
+- The transition still consumes exactly one matched completion credit, requires
+  no active background tasks, retains session identity checks and requires final
+  result completion. This is not blanket duplicate-init acceptance.
+- Native integration GREEN remains pending a new Windows run. This local result
+  does not prove that all intermittent native subagent failures are resolved.

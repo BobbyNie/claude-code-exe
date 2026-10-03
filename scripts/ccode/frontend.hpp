@@ -93,10 +93,10 @@ class EventReader {
         // before it can mutate the session identity or registered tool names.
         if (type == "system" && event.value("subtype", std::string()) == "init" &&
             (toolRegistryReceived || complete)) {
-            // Native background completion queues a fresh parent turn: result,
-            // init, assistant, result. Only a matched completed task can grant
-            // this boundary, never an arbitrary duplicate initialization.
-            if (!complete || !queuedParentTurns || !backgroundTasks.empty())
+            // A matched background completion queues a fresh parent turn.
+            // Native streams can emit init with or without an intervening result;
+            // consume exactly one completion credit, never a generic duplicate.
+            if (!queuedParentTurns || !backgroundTasks.empty())
                 throw ProtocolError("E_PROTOCOL_ORDER");
             --queuedParentTurns;
             complete = false;

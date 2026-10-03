@@ -268,6 +268,31 @@ int main() {
     queuedParent.Finish();
     assert(queuedParent.complete && queuedParent.session == "same");
     ExpectError(queuedParent, agentInit, "E_PROTOCOL_ORDER");
+    // Native 2.1.221 can begin the queued parent turn immediately after
+    // task_notification, without emitting an intervening result.
+    for (bool intermediateResult : {false, true}) {
+        for (bool changedSession : {false, true}) {
+            ccode::EventReader immediateParent;
+            immediateParent.Feed(agentInit);
+            immediateParent.Feed(tool("Agent", "bg-immediate", ccode::Json::object()));
+            immediateParent.Feed(ccode::Json{{"type", "system"}, {"subtype", "task_started"},
+                {"task_id", "immediate"}, {"tool_use_id", "bg-immediate"}}.dump() + "\n");
+            immediateParent.Feed(ccode::Json{{"type", "system"}, {"subtype", "task_notification"},
+                {"task_id", "immediate"}, {"status", "completed"}}.dump() + "\n");
+            if (intermediateResult) immediateParent.Feed(successResult);
+            if (changedSession) {
+                ExpectError(immediateParent, replacementInit, "E_SESSION_MISMATCH");
+                assert(immediateParent.session == "same");
+            } else {
+                immediateParent.Feed(agentInit);
+                assert(!immediateParent.complete);
+                immediateParent.Feed(successResult);
+                immediateParent.Finish();
+                assert(immediateParent.complete && !immediateParent.failed);
+                ExpectError(immediateParent, agentInit, "E_PROTOCOL_ORDER");
+            }
+        }
+    }
     ccode::EventReader reusedTask;
     reusedTask.Feed(agentInit);
     reusedTask.Feed(tool("Agent", "reuse1", ccode::Json::object()));
