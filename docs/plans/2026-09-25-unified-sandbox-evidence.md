@@ -3939,3 +3939,15 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   only for local MinGW); Python regression 162 tests OK, 5 skipped. These are not
   Windows runtime GREEN. Proxy parity, additional TLS cancellation coverage and
   full release approvals/acceptance remain open; no unified Release is claimed.
+
+### 2026-10-03 — reject-response race and TLS failure observation
+
+- Run37085460675: both MSVC builds compile, but 2.1.221's existing unauthorized
+  request test observes WSAECONNRESET rather than the required 400 (RED).
+  Add a deliberately fragmented unauthorized body test. Half-close the response
+  and drain at most64KiB/500ms before final socket close so unread request bytes
+  do not discard the rejection response. No unauthorized request reaches upstream.
+- 2.1.282 still fails the untrusted-handshake assertion. Add fixture-only coarse
+  connection/handshake counters to its assertion, identical in privacy scope to
+  the real-engine fixture, to distinguish no connection from a completed handshake.
+  No assertion changed or guessed TLS exception reclassified. Native GREEN pending.

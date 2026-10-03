@@ -232,6 +232,32 @@ class GatewayBridge {
             if (!Send(client, buffer.data(), read)) return;
         }
     }
+    void FinishRejectedResponse(SOCKET client) {
+        // A body may still be arriving after its headers were rejected. Closing
+        // with unread bytes can turn the already-sent 400 into a TCP reset.
+        // Half-close first, then drain only a bounded amount/time; never forward.
+        if (shutdown(client, SD_SEND) == SOCKET_ERROR) {
+            if (!stopping.load()) Failure(0);
+            return;
+        }
+        const auto deadline = GetTickCount64() + 500;
+        size_t drained = 0;
+        std::array<char, 4096> discard{};
+        while (!stopping.load() && drained < 65536 && GetTickCount64() < deadline) {
+            WSAPOLLFD poll{client, POLLRDNORM, 0};
+            const int ready = WSAPoll(&poll, 1, 25);
+            if (ready == SOCKET_ERROR) { Failure(0); return; }
+            if (!ready) continue;
+            const int count = recv(client, discard.data(), static_cast<int>(discard.size()), 0);
+            if (count == 0) return;
+            if (count == SOCKET_ERROR) {
+                const int error = WSAGetLastError();
+                if (error != WSAECONNRESET && error != WSAECONNABORTED && !stopping.load()) Failure(0);
+                return;
+            }
+            drained += static_cast<size_t>(count);
+        }
+    }
     void Serve(Worker& worker) {
         try {
             GatewayRequestParser parser(capability);
@@ -248,6 +274,7 @@ class GatewayBridge {
         } catch (const std::runtime_error& error) {
             if (std::string(error.what()) == "E_NETWORK") Failure(0);
             Send(worker.socket, "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+            FinishRejectedResponse(worker.socket);
         } catch (...) { Failure(0); }
         std::lock_guard<std::mutex> lock(workersMutex);
         shutdown(worker.socket, SD_BOTH); closesocket(worker.socket);

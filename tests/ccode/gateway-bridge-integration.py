@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import http.client
 import importlib.util
+import json
 from pathlib import Path
 import subprocess
 import ssl
@@ -95,6 +96,18 @@ def main(executable):
         with bridge(executable, upstream) as (process, url):
             assert request(url, authorized=False)[0] == 400
             assert not records, "Unauthorized loopback request reached upstream"
+            connection = http.client.HTTPConnection(url.hostname, url.port, timeout=5)
+            try:
+                connection.putrequest("POST", "/wrong-capability/echo")
+                connection.putheader("Content-Length", "1024")
+                connection.endheaders()
+                time.sleep(0.05)  # Body is deliberately still in flight when rejected.
+                connection.send(b"x" * 1024)
+                response = connection.getresponse()
+                assert response.status == 400 and response.read() == b""
+                assert not records, "Fragmented unauthorized request reached upstream"
+            finally:
+                connection.close()
             assert request(url) == (200, b'{"test":"private-body"}', "application/json")
             assert records == [("/base/echo", b'{"test":"private-body"}', "Bearer private-fixture-token")]
             connection = http.client.HTTPConnection(url.hostname, url.port, timeout=5)
@@ -134,7 +147,14 @@ def main(executable):
                 assert request(url)[0] == 502
                 stdout, stderr = process.communicate("stop\n", timeout=5)
                 assert process.returncode == 0 and stdout.strip() == "E_GATEWAY_TLS" and not stderr.strip()
-                assert endpoint.handshake_failed.wait(5), "Untrusted TLS handshake was not rejected"
+                assert endpoint.handshake_failed.wait(5), "Untrusted TLS handshake was not rejected: " + json.dumps({
+                    "connections": endpoint.connections,
+                    "completed": endpoint.tls_handshakes_completed,
+                    "errors": endpoint.handshake_errors,
+                    "versions": endpoint.tls_versions,
+                    "protocol": endpoint.protocol_observations,
+                    "http": endpoint.http_requests,
+                })
                 assert endpoint.http_requests == 0 and endpoint.tls_handshakes_completed == 0
         with bridge(executable, "https://ccode-native-dns.invalid") as (process, url):
             assert request(url)[0] == 502
