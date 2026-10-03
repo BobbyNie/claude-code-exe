@@ -3894,3 +3894,13 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   rather than silently discarding it; expiration acceptance remains incomplete.
 - Native probe cross-compiles; Python regression 161 tests OK, 5 skipped.
   Neither the policy helper nor this default-trust slice completes TLS acceptance.
+
+### 2026-10-03 — certificate rejection requires exact native evidence
+
+- Run37083689790 both builds still fail the expired-certificate classification
+  assertion; adding issuer discovery alone did not resolve it. The synchronized
+  process-tree test passes, but neither build reached the HTTPS bridge probe.
+- Keep the expiry assertion unchanged. Expose only native numeric policy/chain
+  status for the public fixture in the test executable, never certificate bytes,
+  hostnames, credentials or model content. Production emits no such diagnostics.
+  Collect these statuses before selecting the next correction; no runtime GREEN.

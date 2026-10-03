@@ -82,9 +82,13 @@ public:
     ~GatewayTrust() { if (engine) CertFreeCertificateChainEngine(engine); }
     GatewayTrust(const GatewayTrust&) = delete;
     GatewayTrust& operator=(const GatewayTrust&) = delete;
-    GatewayCertificateResult Verify(PCCERT_CONTEXT peer, const std::wstring& hostname) const {
+    struct Verification {
+        GatewayCertificateResult result = GatewayCertificateResult::Rejected;
+        DWORD policyError = 0, chainErrors = 0;
+    };
+    Verification Inspect(PCCERT_CONTEXT peer, const std::wstring& hostname) const {
         if (!peer || hostname.empty() || hostname.find(L'\0') != std::wstring::npos)
-            return GatewayCertificateResult::Rejected;
+            return {};
         CERT_CHAIN_PARA parameters{}; parameters.cbSize = sizeof(parameters);
         LPSTR serverAuth = const_cast<LPSTR>(szOID_PKIX_KP_SERVER_AUTH);
         parameters.RequestedUsage.dwType = USAGE_MATCH_TYPE_AND;
@@ -92,17 +96,21 @@ public:
         parameters.RequestedUsage.Usage.rgpszUsageIdentifier = &serverAuth;
         PCCERT_CHAIN_CONTEXT chain = nullptr;
         if (!CertGetCertificateChain(engine, peer, nullptr, peer->hCertStore, &parameters, 0, nullptr, &chain))
-            return GatewayCertificateResult::Rejected;
+            return {};
         SSL_EXTRA_CERT_CHAIN_POLICY_PARA ssl{}; ssl.cbSize = sizeof(ssl);
         ssl.dwAuthType = AUTHTYPE_SERVER; ssl.pwszServerName = const_cast<LPWSTR>(hostname.c_str());
         CERT_CHAIN_POLICY_PARA policy{}; policy.cbSize = sizeof(policy); policy.pvExtraPolicyPara = &ssl;
         CERT_CHAIN_POLICY_STATUS status{}; status.cbSize = sizeof(status);
         const BOOL valid = CertVerifyCertificateChainPolicy(CERT_CHAIN_POLICY_SSL, chain, &policy, &status);
+        const DWORD errors = chain->TrustStatus.dwErrorStatus;
         CertFreeCertificateChain(chain);
-        if (!valid) return GatewayCertificateResult::Rejected;
-        if (!status.dwError) return GatewayCertificateResult::Trusted;
-        if (status.dwError == static_cast<DWORD>(CERT_E_EXPIRED)) return GatewayCertificateResult::Expired;
-        return GatewayCertificateResult::Rejected;
+        const auto result = !valid ? GatewayCertificateResult::Rejected :
+            !status.dwError ? GatewayCertificateResult::Trusted :
+            status.dwError == static_cast<DWORD>(CERT_E_EXPIRED) ? GatewayCertificateResult::Expired : GatewayCertificateResult::Rejected;
+        return {result, status.dwError, errors};
+    }
+    GatewayCertificateResult Verify(PCCERT_CONTEXT peer, const std::wstring& hostname) const {
+        return Inspect(peer, hostname).result;
     }
 };
 } // namespace ccode

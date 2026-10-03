@@ -29,7 +29,11 @@ int wmain(int argc, wchar_t** argv) {
     // Trust additions must not mutate the user's or machine's root store.
     assert(defaults.Verify(good.get(), L"127.0.0.1") == ccode::GatewayCertificateResult::Rejected);
     ccode::GatewayTrust issuer(caPem);
-    assert(issuer.Verify(expired.get(), L"127.0.0.1") == ccode::GatewayCertificateResult::Expired);
+    const auto expiry = issuer.Inspect(expired.get(), L"127.0.0.1");
+    if (expiry.result != ccode::GatewayCertificateResult::Expired)
+        std::cerr << "E_TEST_CERTIFICATE_POLICY policy=" << std::hex << expiry.policyError
+                  << " chain=" << expiry.chainErrors << std::dec << std::endl;
+    assert(expiry.result == ccode::GatewayCertificateResult::Expired);
     for (const auto& invalid : {std::string("not a certificate"), goodPem + "trailing garbage"}) {
         bool rejected = false;
         try { ccode::GatewayTrust malformed(invalid); }
