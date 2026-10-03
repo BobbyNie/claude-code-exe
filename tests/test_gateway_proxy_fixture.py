@@ -15,6 +15,13 @@ spec.loader.exec_module(fixture)
 
 
 class ProxyFixtureTests(unittest.TestCase):
+    def test_release_proxy_scope_retains_http_and_requires_explicit_https_opt_in(self):
+        args = fixture.parse_arguments(['probe.exe'])
+        self.assertEqual(args.executable, Path('probe.exe'))
+        self.assertEqual(fixture.proxy_schemes(args.include_deferred_https_proxy), ('http',))
+        args = fixture.parse_arguments(['probe.exe', '--include-deferred-https-proxy'])
+        self.assertEqual(fixture.proxy_schemes(args.include_deferred_https_proxy), ('http', 'https'))
+
     def test_denial_observes_one_connect_and_does_not_open_upstream(self):
         with fixture.connect_proxy(('127.0.0.1', 9), deny=True) as proxy:
             with socket.create_connection(proxy.server_address, timeout=3) as connection:

@@ -2,6 +2,7 @@
 from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import argparse
 import http.client
 import importlib.util
 import json
@@ -165,7 +166,19 @@ def cancel_request(process, pending, request_started):
         pass  # Expected: cancellation closes the loopback connection.
 
 
-def main(executable):
+def parse_arguments(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('executable', type=Path)
+    parser.add_argument('--include-deferred-https-proxy', action='store_true',
+                        help='Also validate deferred HTTPS-proxy to HTTPS-origin support')
+    return parser.parse_args(argv)
+
+
+def proxy_schemes(include_deferred=False):
+    return ('http', 'https') if include_deferred else ('http',)
+
+
+def main(executable, *, include_deferred_https_proxy=False):
     records = []
     release_stream, request_started = threading.Event(), threading.Event()
 
@@ -331,7 +344,8 @@ def main(executable):
         tls_thread.start()
         try:
             target = ("127.0.0.1", tls_server.server_port)
-            for scheme, deny in (("http", False), ("http", True), ("https", False), ("https", True)):
+            for scheme, deny in ((scheme, deny) for scheme in proxy_schemes(include_deferred_https_proxy)
+                                 for deny in (False, True)):
                 with connect_proxy(target, deny=deny, authorization="Basic dXNlcjpwQHNz",
                                    tls_context=tls_context if scheme == "https" else None) as proxy:
                     env = proxy_environment(f"{scheme}://user:p%40ss@127.0.0.1:{proxy.server_address[1]}")
@@ -349,23 +363,24 @@ def main(executable):
                         assert not getattr(tls_server, "proxy_credentials_seen", False), "Proxy credentials reached origin"
                         stdout, stderr = process.communicate("stop\n", timeout=5)
                         assert process.returncode == 0 and stdout.strip() == ("E_NETWORK" if deny else "") and not stderr.strip()
-            for certificate, proxy_host in (("valid-test-cert.pem", "localhost"),
-                                            ("expired-test-cert.pem", "127.0.0.1"),
-                                            ("untrusted-test-cert.pem", "127.0.0.1")):
-                rejected_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-                rejected_context.load_cert_chain(certificates / certificate,
-                                                 certificates / "untrusted-test-key.pem")
-                before = len(records)
-                with connect_proxy(target, tls_context=rejected_context) as proxy:
-                    env = proxy_environment(f"https://user:p%40ss@{proxy_host}:{proxy.server_address[1]}")
-                    with bridge(executable, f"https://127.0.0.1:{tls_server.server_port}/base/",
-                                certificates / "expired-test-ca.pem", env=env) as (process, url):
-                        assert request(url)[0] == 502
-                        stdout, stderr = process.communicate("stop\n", timeout=5)
-                        assert process.returncode == 0 and stdout.strip() == "E_GATEWAY_TLS" and not stderr.strip()
-                assert proxy.connections == proxy.tls_failures == 1
-                assert proxy.tls_handshakes == proxy.tunnels == 0 and not proxy.started.is_set()
-                assert len(records) == before, "Invalid proxy TLS contacted origin"
+            if include_deferred_https_proxy:
+                for certificate, proxy_host in (("valid-test-cert.pem", "localhost"),
+                                                ("expired-test-cert.pem", "127.0.0.1"),
+                                                ("untrusted-test-cert.pem", "127.0.0.1")):
+                    rejected_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+                    rejected_context.load_cert_chain(certificates / certificate,
+                                                     certificates / "untrusted-test-key.pem")
+                    before = len(records)
+                    with connect_proxy(target, tls_context=rejected_context) as proxy:
+                        env = proxy_environment(f"https://user:p%40ss@{proxy_host}:{proxy.server_address[1]}")
+                        with bridge(executable, f"https://127.0.0.1:{tls_server.server_port}/base/",
+                                    certificates / "expired-test-ca.pem", env=env) as (process, url):
+                            assert request(url)[0] == 502
+                            stdout, stderr = process.communicate("stop\n", timeout=5)
+                            assert process.returncode == 0 and stdout.strip() == "E_GATEWAY_TLS" and not stderr.strip()
+                    assert proxy.connections == proxy.tls_failures == 1
+                    assert proxy.tls_handshakes == proxy.tunnels == 0 and not proxy.started.is_set()
+                    assert len(records) == before, "Invalid proxy TLS contacted origin"
             with connect_proxy(target) as proxy:
                 env = proxy_environment(f"http://127.0.0.1:{proxy.server_address[1]}",
                                         f"127.0.0.1:{tls_server.server_port}")
@@ -383,7 +398,7 @@ def main(executable):
                     assert proxy.connections == proxy.tunnels == 1 and len(records) == before
                     stdout, stderr = process.communicate("stop\n", timeout=5)
                     assert process.returncode == 0 and stdout.strip() == "E_GATEWAY_TLS" and not stderr.strip()
-            for scheme in ("http", "https"):
+            for scheme in proxy_schemes(include_deferred_https_proxy):
                 with connect_proxy(target, stall=True,
                                    tls_context=tls_context if scheme == "https" else None) as proxy:
                     env = proxy_environment(f"{scheme}://127.0.0.1:{proxy.server_address[1]}")
@@ -392,6 +407,8 @@ def main(executable):
                         with ThreadPoolExecutor(max_workers=1) as pool:
                             pending = pool.submit(request, url)
                             cancel_request(process, pending, proxy.started)
+            if not include_deferred_https_proxy:
+                print("DEFERRED (not a pass): HTTPS proxy to HTTPS API; enable --include-deferred-https-proxy to test")
             print("PASS: actual HTTPS CONNECT, proxy auth isolation, denial without fallback, scoped bypass, TLS rejection and cancellation")
             with bridge(executable, f"https://127.0.0.1:{tls_server.server_port}/base/",
                         certificates / "expired-test-ca.pem") as (process, url):
@@ -452,4 +469,5 @@ def main(executable):
 
 
 if __name__ == "__main__":
-    main(Path(sys.argv[1]).resolve())
+    args = parse_arguments()
+    main(args.executable.resolve(), include_deferred_https_proxy=args.include_deferred_https_proxy)

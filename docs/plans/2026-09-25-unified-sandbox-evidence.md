@@ -4315,3 +4315,18 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   CONNECT tests are the acceptance tests. Native GREEN remains pending CI; local
   Python tests alone cannot prove Schannel nesting. HTTP origin through HTTPS
   proxy remains a separate missing case. Independent Release is not complete.
+
+### 2026-10-03 Release test selection after explicit proxy deferral
+
+- Added an explicit `--include-deferred-https-proxy` native fixture option. The
+  default release invocation retains HTTP-proxy CONNECT positives/407 rejection,
+  scoped bypass, origin certificate rejection and cancellation. HTTPS-proxy to
+  HTTPS-origin cases remain available with the option; default output labels them
+  DEFERRED (not a pass). No production trust or error policy changed.
+- TDD: new default/opt-in selection test failed on missing `parse_arguments`;
+  after implementation, Python suite passed 176 tests (5 platform skips).
+- Prior run `37094824983`, job `111122495117`, progressed beyond the native gateway
+  tests but failed subagent integration with E_PROTOCOL_ORDER and a second init
+  after task_notification. This remains a real release blocker independent of
+  the deferred proxy combination. Full run and new scoped native CI still need
+  verification; no Release completion claim.
