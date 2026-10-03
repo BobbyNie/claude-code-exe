@@ -49,6 +49,8 @@ class GatewayBridge {
             if (status == WINHTTP_CALLBACK_STATUS_HANDLE_CLOSING) { SetEvent(self.closed); return; }
             if (status == WINHTTP_CALLBACK_STATUS_REQUEST_ERROR) {
                 self.error.store(static_cast<WINHTTP_ASYNC_RESULT*>(info)->dwError);
+            } else if (status == WINHTTP_CALLBACK_STATUS_DATA_AVAILABLE) {
+                self.count.store(*static_cast<DWORD*>(info));
             } else if (status == WINHTTP_CALLBACK_STATUS_READ_COMPLETE) {
                 self.count.store(size);
             } else if (status != WINHTTP_CALLBACK_STATUS_SENDREQUEST_COMPLETE &&
@@ -141,7 +143,7 @@ class GatewayBridge {
         if (!WinHttpSetOption(operation.request, WINHTTP_OPTION_DISABLE_FEATURE, &disabled, sizeof(disabled)) ||
             !WinHttpSetOption(operation.request, WINHTTP_OPTION_AUTOLOGON_POLICY, &logon, sizeof(logon)))
             throw std::runtime_error("E_NETWORK");
-        std::wstring headers = L"Accept-Encoding: identity\r\n";
+        std::wstring headers = L"Accept-Encoding: identity\r\nConnection: close\r\n";
         for (const auto& header : incoming.headers)
             headers += Wide(header.first) + L": " + Wide(header.second) + L"\r\n";
         auto failed = [&] {
@@ -168,7 +170,15 @@ class GatewayBridge {
         if (!Send(client, response)) return;
         std::array<char, 16384> buffer{};
         while (!stopping.load()) {
-            if (!operation.Await(WinHttpReadData(operation.request, buffer.data(), static_cast<DWORD>(buffer.size()), nullptr), stopping)) {
+            // ReadData can wait to fill its requested length. Query the available
+            // bytes first so an SSE record is forwarded before the next arrives.
+            if (!operation.Await(WinHttpQueryDataAvailable(operation.request, nullptr), stopping)) {
+                Failure(operation.error.load()); return;
+            }
+            const DWORD available = operation.count.load();
+            if (!available) return;
+            const DWORD wanted = (std::min)(available, static_cast<DWORD>(buffer.size()));
+            if (!operation.Await(WinHttpReadData(operation.request, buffer.data(), wanted, nullptr), stopping)) {
                 Failure(operation.error.load()); return;
             }
             const DWORD read = operation.count.load();

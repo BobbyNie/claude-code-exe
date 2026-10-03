@@ -3805,3 +3805,15 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - HTTPS still follows the unchanged engine path in this slice. Custom-CA parity,
   request chunked framing and proxy configuration remain implementation work;
   this slice is not a completed transport, full acceptance or a release.
+
+### 2026-10-03 — native HTTP streaming regression (Windows RED)
+
+- Run37082092196 failed in both Build jobs at the required native bridge probe:
+  the first SSE record was not delivered before the upstream awaited its consumer.
+  This is a transport buffering failure, not billing. Engine acceptance was not reached.
+- Preserve the original five-second streaming assertion. Query asynchronously
+  available response bytes before reading, rather than requesting a full 16KiB.
+  The callback retains the available-byte count. Disable upstream connection reuse
+  for the per-request session using Connection: close.
+- Updated Windows probe cross-compiles successfully; Windows runtime GREEN is
+  pending the new commit's CI. This is not TLS acceptance or release completion.
