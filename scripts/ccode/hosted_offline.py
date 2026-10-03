@@ -17,6 +17,18 @@ import time
 import uuid
 
 
+def run_phase(name, action, *args, **kwargs):
+    # Only constant stage labels reach public logs; no command output or identity.
+    allowed = {'host-check', 'admin-check', 'adapter-discovery', 'adapter-validation',
+               'disconnect', 'acceptance', 'restore'}
+    if name not in allowed:
+        raise ValueError('E_HOSTED_OFFLINE_PHASE')
+    print(f'OFFLINE {name}: begin', flush=True)
+    result = action(*args, **kwargs)
+    print(f'OFFLINE {name}: complete', flush=True)
+    return result
+
+
 def require_host(platform, environment):
     if (platform != 'win32' or environment.get('GITHUB_ACTIONS') != 'true'
             or environment.get('RUNNER_ENVIRONMENT') != 'github-hosted'):
@@ -95,17 +107,17 @@ def recover(state_path):
 
 
 def execute(args):
-    require_host(sys.platform, os.environ)
+    run_phase('host-check', require_host, sys.platform, os.environ)
     if args.recover:
         recover(args.recover)
         return
-    powershell("$p=[Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent()); "
+    run_phase('admin-check', powershell, "$p=[Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent()); "
                "if (-not $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'admin required' }")
-    raw = powershell("$a=@(Get-NetAdapter -IncludeHidden | Where-Object { "
+    raw = run_phase('adapter-discovery', powershell, "$a=@(Get-NetAdapter -IncludeHidden | Where-Object { "
                      "$_.Status -eq 'Up' -and $_.ifIndex -ne 1 -and "
                      "$_.Name -notmatch '(?i)loopback' -and $_.InterfaceDescription -notmatch '(?i)loopback' } | "
                      "ForEach-Object { $_.InterfaceGuid.ToString().ToLowerInvariant() }); ConvertTo-Json -InputObject $a -Compress")
-    ids = adapter_ids(json.loads(raw))
+    ids = run_phase('adapter-validation', lambda: adapter_ids(json.loads(raw)))
     evidence = args.evidence.resolve()
     evidence.parent.mkdir(parents=True, exist_ok=True)
     if evidence.exists():
@@ -142,9 +154,10 @@ def execute(args):
                     raise RuntimeError('E_HOSTED_OFFLINE_ACCEPTANCE')
             def restore():
                 nonlocal restored
-                network(ids, True)
+                run_phase('restore', network, ids, True)
                 restored = True
-            isolated_trial(lambda: network(ids, False), trial, restore)
+            isolated_trial(lambda: run_phase('disconnect', network, ids, False),
+                           lambda: run_phase('acceptance', trial), restore)
             if state.with_suffix('.recovered').exists() or watchdog.poll() is not None:
                 raise RuntimeError('E_HOSTED_OFFLINE_RECOVERY_INTERVENED')
             print('PASS: isolated hosted offline trial and adapter restoration')

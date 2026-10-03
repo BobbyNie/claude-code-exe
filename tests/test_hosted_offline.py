@@ -4,7 +4,10 @@ from pathlib import Path
 import unittest
 import tempfile
 import json
+import io
+from contextlib import redirect_stdout
 from unittest.mock import patch
+from types import SimpleNamespace
 
 spec = importlib.util.spec_from_file_location('hosted_offline',
     Path(__file__).resolve().parents[1] / 'scripts/ccode/hosted_offline.py')
@@ -13,6 +16,41 @@ spec.loader.exec_module(module)
 
 
 class HostedOfflineTests(unittest.TestCase):
+    def test_phase_diagnostics_are_fixed_labels_and_never_report_failed_phase_passed(self):
+        output = io.StringIO()
+        with redirect_stdout(output):
+            self.assertEqual(module.run_phase('adapter-discovery', lambda: 'private value'),
+                             'private value')
+        self.assertEqual(output.getvalue(),
+                         'OFFLINE adapter-discovery: begin\nOFFLINE adapter-discovery: complete\n')
+        output = io.StringIO()
+        def fail():
+            raise RuntimeError('private adapter and credentials')
+        with redirect_stdout(output), self.assertRaises(RuntimeError):
+            module.run_phase('disconnect', fail)
+        self.assertEqual(output.getvalue(), 'OFFLINE disconnect: begin\n')
+        output = io.StringIO()
+        with patch.object(module, 'network') as action:
+            with redirect_stdout(output), self.assertRaises(ValueError):
+                module.run_phase('private injected label', action)
+            action.assert_not_called()
+        self.assertEqual(output.getvalue(), '')
+
+    def test_execute_locates_bad_adapter_inventory_without_disclosing_it(self):
+        output = io.StringIO()
+        with patch.object(module.sys, 'platform', 'win32'), patch.dict(module.os.environ,
+                GITHUB_ACTIONS='true', RUNNER_ENVIRONMENT='github-hosted'), \
+                patch.object(module, 'powershell', side_effect=['', '["private-adapter"]']), \
+                patch.object(module, 'network') as network, redirect_stdout(output):
+            with self.assertRaises(ValueError):
+                module.execute(SimpleNamespace(recover=None))
+            network.assert_not_called()
+        self.assertEqual(output.getvalue().splitlines(), [
+            'OFFLINE host-check: begin', 'OFFLINE host-check: complete',
+            'OFFLINE admin-check: begin', 'OFFLINE admin-check: complete',
+            'OFFLINE adapter-discovery: begin', 'OFFLINE adapter-discovery: complete',
+            'OFFLINE adapter-validation: begin'])
+
     def test_success_disconnects_before_trial_and_restores_before_returning(self):
         events = []
         module.isolated_trial(lambda: events.append('disable'),
