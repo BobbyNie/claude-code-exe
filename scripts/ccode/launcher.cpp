@@ -470,7 +470,8 @@ int RunTurn(const fs::path& module, const fs::path& payload, const fs::path& dat
     auto sessionLock = AcquireFileLock(sessionLockPath, false, 0, "E_SESSION_BUSY", "E_SESSION_LOCK_PATH");
     std::unique_ptr<ccode::GatewayBridge> gateway;
     const auto upstream = Env(L"A_BASE_URL");
-    if (ccode::StartsWithInsensitive(upstream, L"http://"))
+    if (ccode::StartsWithInsensitive(upstream, L"http://") ||
+        (ccode::StartsWithInsensitive(upstream, L"https://") && Env(L"NODE_EXTRA_CA_CERTS").empty()))
         gateway = std::make_unique<ccode::GatewayBridge>(upstream);
     auto environment = ChildEnvironment(profile, interactive, gateway ? gateway->Url() : std::wstring());
     Json mcp = {{"mcpServers", {{"ccode_permissions", {{"type", "stdio"},
@@ -570,7 +571,7 @@ int RunTurn(const fs::path& module, const fs::path& payload, const fs::path& dat
     if (gateway && !gateway->Error().empty()) {
         const auto error = gateway->Error();
         if (failureCode) *failureCode = error;
-        if (error == "E_GATEWAY_DNS") std::cerr << ccode::ProtocolFailureMessage(error);
+        if (error == "E_GATEWAY_DNS" || error == "E_GATEWAY_TLS") std::cerr << ccode::ProtocolFailureMessage(error);
         else std::cerr << "[E_NETWORK: gateway request failed]\n";
         return 65;
     }

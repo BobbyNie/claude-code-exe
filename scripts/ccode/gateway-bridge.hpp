@@ -28,7 +28,7 @@ class GatewayBridge {
         HANDLE ready = CreateEventW(nullptr, FALSE, FALSE, nullptr);
         HANDLE closed = CreateEventW(nullptr, TRUE, FALSE, nullptr);
         HINTERNET request = nullptr;
-        std::atomic<DWORD> error{0}, count{0};
+        std::atomic<DWORD> error{0}, count{0}, secureFailure{0};
         bool callbackInstalled = false;
         explicit Operation(HINTERNET handle) : request(handle) {
             if (!ready || !closed || !request) {
@@ -47,6 +47,9 @@ class GatewayBridge {
             if (!context) return;
             auto& self = *reinterpret_cast<Operation*>(context);
             if (status == WINHTTP_CALLBACK_STATUS_HANDLE_CLOSING) { SetEvent(self.closed); return; }
+            if (status == WINHTTP_CALLBACK_STATUS_SECURE_FAILURE) {
+                self.secureFailure.store(*static_cast<DWORD*>(info)); return;
+            }
             if (status == WINHTTP_CALLBACK_STATUS_REQUEST_ERROR) {
                 self.error.store(static_cast<WINHTTP_ASYNC_RESULT*>(info)->dwError);
             } else if (status == WINHTTP_CALLBACK_STATUS_DATA_AVAILABLE) {
@@ -62,7 +65,7 @@ class GatewayBridge {
             if (!WinHttpSetOption(request, WINHTTP_OPTION_CONTEXT_VALUE,
                     const_cast<DWORD_PTR*>(&context), sizeof(context)) ||
                 WinHttpSetStatusCallback(request, Callback,
-                    WINHTTP_CALLBACK_FLAG_ALL_COMPLETIONS | WINHTTP_CALLBACK_FLAG_HANDLES, 0) == WINHTTP_INVALID_STATUS_CALLBACK)
+                    WINHTTP_CALLBACK_FLAG_ALL_COMPLETIONS | WINHTTP_CALLBACK_FLAG_HANDLES | WINHTTP_CALLBACK_FLAG_SECURE_FAILURE, 0) == WINHTTP_INVALID_STATUS_CALLBACK)
                 throw std::runtime_error("E_NETWORK");
             callbackInstalled = true;
         }
@@ -85,6 +88,7 @@ class GatewayBridge {
     struct Worker { SOCKET socket; std::thread thread; std::atomic<bool> done{false}; };
     std::wstring host, basePath;
     INTERNET_PORT port = 0;
+    bool secure = false;
     std::string capability;
     SOCKET listener = INVALID_SOCKET;
     bool winsock = false;
@@ -110,11 +114,16 @@ class GatewayBridge {
         }
         return result;
     }
-    void Failure(DWORD code) {
+    void Failure(DWORD code, DWORD certificateFailure = 0) {
         if (stopping.load()) return;
         int expected = 0;
         // Only the OS result of this actual request supplies these causes.
-        const int value = code == ERROR_WINHTTP_NAME_NOT_RESOLVED ? 1 : 2;
+        const DWORD certificateFlags = WINHTTP_CALLBACK_STATUS_FLAG_INVALID_CA |
+            WINHTTP_CALLBACK_STATUS_FLAG_CERT_CN_INVALID | WINHTTP_CALLBACK_STATUS_FLAG_CERT_DATE_INVALID |
+            WINHTTP_CALLBACK_STATUS_FLAG_CERT_REVOKED | WINHTTP_CALLBACK_STATUS_FLAG_CERT_WRONG_USAGE |
+            WINHTTP_CALLBACK_STATUS_FLAG_CERT_REV_FAILED | WINHTTP_CALLBACK_STATUS_FLAG_INVALID_CERT;
+        const int value = code == ERROR_WINHTTP_NAME_NOT_RESOLVED ? 1 :
+            code == ERROR_WINHTTP_SECURE_FAILURE && (certificateFailure & certificateFlags) ? 3 : 2;
         failure.compare_exchange_strong(expected, value);
     }
     bool Send(SOCKET socket, const char* bytes, size_t length) {
@@ -136,7 +145,7 @@ class GatewayBridge {
         if (!connection.value) throw std::runtime_error("E_NETWORK");
         const auto target = basePath + Wide(incoming.target);
         Operation operation(WinHttpOpenRequest(connection.value, Wide(incoming.method).c_str(), target.c_str(),
-            L"HTTP/1.1", WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_ESCAPE_DISABLE));
+            L"HTTP/1.1", WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_ESCAPE_DISABLE | (secure ? WINHTTP_FLAG_SECURE : 0)));
         operation.Install();
         DWORD disabled = WINHTTP_DISABLE_COOKIES | WINHTTP_DISABLE_AUTHENTICATION | WINHTTP_DISABLE_REDIRECTS;
         DWORD logon = WINHTTP_AUTOLOGON_SECURITY_LEVEL_HIGH;
@@ -147,7 +156,7 @@ class GatewayBridge {
         for (const auto& header : incoming.headers)
             headers += Wide(header.first) + L": " + Wide(header.second) + L"\r\n";
         auto failed = [&] {
-            Failure(operation.error.load());
+            Failure(operation.error.load(), operation.secureFailure.load());
             Send(client, "HTTP/1.1 502 Gateway Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
         };
         if (!operation.Await(WinHttpSendRequest(operation.request, headers.c_str(), static_cast<DWORD>(headers.size()),
@@ -233,16 +242,17 @@ class GatewayBridge {
         }
     }
 public:
-    // First integration slice is HTTP only. HTTPS remains on the unmodified
-    // engine until native certificate/custom-CA parity is tested and integrated.
+    // Native OS trust for HTTPS. Explicit extra-CA configurations remain on the
+    // engine route until scoped Schannel trust is integrated; never ignore TLS errors.
     explicit GatewayBridge(const std::wstring& upstream) {
         URL_COMPONENTS parts{}; parts.dwStructSize = sizeof(parts);
         parts.dwHostNameLength = parts.dwUrlPathLength = parts.dwExtraInfoLength =
             parts.dwUserNameLength = parts.dwPasswordLength = static_cast<DWORD>(-1);
         if (!WinHttpCrackUrl(upstream.c_str(), static_cast<DWORD>(upstream.size()), 0, &parts) ||
-            parts.nScheme != INTERNET_SCHEME_HTTP || !parts.dwHostNameLength ||
+            (parts.nScheme != INTERNET_SCHEME_HTTP && parts.nScheme != INTERNET_SCHEME_HTTPS) || !parts.dwHostNameLength ||
             parts.dwUserNameLength || parts.dwPasswordLength || parts.dwExtraInfoLength)
             throw std::runtime_error("E_GATEWAY");
+        secure = parts.nScheme == INTERNET_SCHEME_HTTPS;
         host.assign(parts.lpszHostName, parts.dwHostNameLength); port = parts.nPort;
         if (parts.dwUrlPathLength) basePath.assign(parts.lpszUrlPath, parts.dwUrlPathLength);
         while (!basePath.empty() && basePath.back() == L'/') basePath.pop_back();
@@ -273,7 +283,7 @@ public:
     GatewayBridge(const GatewayBridge&) = delete;
     GatewayBridge& operator=(const GatewayBridge&) = delete;
     std::wstring Url() const { return L"http://127.0.0.1:" + std::to_wstring(localPort) + Wide(capability); }
-    std::string Error() const { const int code = failure.load(); return code == 1 ? "E_GATEWAY_DNS" : code == 2 ? "E_NETWORK" : ""; }
+    std::string Error() const { const int code = failure.load(); return code == 1 ? "E_GATEWAY_DNS" : code == 2 ? "E_NETWORK" : code == 3 ? "E_GATEWAY_TLS" : ""; }
     void Stop() noexcept {
         if (stopping.exchange(true)) return;
         if (listener != INVALID_SOCKET) { closesocket(listener); }

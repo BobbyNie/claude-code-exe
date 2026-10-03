@@ -3877,3 +3877,20 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   accepted, and every native query must succeed. No cleanup errors ignored.
 - Portable process-tree tests pass locally; Windows rerun on a new commit is
   required to verify the native synchronization (no unchanged CI rerun).
+
+### 2026-10-03 — system-trust HTTPS integration slice
+
+- Run37082623497 both real-engine DNS gates remain RED: their configured URL
+  is HTTPS and the prior HTTP-only bridge was deliberately not used. Keep that
+  HTTPS fixture unchanged; route default-trust HTTPS through native WinHTTP.
+- Enable WINHTTP_FLAG_SECURE with normal OS certificate validation. Only native
+  secure-failure certificate flags classify E_GATEWAY_TLS; generic handshake/
+  transport failures are not guessed to be certificate failures. No ignore flags.
+- Add real HTTPS DNS and untrusted-handshake probe cases requiring zero HTTP
+  requests, zero completed untrusted handshakes and exact neutral errors.
+  Existing Windows DNS RED motivates this integration; runtime GREEN is pending.
+- Explicit NODE_EXTRA_CA_CERTS still selects the original engine path until
+  native Schannel custom-CA integration is ready. This preserves explicit trust
+  rather than silently discarding it; expiration acceptance remains incomplete.
+- Native probe cross-compiles; Python regression 161 tests OK, 5 skipped.
+  Neither the policy helper nor this default-trust slice completes TLS acceptance.

@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import http.client
+import importlib.util
 from pathlib import Path
 import subprocess
 import sys
@@ -119,6 +120,21 @@ def main(executable):
             stdout, stderr = process.communicate("stop\n", timeout=5)
             assert process.returncode == 0 and not stdout.strip() and not stderr.strip()
         with bridge(executable, "http://ccode-native-dns.invalid") as (process, url):
+            assert request(url)[0] == 502
+            stdout, stderr = process.communicate("stop\n", timeout=5)
+            assert process.returncode == 0 and stdout.strip() == "E_GATEWAY_DNS" and not stderr.strip()
+        fixture_spec = importlib.util.spec_from_file_location(
+            "gateway_tls_fixture", Path(__file__).with_name("gateway-integration.py"))
+        fixture = importlib.util.module_from_spec(fixture_spec)
+        fixture_spec.loader.exec_module(fixture)
+        with fixture.untrusted_tls_endpoint() as endpoint:
+            with bridge(executable, f"https://127.0.0.1:{endpoint.server_port}") as (process, url):
+                assert request(url)[0] == 502
+                stdout, stderr = process.communicate("stop\n", timeout=5)
+                assert process.returncode == 0 and stdout.strip() == "E_GATEWAY_TLS" and not stderr.strip()
+                assert endpoint.handshake_failed.wait(5), "Untrusted TLS handshake was not rejected"
+                assert endpoint.http_requests == 0 and endpoint.tls_handshakes_completed == 0
+        with bridge(executable, "https://ccode-native-dns.invalid") as (process, url):
             assert request(url)[0] == 502
             stdout, stderr = process.communicate("stop\n", timeout=5)
             assert process.returncode == 0 and stdout.strip() == "E_GATEWAY_DNS" and not stderr.strip()

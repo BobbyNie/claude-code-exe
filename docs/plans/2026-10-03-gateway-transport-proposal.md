@@ -50,3 +50,11 @@ HANDLE_CLOSING callback，再回收 socket／threads。原始 engine bytes 不�
   再核實正式候選／簽章及剩餘完整矩陣。這些未完成項不可由 HTTP slice 推論通過。
 
 方案批准不是實作／驗收通過；不移除任何現有失敗 gate，亦不聲稱 Release 已完成。
+
+### 2026-10-03 後續切片
+
+HTTP 的真實 streaming／chunked Windows probe 已通過。下一提交接入 WinHTTP
+系統信任 HTTPS（不設 ignore flags），從原生 certificate failure flags 分類中性錯誤。
+若設定 NODE_EXTRA_CA_CERTS，暫時仍走原 engine，不能把這條路徑當成 expiry 已修好。
+記憶體限定 CA policy 已增加 Windows 測試，但尚未接到 Schannel 真實連線；
+完整自訂 CA 正反例、proxy parity 及發布矩陣仍屬未完成事項。
