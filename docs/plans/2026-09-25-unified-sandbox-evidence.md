@@ -4245,3 +4245,17 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   separately counting outer TLS handshakes. Production still rejects HTTPS proxy
   URLs; that requirement is expected RED, not an implemented feature. The earlier
   HTTP proxy failure may stop execution before this new assertion is reached.
+
+### 2026-10-03 — named HTTP proxy implicit bypass RED
+
+- Run37093632561 /36c381d neutral diagnostic identifies HTTP status200,
+  proxy_connections0, proxy_tunnels0, origin_requests1: the request reached the
+  loopback origin directly despite an explicitly selected proxy and empty
+  NO_PROXY. This is routing failure, not a407 parsing failure or billing.
+- Request suppression of implicit loopback bypass (`<-loopback>`) only for the
+  already selected named WinHTTP proxy. Explicit caller NO_PROXY matching remains
+  in SelectGatewayProxy and continues to choose direct routing when applicable.
+  Child-to-private-bridge exclusion is unchanged. No blanket bypass or retry.
+- This is a targeted correction against the existing actual Windows RED. Its
+  native GREEN is pending; do not infer support from the bypass string alone.
+  HTTPS-proxy nesting tests are still expected to fail until implemented.

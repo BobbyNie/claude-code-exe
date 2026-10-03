@@ -180,7 +180,10 @@ class GatewayBridge {
                                        ":" + std::to_string(proxy.port));
         InternetHandle session(WinHttpOpen(L"ccode", proxy.active() ? WINHTTP_ACCESS_TYPE_NAMED_PROXY :
             configuredProxyPolicy ? WINHTTP_ACCESS_TYPE_NO_PROXY : WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
-            proxy.active() ? proxyAddress.c_str() : WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, WINHTTP_FLAG_ASYNC));
+            proxy.active() ? proxyAddress.c_str() : WINHTTP_NO_PROXY_NAME,
+            // Selection already applied the caller's NO_PROXY policy. Do not
+            // add WinHTTP's implicit loopback bypass to an explicit proxy route.
+            proxy.active() ? L"<-loopback>" : WINHTTP_NO_PROXY_BYPASS, WINHTTP_FLAG_ASYNC));
         if (!session.value || !WinHttpSetTimeouts(session.value, 10000, 10000, 10000, 600000))
             throw std::runtime_error("E_NETWORK");
         InternetHandle connection(WinHttpConnect(session.value, host.c_str(), port, 0));
