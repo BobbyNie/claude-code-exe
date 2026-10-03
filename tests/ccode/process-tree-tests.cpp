@@ -20,6 +20,13 @@ static void NativeDescendantTest() {
     DWORD code = 1; assert(GetExitCodeProcess(parent.hProcess, &code) && code == 0);
     JOBOBJECT_BASIC_ACCOUNTING_INFORMATION info{};
     assert(QueryInformationJobObject(job, JobObjectBasicAccountingInformation, &info, sizeof(info), nullptr));
+    // A signalled root handle can precede the job's accounting update. Wait
+    // for that update, not for the descendant to exit; zero remains a failure.
+    const auto accountingDeadline = GetTickCount64() + 5000;
+    while (info.ActiveProcesses > 1 && GetTickCount64() < accountingDeadline) {
+        Sleep(10);
+        assert(QueryInformationJobObject(job, JobObjectBasicAccountingInformation, &info, sizeof(info), nullptr));
+    }
     assert(info.ActiveProcesses == 1); // orphaned descendant survives root exit
     ccode::StopNativeProcessTree(job, 0);
     assert(QueryInformationJobObject(job, JobObjectBasicAccountingInformation, &info, sizeof(info), nullptr));

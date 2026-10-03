@@ -3866,3 +3866,14 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   add the same memory store to the chain engine additional stores. No ignore
   flags, root installation, time override or weakened assertion. Cross-compile
   with warnings-as-errors passes; Windows runtime verification remains pending.
+
+### 2026-10-03 — native process-tree fixture accounting synchronization
+
+- Run37083118730 test (2.1.282) fails before gateway tests at the exact
+  ActiveProcesses==1 assertion after the parent handle is signalled. Waiting
+  on the handle alone does not synchronize the separate job accounting query.
+- Retain exactly-one-live-descendant and exactly-zero-after-cleanup assertions.
+  Allow at most five seconds for accounting above one to settle; zero is never
+  accepted, and every native query must succeed. No cleanup errors ignored.
+- Portable process-tree tests pass locally; Windows rerun on a new commit is
+  required to verify the native synchronization (no unchanged CI rerun).
