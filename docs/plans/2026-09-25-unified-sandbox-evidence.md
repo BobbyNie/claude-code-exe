@@ -4491,3 +4491,18 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - Diagnostic regressions were RED before implementation; GREEN: 194 local tests,
   5 existing platform skips. Native localization on the new commit is pending.
   HTTPS-proxy-to-HTTPS remains deferred, not passed; independent Release unpublished.
+
+### 2026-10-03 HTTP proxy denial fixture request-body race
+
+- Run `37099380162`, 2.1.282 runtime job `111135736423`, failed the mandatory
+  HTTP forward-proxy denial assertion: status 502 instead of 407, one proxy
+  connection, zero tunnels and zero origin requests. Do not accept 502 as 407.
+- The shared CONNECT denial fixture also receives HTTP POSTs but closed after
+  reading headers only. A delayed-body local regression is RED: the fixture
+  responds/closes before consuming the declared body, risking a TCP reset that
+  masks the 407. This reproduces a fixture defect, not yet the native root cause.
+- Consume at most 64 KiB of declared request body with the existing finite socket
+  timeout before denial. Duplicate/invalid lengths and transfer encoding fail the
+  fixture; no upstream connection is opened. CONNECT without a body is unchanged.
+- GREEN: 195 local tests, 5 existing platform skips. Native confirmation pending;
+  no transport expectation, TLS gate or cleanup failure has been weakened.

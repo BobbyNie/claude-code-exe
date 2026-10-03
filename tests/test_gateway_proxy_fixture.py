@@ -74,6 +74,22 @@ class ProxyFixtureTests(unittest.TestCase):
         args = fixture.parse_arguments(['probe.exe', '--include-deferred-https-proxy'])
         self.assertEqual(fixture.proxy_schemes(args.include_deferred_https_proxy), ('http', 'https'))
 
+    def test_http_denial_consumes_delayed_body_before_closing_connection(self):
+        # A close with unread POST bytes can reset TCP and hide the 407 on Windows.
+        with fixture.connect_proxy(('127.0.0.1', 9), deny=True) as proxy:
+            with socket.create_connection(proxy.server_address, timeout=3) as connection:
+                connection.sendall(b'POST http://127.0.0.1:9/ HTTP/1.1\r\n'
+                                   b'Host: 127.0.0.1:9\r\nContent-Length: 7\r\n\r\n')
+                connection.settimeout(0.2)
+                with self.assertRaises(socket.timeout):
+                    connection.recv(4096)
+                connection.sendall(b'fixture')
+                connection.settimeout(3)
+                self.assertTrue(connection.recv(4096).startswith(b'HTTP/1.1 407 '))
+            self.assertEqual(proxy.connections, 1)
+            self.assertEqual(proxy.tunnels, 0)
+        self.assertFalse(proxy.worker.is_alive())
+
     def test_denial_observes_one_connect_and_does_not_open_upstream(self):
         with fixture.connect_proxy(('127.0.0.1', 9), deny=True) as proxy:
             with socket.create_connection(proxy.server_address, timeout=3) as connection:

@@ -89,6 +89,23 @@ def connect_proxy(target, *, deny=False, authorization="", authority_host=None, 
                 assert self.server.stopped.wait(10), "Proxy stall fixture did not clean up"
                 return
             if deny or not valid:
+                # HTTP forward-proxy requests carry a body, unlike CONNECT.
+                # Closing with unread request bytes can reset TCP on Windows,
+                # discarding the 407 and turning this fixture into a network error.
+                lengths = [line.partition(":")[2].strip() for line in lines[1:]
+                           if line.partition(":")[0].lower() == "content-length"]
+                if any(line.partition(":")[0].lower() == "transfer-encoding" for line in lines[1:]):
+                    raise AssertionError("Unsupported denial fixture framing")
+                if len(lengths) > 1 or (lengths and not lengths[0].isascii()) or (lengths and not lengths[0].isdigit()):
+                    raise AssertionError("Invalid denial fixture length")
+                remaining = int(lengths[0]) if lengths else 0
+                if remaining > 65536:
+                    raise AssertionError("Denial fixture body limit exceeded")
+                while remaining:
+                    part = self.request.recv(min(remaining, 16384))
+                    if not part:
+                        raise AssertionError("Incomplete denial fixture body")
+                    remaining -= len(part)
                 self.request.sendall(b"HTTP/1.1 407 Proxy Authentication Required\r\nContent-Length: 0\r\n\r\n")
                 return
             with socket.create_connection(target, timeout=5) as upstream:
