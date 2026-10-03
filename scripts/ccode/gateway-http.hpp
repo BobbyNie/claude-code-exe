@@ -27,7 +27,7 @@ class GatewayRequestParser {
     std::string prefix, pending;
     GatewayRequest request;
     size_t length = 0;
-    bool headersRead = false, complete = false;
+    bool headersRead = false, complete = false, chunked = false;
     [[noreturn]] static void Reject() { throw std::runtime_error("E_GATEWAY"); }
     void Headers(const std::string& raw) {
         const auto lineEnd = raw.find("\r\n");
@@ -74,16 +74,47 @@ class GatewayRequestParser {
                     length = length * 10 + (c - '0');
                     if (length > BodyLimit) Reject();
                 }
-            } else if (name == "transfer-encoding" || name == "expect") Reject();
+            } else if (name == "transfer-encoding") {
+                if (chunked || GatewayLower(value) != "chunked") Reject();
+                chunked = true;
+            } else if (name == "expect") Reject();
             else if (name != "host" && name != "connection" && name != "accept-encoding" &&
                      name != "proxy-authorization" && name != "proxy-connection" &&
                      name != "keep-alive" && name != "te" && name != "trailer" && name != "upgrade")
                 request.headers.emplace_back(name, value);
         }
+        if (chunked && hasLength) Reject();
         request.headers.erase(std::remove_if(request.headers.begin(), request.headers.end(),
             [&](const auto& header) {
                 return std::find(connectionFields.begin(), connectionFields.end(), header.first) != connectionFields.end();
             }), request.headers.end());
+    }
+    bool Chunks() {
+        while (true) {
+            const auto end = pending.find("\r\n");
+            if (end == std::string::npos) { if (pending.size() > 8192) Reject(); return false; }
+            if (!end || end > 8192) Reject();
+            const auto line = pending.substr(0, end);
+            for (unsigned char ch : line) if (ch < 32 || ch >= 127) Reject();
+            const auto digits = line.substr(0, line.find(';'));
+            if (digits.empty()) Reject();
+            size_t size = 0;
+            for (unsigned char ch : digits) {
+                const auto index = std::string("0123456789abcdef").find(static_cast<char>(std::tolower(ch)));
+                if (index == std::string::npos || size > BodyLimit / 16) Reject();
+                size = size * 16 + index;
+                if (size > BodyLimit - request.body.size()) Reject();
+            }
+            if (pending.size() < end + 2 + size + 2) return false;
+            // No trailers: they could override authenticated/framing headers.
+            if (pending.compare(end + 2 + size, 2, "\r\n") != 0) Reject();
+            request.body.append(pending, end + 2, size);
+            pending.erase(0, end + 2 + size + 2);
+            if (!size) {
+                if (!pending.empty()) Reject();
+                return complete = true;
+            }
+        }
     }
 public:
     explicit GatewayRequestParser(std::string capabilityPrefix) : prefix(std::move(capabilityPrefix)) {}
@@ -99,6 +130,7 @@ public:
             pending.erase(0, end + 4);
             headersRead = true;
         }
+        if (chunked) return Chunks();
         if (pending.size() > length) Reject();
         if (pending.size() < length) return false;
         request.body = std::move(pending);

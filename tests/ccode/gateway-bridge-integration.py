@@ -94,6 +94,15 @@ def main(executable):
             assert not records, "Unauthorized loopback request reached upstream"
             assert request(url) == (200, b'{"test":"private-body"}', "application/json")
             assert records == [("/base/echo", b'{"test":"private-body"}', "Bearer private-fixture-token")]
+            connection = http.client.HTTPConnection(url.hostname, url.port, timeout=5)
+            try:
+                connection.request("POST", url.path + "/echo", body=iter([b"abc", b"defg"]),
+                                   headers={"Authorization": "Bearer private-fixture-token"}, encode_chunked=True)
+                response = connection.getresponse()
+                assert response.status == 200 and response.read() == b"abcdefg"
+                assert records[-1] == ("/base/echo", b"abcdefg", "Bearer private-fixture-token")
+            finally:
+                connection.close()
             with ThreadPoolExecutor(max_workers=4) as pool:
                 results = list(pool.map(lambda _: request(url), range(4)))
             assert all(result[0] == 200 for result in results)

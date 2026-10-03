@@ -3817,3 +3817,13 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   for the per-request session using Connection: close.
 - Updated Windows probe cross-compiles successfully; Windows runtime GREEN is
   pending the new commit's CI. This is not TLS acceptance or release completion.
+
+### 2026-10-03 — chunked request framing slice
+
+- Portable parser test first rejected a valid segmented chunked request (RED),
+  then passes with bounded chunk decoding (GREEN). Conflicting Content-Length,
+  duplicate/chained transfer encodings, oversized chunks, trailers and invalid
+  delimiters remain fail-closed. Header framing is not forwarded upstream.
+- Local clang C++17 contract suite passes. Add real Windows probe coverage for
+  chunked input preserving body and authorization through the upstream request;
+  its Windows execution remains pending CI, not asserted by portable tests.
