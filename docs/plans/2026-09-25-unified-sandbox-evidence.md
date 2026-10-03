@@ -3968,3 +3968,9 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   (RED). Implementation cross-compiles with warnings as errors for both policy
   suite and bridge probe. Native runtime GREEN is pending the pushed Windows run;
   compilation is not proof of handshake rejection. Assertions remain unchanged.
+
+- Run37086627808 stops in the new serialization control: the combined expired +
+  wrong-host case may correctly report Expired rather than generic Rejected.
+  Correct that test to require equality with the original certificate's decision
+  AND non-Trusted. The valid-leaf wrong-host case remains checked, and existing
+  real TLS handshake assertions are unchanged. Native integration not reached.

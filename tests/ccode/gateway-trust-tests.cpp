@@ -71,7 +71,11 @@ int wmain(int argc, wchar_t** argv) {
         const auto restored = ccode::GatewayTrust::DeserializePeer(blob);
         assert(CertCompareCertificate(X509_ASN_ENCODING, peer->pCertInfo, restored->pCertInfo));
         assert(issuer.Verify(restored.get(), L"127.0.0.1") == issuer.Verify(peer, L"127.0.0.1"));
-        assert(issuer.Verify(restored.get(), L"wrong.invalid") == ccode::GatewayCertificateResult::Rejected);
+        // A peer that is both expired and wrong-host may report expiry first.
+        // Serialization must preserve the original decision and never trust it.
+        const auto wrongHost = issuer.Verify(restored.get(), L"wrong.invalid");
+        assert(wrongHost == issuer.Verify(peer, L"wrong.invalid"));
+        assert(wrongHost != ccode::GatewayCertificateResult::Trusted);
     }
     auto unmarked = Serialize(valid.get(), ca.get(), false);
     for (auto bytes : {unmarked, std::vector<BYTE>{1, 2, 3}}) {
