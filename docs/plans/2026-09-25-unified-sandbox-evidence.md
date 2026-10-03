@@ -4134,3 +4134,27 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - Add snapshot-local `-text` attributes and restore the downloaded bytes. Compare
   both staged blobs against their respective original artifact ZIP members before
   committing. This repairs evidence storage only; no candidate code or CI rerun.
+
+### 2026-10-03 — bounded native HTTPS response trailers
+
+- Replace the blanket rejection of nonempty chunked response trailers with an
+  incremental parser: 8192 bytes per field line and 65536 bytes for the complete
+  trailer section, including delimiters. Keep trailer fields separate on the
+  wire, never merged into response headers. Reject framing, routing, authentication,
+  response-control/payload-processing fields and Connection-nominated fields.
+- RED: a valid response with X-Checksum and Server-Timing previously threw
+  E_NETWORK. GREEN: every two-part split, bytewise input, malformed/forbidden
+  fields, incomplete trailers, extra response bytes and aggregate limits pass.
+  An additional RED exposed a maximum-length line split between CR and LF;
+  corrected that boundary and retained its regression test.
+- Native Windows fixture now inspects actual HTTPS-to-loopback bytes for trailer
+  preservation, plus a forbidden Content-Length trailer with E_NETWORK and no
+  accepted complete message. This is pending hosted execution, not claimed passed.
+- Local C++ framing suite passes with AddressSanitizer/UndefinedBehaviorSanitizer;
+  Windows framing suite cross-compiles. Full Python regression:169 tests,5 platform
+  skips, no failures. Full gateway cross-compilation is unavailable in this local
+  MinGW: its headers lack existing GetAddrInfoExCancel/GetAddrInfoExOverlappedResult
+  declarations even with _WIN32_WINNT=0x0A00. No production workaround was introduced.
+- This slice addresses the native HTTPS response path only. Proxy parity, the
+  separate WinHTTP response path, full candidate acceptance and formal Release
+  gates remain open; no release or comprehensive transport parity claim.

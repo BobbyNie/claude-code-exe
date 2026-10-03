@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import subprocess
 import ssl
+import socket
 import sys
 import threading
 import time
@@ -52,6 +53,20 @@ def request(url, method="POST", suffix="/echo", body=b'{"test":"private-body"}',
         connection.close()
 
 
+def request_wire(url, suffix):
+    with socket.create_connection((url.hostname, url.port), timeout=5) as wire:
+        wire.sendall(("POST " + url.path + suffix + " HTTP/1.1\r\nHost: localhost\r\n"
+                      "Content-Length: 0\r\nConnection: close\r\n\r\n").encode("ascii"))
+        response_bytes = bytearray()
+        while True:
+            part = wire.recv(4096)
+            if not part:
+                break
+            response_bytes.extend(part)
+            assert len(response_bytes) < 65536
+        return bytes(response_bytes).split(b"\r\n\r\n", 1)
+
+
 def cancel_request(process, pending, request_started):
     assert request_started.wait(5), "Upstream request did not start before cancellation"
     start = time.monotonic()
@@ -88,6 +103,17 @@ def main(executable):
             if self.path.endswith("/stall"):
                 request_started.set()
                 release_stream.wait(15)
+                return
+            if self.path.endswith(("/trailers", "/forbidden-trailers")):
+                self.send_response(200)
+                self.send_header("Transfer-Encoding", "chunked")
+                self.send_header("Trailer", "X-Checksum")
+                self.end_headers()
+                self.wfile.write(b"3\r\nabc\r\n0\r\n")
+                self.wfile.flush()
+                self.wfile.write(b"Content-Length: 99\r\n\r\n" if self.path.endswith("/forbidden-trailers")
+                                 else b"X-Checksum: fixture\r\nServer-Timing: total;dur=1\r\n\r\n")
+                self.wfile.flush()
                 return
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream" if self.path.endswith("/stream") else "application/json")
@@ -206,6 +232,11 @@ def main(executable):
                 with ThreadPoolExecutor(max_workers=4) as pool:
                     responses = list(pool.map(lambda _: request(url), range(4)))
                 assert responses == [(200, b'{"test":"private-body"}', "application/json")] * 4
+                # Inspect the actual loopback wire: metadata stays in the trailer
+                # section, not merged into headers or discarded by the bridge.
+                header, body = request_wire(url, "/trailers")
+                assert b"X-Checksum: fixture" not in header
+                assert body == b"3\r\nabc\r\n0\r\nX-Checksum: fixture\r\nServer-Timing: total;dur=1\r\n\r\n"
                 release_stream.clear()
                 connection = http.client.HTTPConnection(url.hostname, url.port, timeout=5)
                 try:
@@ -218,6 +249,14 @@ def main(executable):
                     connection.close()
                 stdout, stderr = process.communicate("stop\n", timeout=5)
                 assert process.returncode == 0 and not stdout.strip() and not stderr.strip()
+            with bridge(executable, f"https://127.0.0.1:{tls_server.server_port}/base/",
+                        certificates / "expired-test-ca.pem") as (process, url):
+                header, body = request_wire(url, "/forbidden-trailers")
+                assert b"Content-Length: 99" not in body
+                assert header.startswith(b"HTTP/1.1 502 ") or (
+                    header.startswith(b"HTTP/1.1 200 ") and not body.endswith(b"\r\n\r\n"))
+                stdout, stderr = process.communicate("stop\n", timeout=5)
+                assert process.returncode == 0 and stdout.strip() == "E_NETWORK" and not stderr.strip()
             release_stream.clear()
             request_started.clear()
             with bridge(executable, f"https://127.0.0.1:{tls_server.server_port}/base/",

@@ -9,7 +9,8 @@ namespace ccode {
 class GatewayResponseFraming {
     enum class Mode { Header, Fixed, ChunkSize, ChunkBody, ChunkEnd, Trailers, Close, Complete } mode = Mode::Header;
     std::string pending;
-    size_t remaining = 0;
+    size_t remaining = 0, trailerBytes = 0;
+    std::vector<std::string> connectionFields;
     bool headOnly;
     [[noreturn]] static void Reject() { throw std::runtime_error("E_NETWORK"); }
     static size_t Decimal(const std::string& text) {
@@ -21,6 +22,30 @@ class GatewayResponseFraming {
         }
         return result;
     }
+    static std::string FieldName(const std::string& line) {
+        const auto colon = line.find(':');
+        if (colon == std::string::npos || !colon) Reject();
+        for (unsigned char ch : line.substr(0, colon))
+            if (!((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+                  (ch >= '0' && ch <= '9')) &&
+                std::string("!#$%&'*+-.^_`|~").find(static_cast<char>(ch)) == std::string::npos) Reject();
+        for (unsigned char ch : line.substr(colon + 1))
+            if ((ch < 32 && ch != '\t') || ch == 127) Reject();
+        return GatewayLower(line.substr(0, colon));
+    }
+    void Trailer(const std::string& line) {
+        const auto name = FieldName(line);
+        // Keep trailers separate on the wire. Never allow them to supply framing,
+        // routing, authentication, response-control or payload-processing fields.
+        for (const auto* forbidden : {"content-length", "transfer-encoding", "host",
+                "connection", "keep-alive", "proxy-connection", "te", "trailer", "upgrade",
+                "authorization", "proxy-authorization", "www-authenticate", "proxy-authenticate",
+                "authentication-info", "proxy-authentication-info", "cookie", "set-cookie",
+                "content-type", "content-encoding", "content-range", "content-location",
+                "location", "retry-after", "cache-control", "expires", "age", "vary"})
+            if (name == forbidden) Reject();
+        if (std::find(connectionFields.begin(), connectionFields.end(), name) != connectionFields.end()) Reject();
+    }
     void Header(const std::string& text) {
         const auto first = text.find("\r\n");
         const auto status = text.substr(0, first);
@@ -30,19 +55,26 @@ class GatewayResponseFraming {
         for (unsigned char ch : status) if (ch < 32 || ch == 127) Reject();
         const auto code = (status[9] - '0') * 100 + (status[10] - '0') * 10 + status[11] - '0';
         bool hasLength = false, chunked = false;
+        connectionFields.clear();
         size_t offset = first == std::string::npos ? text.size() : first + 2;
         while (offset < text.size()) {
             const auto end = text.find("\r\n", offset);
             const auto line = text.substr(offset, end == std::string::npos ? std::string::npos : end - offset);
             const auto colon = line.find(':');
-            if (colon == std::string::npos || !colon) Reject();
-            for (unsigned char ch : line.substr(0, colon))
-                if (!std::isalnum(ch) && std::string("!#$%&'*+-.^_`|~").find(static_cast<char>(ch)) == std::string::npos) Reject();
-            for (unsigned char ch : line.substr(colon + 1)) if ((ch < 32 && ch != '\t') || ch == 127) Reject();
-            const auto name = GatewayLower(line.substr(0, colon));
+            const auto name = FieldName(line);
             const auto begin = line.find_first_not_of(" \t", colon + 1);
             const auto last = line.find_last_not_of(" \t");
             const auto value = begin == std::string::npos ? std::string() : line.substr(begin, last - begin + 1);
+            if (name == "connection") {
+                size_t start = 0;
+                do {
+                    const auto comma = value.find(',', start);
+                    connectionFields.push_back(GatewayLower(GatewayTrim(value.substr(start,
+                        comma == std::string::npos ? std::string::npos : comma - start))));
+                    if (comma == std::string::npos) break;
+                    start = comma + 1;
+                } while (true);
+            }
             if (name == "content-length") {
                 if (hasLength) Reject();
                 hasLength = true; remaining = Decimal(value);
@@ -96,11 +128,17 @@ public:
                 if (pending.substr(0, 2) != "\r\n") Reject();
                 pending.erase(0, 2); mode = Mode::ChunkSize;
             } else {
-                // Trailer support is deliberately fail-closed for now; trailers
-                // must not override authentication or framing semantics.
-                if (pending.size() < 2) return false;
-                if (pending.substr(0, 2) != "\r\n") Reject();
-                pending.erase(0, 2); mode = Mode::Complete;
+                const auto end = pending.find("\r\n");
+                if (end == std::string::npos) {
+                    if (pending.size() > 8193 || (pending.size() == 8193 && pending.back() != '\r') ||
+                        pending.size() > 65536 - trailerBytes) Reject();
+                    return false;
+                }
+                if (end > 8192 || end + 2 > 65536 - trailerBytes) Reject();
+                trailerBytes += end + 2;
+                if (end) Trailer(pending.substr(0, end));
+                pending.erase(0, end + 2);
+                if (!end) mode = Mode::Complete;
             }
         }
         if (mode == Mode::Fixed) {
