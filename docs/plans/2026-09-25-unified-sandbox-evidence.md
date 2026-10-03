@@ -4108,3 +4108,20 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   five platform skips pass locally. Actual hosted provenance artifact is pending CI.
 - This is source/host evidence, not formal signer authorization, offline acceptance,
   redistribution approval or a release. Those requirements remain separate.
+
+### 2026-10-03 — hosted matrix green and preserved provenance artifacts
+
+- Run37090296989 /3321a2e3c22f9a1376e61fb697cb38e6fa540053 is completed/success:
+  both full engine jobs, both workspace-boundary jobs and cross-version succeed.
+  Predecessor Run37089849826 /9e377c6 also completed/success. Neither run reproduced
+  the intermittent order error; that does not prove its root cause eliminated.
+- Downloaded both hosted provenance artifacts, checked exact adapter/engine
+  identity and extracted/embedded hashes, and preserved the original JSON bytes at
+  docs/verification/run-37090296989/. Actual host is build26100 Server/x64 with
+  administrator token, accurately labeled under the user's hosted authorization.
+- Both native HTTPS concurrency/cancellation tests execute successfully. The
+  hosted provenance comparison and no-side-effects checks execute successfully.
+  See the snapshot README for executable SHA256 and the remaining release gates.
+- This docs-only preservation does not change candidate code and skips CI.
+  No unified Release is published; formal approvals and full-design requirements
+  remain open, not silently replaced by this successful regression matrix.

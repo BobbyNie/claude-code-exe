@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-10-03T02:38:05.565255+00:00",
+  "acceptanceTarget": "GitHub hosted Windows x64",
+  "environment": {
+    "acceptanceTarget": "GitHub hosted Windows x64",
+    "osMajor": 10,
+    "osMinor": 0,
+    "osBuild": 26100,
+    "windowsProductType": 3,
+    "architecture": "x64",
+    "processBits": 64,
+    "administratorToken": true
+  },
+  "packageExecutableSha256": "f65675911b3547b424c199f03d4de9f35cec15d9b57e58647c3c290be7fc8390",
+  "embeddedManifestSha256": "b48ea06251d66c8df3be26eea7122ad289f575df25502d614b65b452eae16c2d",
+  "extractedEngineSha256": "fc0e3af017705624b9e1bce913f72761864ff994804514da1f5e41380fca4484",
+  "extractedEngineSize": 242171040,
+  "manifest": {
+    "schemaVersion": 1,
+    "packageName": "ccode",
+    "packageVersion": "1.0",
+    "platform": "windows",
+    "architecture": "x64",
+    "adapterRevision": "3321a2e3c22f9a1376e61fb697cb38e6fa540053",
+    "engineVersion": "2.1.282",
+    "engineSha256": "fc0e3af017705624b9e1bce913f72761864ff994804514da1f5e41380fca4484",
+    "engineSize": 242171040,
+    "officialManifestUrl": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.282/manifest.json",
+    "officialManifestSha256": "041abb14aba47e7dd31f8ba83d8102e54b6350d099382cb1def7ab10add415ed",
+    "officialPayloadUrl": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.282/win32-x64/claude.exe"
+  }
+}
