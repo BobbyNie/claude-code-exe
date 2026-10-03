@@ -1,9 +1,20 @@
 #include "../../scripts/ccode/gateway-proxy.hpp"
 #include <cassert>
+#include <array>
 #include <iostream>
 
 int main() {
     using namespace ccode;
+    ValidateGatewayEnvironmentRead(1, 0, 0); // Existing, explicitly empty NO_PROXY.
+    ValidateGatewayEnvironmentRead(8, 7, 0);
+    for (const auto sample : {std::array<unsigned, 3>{1, 0, 203},
+                             std::array<unsigned, 3>{8, 8, 0},
+                             std::array<unsigned, 3>{8, 0, 0}}) {
+        bool rejected = false;
+        try { ValidateGatewayEnvironmentRead(sample[0], sample[1], sample[2]); }
+        catch (const std::runtime_error&) { rejected = true; }
+        assert(rejected);
+    }
     assert(!SelectGatewayProxy("api.example", 443, "", "", "").active());
     auto proxy = SelectGatewayProxy("api.example", 443,
         "http://user:p%40ss@proxy.example:8080/", "http://ignored.example", "");

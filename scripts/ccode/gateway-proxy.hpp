@@ -3,6 +3,10 @@
 
 namespace ccode {
 [[noreturn]] inline void RejectGatewayProxy() { throw std::runtime_error("E_NETWORK"); }
+// Validate the two-call Windows environment read without exposing its value.
+inline void ValidateGatewayEnvironmentRead(size_t capacity, size_t copied, unsigned error) {
+    if (copied >= capacity || (!copied && (capacity != 1 || error != 0))) RejectGatewayProxy();
+}
 inline unsigned short GatewayProxyPort(const std::string& text) {
     if (text.empty()) RejectGatewayProxy();
     unsigned value = 0;

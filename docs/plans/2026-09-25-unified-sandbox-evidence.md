@@ -4211,3 +4211,20 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   isolated offline evidence, signed standalone lifecycle/data safety, formal
   signer/pin and redistribution/notices approval. No independent unified Release
   is published or claimed complete by this slice.
+
+### 2026-10-03 — empty Windows proxy environment regression
+
+- Run37093076903 /0a289a6 reached native bridge fixture execution but both engine
+  jobs failed at the first proxy-configured bridge startup; CONNECT assertions
+  did not execute. Downstream artifact-dependent jobs cannot validate this build.
+- Inspection found the new environment reader rejected every zero-character
+  result, including an existing explicitly empty NO_PROXY with a one-character
+  capacity for its terminator. Extracting that exact check and exercising the
+  empty-success case reproduced RED (E_NETWORK) in the portable suite.
+- Accept only capacity1/copied0/error0 as a valid empty read. Clear LastError
+  before the actual Windows read; retain failure for disappearance, truncation
+  and unexpected size changes. Missing variables still use the prior first-call
+  empty return. No proxy URI, credential or environment value is logged.
+- GREEN: ASAN/UBSAN proxy suite and Windows cross-compilation. Actual Windows
+  startup/CONNECT GREEN remains pending the changed-code run; this is not an
+  unchanged rerun or a claim that all proxy cases now pass.

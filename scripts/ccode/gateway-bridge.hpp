@@ -341,8 +341,9 @@ public:
             if (!size) return std::string();
             if (size > 32768) throw std::runtime_error("E_NETWORK");
             std::vector<wchar_t> value(size);
+            SetLastError(ERROR_SUCCESS);
             const DWORD copied = GetEnvironmentVariableW(name, value.data(), size);
-            if (!copied || copied >= size) throw std::runtime_error("E_NETWORK");
+            ValidateGatewayEnvironmentRead(size, copied, GetLastError());
             return NarrowHeader(std::wstring(value.data(), copied));
         };
         // Windows environment names are case-insensitive. Values stay in memory.
