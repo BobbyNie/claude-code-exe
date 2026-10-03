@@ -88,9 +88,21 @@ class HostedOfflineTests(unittest.TestCase):
     def test_adapter_ids_must_be_unique_canonical_guids(self):
         value = '12345678-1234-1234-1234-123456789abc'
         self.assertEqual(module.adapter_ids([value]), [value])
-        for values in ([], ['private;command'], [value, value], 'not-a-list'):
+        self.assertEqual(module.adapter_ids(['{' + value.upper() + '}']), [value])
+        for values in ([], ['private;command'], [value, value], [value, '{' + value + '}'],
+                       ['{{' + value + '}}'], [value.replace('-', '')], [None], 'not-a-list'):
             with self.assertRaises(ValueError):
                 module.adapter_ids(values)
+
+    def test_network_selection_normalizes_windows_guid_for_disable_and_restore(self):
+        value = '12345678-1234-1234-1234-123456789abc'
+        for enable in (False, True):
+            with patch.object(module, 'powershell') as invoke:
+                module.network([value], enable)
+            script = invoke.call_args.args[0]
+            self.assertIn("([guid]$_.InterfaceGuid).ToString('D').ToLowerInvariant()", script)
+            self.assertNotIn('$_.InterfaceGuid.ToString()', script)
+            self.assertIn('if ($adapters.Count -ne $ids.Count)', script)
 
     def test_recovery_waits_for_done_or_restores_on_explicit_failure_signal(self):
         value = '12345678-1234-1234-1234-123456789abc'

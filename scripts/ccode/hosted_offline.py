@@ -40,9 +40,14 @@ def adapter_ids(values):
         raise ValueError('E_HOSTED_OFFLINE_ADAPTERS')
     result = []
     for value in values:
-        if not isinstance(value, str) or str(uuid.UUID(value)) != value.lower():
+        if not isinstance(value, str):
             raise ValueError('E_HOSTED_OFFLINE_ADAPTERS')
-        result.append(value.lower())
+        # Accept only the standard D or Windows B GUID representation, then
+        # compare normalized identities everywhere (including restoration).
+        canonical = str(uuid.UUID(value))
+        if value.lower() not in (canonical, '{' + canonical + '}'):
+            raise ValueError('E_HOSTED_OFFLINE_ADAPTERS')
+        result.append(canonical)
     if len(set(result)) != len(result):
         raise ValueError('E_HOSTED_OFFLINE_ADAPTERS')
     return result
@@ -74,13 +79,13 @@ def network(ids, enable):
     ids = adapter_ids(ids)
     literal = ','.join("'" + value + "'" for value in ids)
     selected = (f"$ids=@({literal}); $adapters=@(Get-NetAdapter -IncludeHidden | "
-                "Where-Object { $ids -contains $_.InterfaceGuid.ToString().ToLowerInvariant() }); "
+                "Where-Object { $ids -contains ([guid]$_.InterfaceGuid).ToString('D').ToLowerInvariant() }); "
                 "if ($adapters.Count -ne $ids.Count) { throw 'missing adapter' }; ")
     if enable:
         script = (selected + "$adapters | Enable-NetAdapter -Confirm:$false; "
                   "$deadline=[DateTime]::UtcNow.AddSeconds(20); do { "
                   "$up=@(Get-NetAdapter -IncludeHidden | Where-Object { "
-                  "$ids -contains $_.InterfaceGuid.ToString().ToLowerInvariant() -and $_.Status -eq 'Up' }); "
+                  "$ids -contains ([guid]$_.InterfaceGuid).ToString('D').ToLowerInvariant() -and $_.Status -eq 'Up' }); "
                   "if ($up.Count -eq $ids.Count) { exit 0 }; Start-Sleep -Milliseconds 250 "
                   "} while ([DateTime]::UtcNow -lt $deadline); throw 'restore incomplete'")
     else:
@@ -116,7 +121,7 @@ def execute(args):
     raw = run_phase('adapter-discovery', powershell, "$a=@(Get-NetAdapter -IncludeHidden | Where-Object { "
                      "$_.Status -eq 'Up' -and $_.ifIndex -ne 1 -and "
                      "$_.Name -notmatch '(?i)loopback' -and $_.InterfaceDescription -notmatch '(?i)loopback' } | "
-                     "ForEach-Object { $_.InterfaceGuid.ToString().ToLowerInvariant() }); ConvertTo-Json -InputObject $a -Compress")
+                     "ForEach-Object { ([guid]$_.InterfaceGuid).ToString('D').ToLowerInvariant() }); ConvertTo-Json -InputObject $a -Compress")
     ids = run_phase('adapter-validation', lambda: adapter_ids(json.loads(raw)))
     evidence = args.evidence.resolve()
     evidence.parent.mkdir(parents=True, exist_ok=True)

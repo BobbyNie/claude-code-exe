@@ -4443,3 +4443,18 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - Wiring regression was RED on the missing option and is now GREEN locally.
   This is not a signed hosted lifecycle execution: approved public signer/pin,
   required notices/authorization and a signed candidate remain prerequisites.
+
+### 2026-10-03 Offline adapter identity normalization candidate
+
+- Diagnostic run `37097664075`, offline 2.1.221 job `111132538745`, completed
+  host/admin/discovery phases and failed at adapter-validation before disconnect.
+  This narrows the failure to inventory parsing/validation, not an observed
+  failure of disconnected engine execution or adapter restoration.
+- A local regression confirms standard braced uppercase GUID input was rejected.
+  Normalize standard D/B GUID forms and use explicit `[guid]` D-format conversion
+  for discovery, disable selection and restore selection. Reject malformed,
+  nonstandard and duplicate identities after normalization. Never log GUID values.
+- Local RED reproduced the braced-input rejection and missing normalized selector;
+  GREEN preserves exact selected-adapter count and restoration requirements.
+  Actual failing GUID values were not collected, so this is a candidate fix,
+  not a proven complete diagnosis until native offline execution advances/passes.
