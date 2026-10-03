@@ -3,6 +3,16 @@
 #include <functional>
 
 namespace ccode {
+// Keep the frontend's approval worker authoritative unless the user explicitly
+// selects another supported mode. Do not inherit changing upstream defaults.
+inline std::vector<std::wstring> PermissionArguments(const std::vector<std::wstring>& arguments) {
+    for (size_t i = 0; i < arguments.size(); i += 2)
+        if (arguments[i] == L"--permission-mode") return arguments;
+    std::vector<std::wstring> result{L"--permission-mode", L"default"};
+    result.insert(result.end(), arguments.begin(), arguments.end());
+    return result;
+}
+
 inline Json PermissionDecision(const Json& args, bool allow) {
     if (!args.is_object() || !args.contains("tool_name") || !args["tool_name"].is_string() ||
         args["tool_name"].get<std::string>().empty() || !args.contains("input") || !args["input"].is_object())

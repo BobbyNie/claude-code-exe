@@ -469,7 +469,7 @@ int RunTurn(const fs::path& module, const fs::path& payload, const fs::path& dat
     std::wstring command = Quote(payload.wstring()) +
         L" --print --output-format stream-json --verbose --mcp-config " + Quote(Wide(mcp.dump())) +
         L" --permission-prompt-tool mcp__ccode_permissions__approve";
-    for (const auto& arg : options.engine) command += L" " + Quote(arg);
+    for (const auto& arg : ccode::PermissionArguments(options.engine)) command += L" " + Quote(arg);
     command += turn.resume ? L" --resume " + Quote(Wide(turn.id))
                            : L" --session-id " + Quote(Wide(turn.id));
     std::vector<wchar_t> cmd(command.begin(), command.end()); cmd.push_back(0);

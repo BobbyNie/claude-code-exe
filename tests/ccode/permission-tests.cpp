@@ -1,6 +1,18 @@
 #include "../../scripts/ccode/permission.hpp"
 #include <cassert>
 int main() {
+    // Latest engines must not silently opt into an upstream auto classifier.
+    assert((ccode::PermissionArguments({}) == std::vector<std::wstring>{L"--permission-mode", L"default"}));
+    const std::vector<std::wstring> allowed{L"--allowedTools", L"Read,Bash"};
+    assert((ccode::PermissionArguments(allowed) == std::vector<std::wstring>{
+        L"--permission-mode", L"default", L"--allowedTools", L"Read,Bash"}));
+    for (const auto mode : {L"default", L"plan", L"acceptEdits"}) {
+        const std::vector<std::wstring> explicitMode{L"--permission-mode", mode, L"--allowedTools", L"Read"};
+        assert(ccode::PermissionArguments(explicitMode) == explicitMode);
+    }
+    const std::vector<std::wstring> optionLikeValue{L"--append-system-prompt", L"--permission-mode"};
+    assert(ccode::PermissionArguments(optionLikeValue).size() == 4);
+
     const ccode::Json input = {{"file_path", "D:\\user\\claude\\a.txt"}, {"content", "hello"}};
     const ccode::Json args = {{"tool_name", "Write"}, {"input", input}};
     auto approved = ccode::PermissionDecision(args, true);
