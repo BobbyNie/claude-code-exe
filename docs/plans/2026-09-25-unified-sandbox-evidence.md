@@ -4538,3 +4538,22 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   installation or local network-adapter changes. Full local GREEN: 197 tests,
   5 existing Windows-only skips. The new PowerShell test runs automatically in
   the existing hosted Python test discovery. Native offline outcome pending.
+
+### 2026-10-03 All seven hosted jobs GREEN; artifact contents audited
+
+- Code `ee64866c94ec523f8e52837da42b5cbca71cfeca`, run `37101196950`:
+  both full runtime jobs, both workspace-boundary jobs, cross-version and both
+  real disconnected offline jobs passed. Empty-field hashing now has native GREEN.
+- Downloaded both built binaries, both provenance reports and both offline
+  reports; checked all six archive digests, matched executable hashes across the
+  reports and binaries, and verified exact adapter/engine identities. Offline
+  reports have zero external default routes/Up adapters, five zero-exit commands,
+  no added services/drivers, and successful controller restoration/cleanup.
+- Actual platform is hosted Windows Server 2025 Datacenter 24H2 build 26100 x64,
+  administrator account; permitted by the user's updated scope, not mislabelled
+  as Windows11 ordinary-account evidence.
+- See `2026-10-03-unified-release-readiness.md` for exact job/artifact IDs, hashes,
+  evidence limitations and remaining gates. Public-mode engineering builds do not
+  prove the approved signed enterprise candidate lifecycle. Independent Release
+  remains unpublished; signer/pin, notice/redistribution/name-policy inputs and
+  final candidate scope audit remain required. HTTPS-proxy→HTTPS is deferred only.
