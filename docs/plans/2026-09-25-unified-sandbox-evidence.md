@@ -3856,3 +3856,13 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   rejected and full report schema/privacy equality remains mandatory.
 - Python regression: 161 tests OK, 5 skipped, with approved loopback access.
   Real-engine Windows GREEN for this correction is pending a new CI run.
+
+### 2026-10-03 — scoped issuer discovery correction (Windows RED)
+
+- Run37083118730 test (2.1.221)
+  fails the expired-leaf policy assertion after the scoped self-signed positive
+  and hostname negative controls passed. No expiry success is claimed.
+- An exclusive root defines anchors but must also be available to issuer search:
+  add the same memory store to the chain engine additional stores. No ignore
+  flags, root installation, time override or weakened assertion. Cross-compile
+  with warnings-as-errors passes; Windows runtime verification remains pending.

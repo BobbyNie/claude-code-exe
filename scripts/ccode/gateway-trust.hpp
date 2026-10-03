@@ -71,6 +71,10 @@ public:
         CERT_CHAIN_ENGINE_CONFIG config{};
         config.cbSize = sizeof(config);
         config.hExclusiveRoot = roots.value;
+        // Exclusive roots define trust, but the issuer search also needs these
+        // certificates in the chain engine world store (not only root policy).
+        config.cAdditionalStore = 1;
+        config.rghAdditionalStore = &roots.value;
         // Preserve OS chain policy (including disallowed certificates); only the
         // trusted-root set is invocation-local. Never set ignore-error flags.
         if (!CertCreateCertificateChainEngine(&config, &engine)) throw std::runtime_error("E_GATEWAY_TLS");
