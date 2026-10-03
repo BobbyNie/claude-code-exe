@@ -4125,3 +4125,12 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - This docs-only preservation does not change candidate code and skips CI.
   No unified Release is published; formal approvals and full-design requirements
   remain open, not silently replaced by this successful regression matrix.
+
+### 2026-10-03 — correct provenance byte preservation
+
+- Post-commit verification found Git had normalized the two JSON artifacts from
+  CRLF to LF (1525 downloaded bytes versus 1492 committed bytes). JSON values
+  were unchanged, but the preceding original-byte claim was not true of that commit.
+- Add snapshot-local `-text` attributes and restore the downloaded bytes. Compare
+  both staged blobs against their respective original artifact ZIP members before
+  committing. This repairs evidence storage only; no candidate code or CI rerun.

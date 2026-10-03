@@ -1,0 +1,2 @@
+# Preserve downloaded provenance artifacts byte-for-byte, including CRLF.
+package-provenance-*.json -text
