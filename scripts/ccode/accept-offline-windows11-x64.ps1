@@ -33,7 +33,7 @@ trap {
 }
 
 function Get-StringSha256 {
-    param([Parameter(Mandatory = $true)][string]$Value)
+    param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Value)
 
     $bytes = [Text.Encoding]::UTF8.GetBytes($Value)
     $sha = [Security.Cryptography.SHA256]::Create()

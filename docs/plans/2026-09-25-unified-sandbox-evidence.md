@@ -4519,3 +4519,22 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   controller permits one strictly bounded numeric record and no raw exception text.
   It rethrows; errors remain fatal. RED→GREEN regression and full local suite:
   196 tests, 5 existing platform skips. Native diagnosis remains pending.
+
+### 2026-10-03 Empty adapter display-field hashing regression
+
+- Run `37100273468` (`d0aa99cd361c2ad216543515bf9ec0d366cfafb4`) completed:
+  both full runtime jobs, both workspace-boundary jobs and cross-version passed.
+  The mandatory HTTP proxy denial case now has native GREEN after the local
+  delayed-body RED; no weakening from 407 to 502 was made.
+- Both offline jobs (`111139922530`, `111139922565`) fail in adapter inventory
+  at line 266, category 6 (InvalidData), before baseline; restoration completes.
+  Raw adapter fields were not collected. Empty display fields are a candidate
+  explanation, not yet a confirmed complete native diagnosis.
+- Real PowerShell 7.5.2 reproduction, loading only the actual hash helper via AST,
+  fails on empty string binding. Allow an explicit empty string and hash its bytes
+  normally; do not skip any adapter or relax connectivity assertions. Known empty
+  and nonempty SHA256 vectors pass after the one-attribute fix.
+- Official temporary PowerShell archive SHA256 verified before running; no system
+  installation or local network-adapter changes. Full local GREEN: 197 tests,
+  5 existing Windows-only skips. The new PowerShell test runs automatically in
+  the existing hosted Python test discovery. Native offline outcome pending.
