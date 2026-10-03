@@ -57,6 +57,16 @@ class GatewayFixtureTests(unittest.TestCase):
                     self.assertIn(b'503', secure.recv(4096))
             self.assertEqual(endpoint.tls_versions, {'TLSv1.2': 1, 'TLSv1.3': 0, 'other': 0})
 
+    def test_valid_leaf_from_expiry_fixture_issuer_is_accepted(self):
+        with fixture.untrusted_tls_endpoint(trusted_chain=True) as endpoint:
+            context = ssl.create_default_context(cafile=str(endpoint.ca_certificate))
+            with socket.create_connection(endpoint.address, timeout=2) as connection:
+                with context.wrap_socket(connection, server_hostname='127.0.0.1') as secure:
+                    secure.sendall(b'GET / HTTP/1.0\r\nHost: localhost\r\n\r\n')
+                    self.assertIn(b'503', secure.recv(4096))
+            self.assertEqual(endpoint.http_requests, 1)
+            self.assertEqual(endpoint.tls_handshakes_completed, 1)
+
     def test_expired_endpoint_is_rejected_even_with_approved_fixture_ca(self):
         with fixture.untrusted_tls_endpoint(expired=True) as endpoint:
             context = ssl.create_default_context(cafile=str(endpoint.ca_certificate))

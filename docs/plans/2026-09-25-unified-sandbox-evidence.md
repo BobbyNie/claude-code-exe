@@ -3904,3 +3904,17 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   status for the public fixture in the test executable, never certificate bytes,
   hostnames, credentials or model content. Production emits no such diagnostics.
   Collect these statuses before selecting the next correction; no runtime GREEN.
+
+### 2026-10-03 — independent issuer-key expiry fixture
+
+- Run37084178400 reports native policy 0x800b0109 (untrusted root), chain 0x21
+  (untrusted root plus expired), rather than expiration alone. The former fixture
+  reuses one public key for issuer and leaf; the independent-key invariant fails
+  locally (RED). Do not relabel the combined failure as expiry-only success.
+- Reissue public test certificates with an independent CA key, CA validity
+  2019–2126 enclosing the expired leaf's unchanged 2020–2021 lifetime. Add a
+  valid 2020–2125 leaf from that same issuer and server key, plus mandatory
+  independent-key and valid-chain controls. No root-store installation/ignore flags.
+- New positive-loopback test first fails for missing fixture support, then passes.
+  All 19 Python gateway fixture tests pass, including exact OpenSSL expiry code10
+  and zero completed expired handshakes/HTTP. Native Windows policy still pending.

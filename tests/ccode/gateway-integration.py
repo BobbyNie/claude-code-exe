@@ -24,10 +24,11 @@ def classify_tls_prefix(prefix):
 
 
 @contextmanager
-def untrusted_tls_endpoint(*, maximum_version=None, expired=False):
+def untrusted_tls_endpoint(*, maximum_version=None, expired=False, trusted_chain=False):
     """Loopback-only public TLS fixtures; trust is explicit and scoped per test."""
     fixtures = Path(__file__).parent / "fixtures"
-    certificate = fixtures / ("expired-test-cert.pem" if expired else "untrusted-test-cert.pem")
+    certificate = fixtures / ("expired-test-cert.pem" if expired else
+                              "valid-test-cert.pem" if trusted_chain else "untrusted-test-cert.pem")
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(certificate, fixtures / "untrusted-test-key.pem")
     if maximum_version is not None:
@@ -74,7 +75,7 @@ def untrusted_tls_endpoint(*, maximum_version=None, expired=False):
     server = Server(("127.0.0.1", 0), Handler)
     server.address = server.server_address
     server.certificate = certificate
-    server.ca_certificate = fixtures / ("expired-test-ca.pem" if expired else "untrusted-test-cert.pem")
+    server.ca_certificate = fixtures / ("expired-test-ca.pem" if expired or trusted_chain else "untrusted-test-cert.pem")
     server.rejected = threading.Event()
     server.handshake_failed = threading.Event()
     server.connections = 0

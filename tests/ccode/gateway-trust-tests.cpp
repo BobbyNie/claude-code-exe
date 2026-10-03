@@ -16,6 +16,7 @@ int wmain(int argc, wchar_t** argv) {
     const std::wstring folder = argv[1];
     const auto goodPem = Read(folder + L"/untrusted-test-cert.pem");
     const auto expiredPem = Read(folder + L"/expired-test-cert.pem");
+    const auto validPem = Read(folder + L"/valid-test-cert.pem");
     const auto caPem = Read(folder + L"/expired-test-ca.pem");
     ccode::GatewayTrust defaults;
     const auto good = ccode::GatewayTrust::Decode(goodPem);
@@ -29,6 +30,11 @@ int wmain(int argc, wchar_t** argv) {
     // Trust additions must not mutate the user's or machine's root store.
     assert(defaults.Verify(good.get(), L"127.0.0.1") == ccode::GatewayCertificateResult::Rejected);
     ccode::GatewayTrust issuer(caPem);
+    const auto valid = ccode::GatewayTrust::Decode(validPem);
+    const auto ca = ccode::GatewayTrust::Decode(caPem);
+    assert(!CertComparePublicKeyInfo(X509_ASN_ENCODING, &ca->pCertInfo->SubjectPublicKeyInfo,
+                                    &expired->pCertInfo->SubjectPublicKeyInfo));
+    assert(issuer.Verify(valid.get(), L"127.0.0.1") == ccode::GatewayCertificateResult::Trusted);
     const auto expiry = issuer.Inspect(expired.get(), L"127.0.0.1");
     if (expiry.result != ccode::GatewayCertificateResult::Expired)
         std::cerr << "E_TEST_CERTIFICATE_POLICY policy=" << std::hex << expiry.policyError
