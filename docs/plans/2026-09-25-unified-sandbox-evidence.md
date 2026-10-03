@@ -3974,3 +3974,28 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   Correct that test to require equality with the original certificate's decision
   AND non-Trusted. The valid-leaf wrong-host case remains checked, and existing
   real TLS handshake assertions are unchanged. Native integration not reached.
+
+### 2026-10-03 — native TLS handshake RED→GREEN; remaining independent failures
+
+- Run37086850688, exact code SHA90baea93d349f5f6af2895806a1e67cef4e1b171,
+  completed/failure. Both native build suites pass, including serialized peer
+  controls and real bridge untrusted/expired/wrong-host handshake rejection,
+  approved fixture CA positive control, TLS body forwarding and streaming.
+- Both real engine versions now pass actual DNS and untrusted TLS assertions.
+  Both also pass the expired TLS assertions; however 2.1.221's expiry step STILL
+  FAILS during TemporaryDirectory cleanup with WinError32 on engine.exe. Its
+  printed PASS line is not step success. Do not ignore cleanup, retry deletion
+  blindly, or claim the whole lifecycle gate is green.
+- 2.1.282's only failed step is actual subagent execution: E_PROTOCOL_ORDER after
+  the parent/child fixture output. Exact event ordering needs evidence before a
+  protocol fix; do not relax validation or presume a flaky test.
+- Both workspace-boundary jobs and cross-version upgrade/rollback job succeed.
+  Annotations are exit1 plus Node action deprecation warnings, not billing.
+- Local regression: 162 Python tests OK (5 skipped), plus7 release tests; native
+  trust suite and bridge probe cross-compile with warnings as errors. Windows
+  runtime evidence above, not local compilation, establishes the TLS milestone.
+- Commits: c0fdaa7 (serialized peer query), 90baea9 (preserve native multi-error
+  policy result in serialization test). No unchanged rerun and no unified Release.
+  Proxy parity, TLS cancellation coverage, lifecycle/protocol failures and other
+  release approvals/matrix requirements remain open. Hosted Windows acceptance
+  remains the user-approved platform; no new physical Windows11 prerequisite.
