@@ -4408,3 +4408,25 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - Latest prior run `37096185797` has a new failed 2.1.282 subagent step while still
   running; its cause must be read after job completion. The earlier green run is
   not generalized to this later candidate or every scheduling permutation.
+
+### 2026-10-03 Hosted failures and bounded late-result regression
+
+- Run `37096682687` (`7db2e32`) completed with both runtime jobs and both workspace
+  boundary jobs green; the two new isolated-offline jobs failed before producing
+  evidence. No offline pass is claimed. Their neutral log did not locate the
+  failing operation. Commit `716c931` adds only allowlisted stage diagnostics,
+  never adapter identities or raw command errors; local suite 190 tests, 5 skips.
+- Run `37097002014` (`372ac2e`) has a new 2.1.282 subagent failure. Safe labels show
+  matched task_notification → init → parent_assistant → result → result, with
+  E_PROTOCOL_ORDER on the second result. 2.1.221, both workspace jobs and
+  cross-version passed; both offline jobs still failed. Not a released candidate.
+- Added a frontend regression for exactly this early-init handoff; it reproduced
+  E_PROTOCOL_ORDER before implementation. A matched completion with no prior
+  result now grants at most one late result. Ordinary duplicate results, a third
+  result, late assistant events and changed sessions remain rejected. Late error
+  results still fail the turn; no error is discarded to achieve a pass.
+- ASAN/UBSAN frontend tests pass locally. Native verification remains pending;
+  this does not close intermittent subagent or offline acceptance gates.
+- HTTP authenticated positive forwarding coverage was added in `abedf50` with
+  fixed-target and credential-isolation checks; local 188 tests (5 skips) passed.
+  Native coverage is pending. HTTPS-proxy-to-HTTPS deferral remains unchanged.

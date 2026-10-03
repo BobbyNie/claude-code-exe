@@ -267,6 +267,8 @@ int main() {
     queuedParent.Feed(successResult);
     queuedParent.Finish();
     assert(queuedParent.complete && queuedParent.session == "same");
+    auto duplicateCompletedParent = queuedParent;
+    ExpectError(duplicateCompletedParent, successResult, "E_PROTOCOL_ORDER");
     ExpectError(queuedParent, agentInit, "E_PROTOCOL_ORDER");
     // Native 2.1.221 can begin the queued parent turn immediately after
     // task_notification, without emitting an intervening result.
@@ -292,6 +294,29 @@ int main() {
                 ExpectError(immediateParent, agentInit, "E_PROTOCOL_ORDER");
             }
         }
+    }
+    // Observed native 2.1.282: notification, init, assistant, result, result.
+    // Only a matched turn handoff lacking its result authorizes one late result.
+    for (bool lateFailure : {false, true}) {
+        ccode::EventReader lateResult;
+        lateResult.Feed(agentInit);
+        lateResult.Feed(tool("Agent", "bg-late", ccode::Json::object()));
+        lateResult.Feed(ccode::Json{{"type", "system"}, {"subtype", "task_started"},
+            {"task_id", "late"}, {"tool_use_id", "bg-late"}}.dump() + "\n");
+        lateResult.Feed(ccode::Json{{"type", "system"}, {"subtype", "task_notification"},
+            {"task_id", "late"}, {"status", "completed"}}.dump() + "\n");
+        lateResult.Feed(agentInit);
+        lateResult.Feed(successResult);
+        auto changedLateSession = lateResult;
+        ExpectError(changedLateSession, ccode::Json{{"type", "result"}, {"subtype", "success"},
+            {"session_id", "other"}}.dump() + "\n", "E_SESSION_MISMATCH");
+        auto lateAssistant = lateResult;
+        ExpectError(lateAssistant, tool("Agent", "unmatched", ccode::Json::object()), "E_PROTOCOL_ORDER");
+        lateResult.Feed(ccode::Json{{"type", "result"}, {"subtype", lateFailure ? "error" : "success"},
+            {"is_error", lateFailure}, {"session_id", "same"}}.dump() + "\n");
+        lateResult.Finish();
+        assert(lateResult.complete && lateResult.failed == lateFailure);
+        ExpectError(lateResult, successResult, "E_PROTOCOL_ORDER");
     }
     ccode::EventReader reusedTask;
     reusedTask.Feed(agentInit);

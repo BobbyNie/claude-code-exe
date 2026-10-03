@@ -41,6 +41,7 @@ class EventReader {
     std::set<std::string> seenTaskIds;
     bool interimResult = false;
     size_t queuedParentTurns = 0;
+    bool pendingPriorResult = false;
     std::vector<std::string> eventOrder;
     void Observe(const Json& event, const std::string& type) {
         // Fixed vocabulary only. Never retain engine-controlled labels or content.
@@ -60,7 +61,8 @@ class EventReader {
         if (!event.is_object()) throw ProtocolError("E_PROTOCOL");
         const auto type = event.value("type", std::string());
         Observe(event, type);
-        if (complete && (type == "assistant" || type == "result")) throw ProtocolError("E_PROTOCOL_ORDER");
+        if (complete && (type == "assistant" || (type == "result" && !pendingPriorResult)))
+            throw ProtocolError("E_PROTOCOL_ORDER");
         // Native2.1.282's typed API cause comes from the local error adapter.
         // Both fields must be top-level wrapper siblings; never inspect content.
         if (type == "assistant" && event.contains("is_api_error_message") &&
@@ -99,6 +101,10 @@ class EventReader {
             if (!queuedParentTurns || !backgroundTasks.empty())
                 throw ProtocolError("E_PROTOCOL_ORDER");
             --queuedParentTurns;
+            // If init overtakes the prior turn's result, native streams may
+            // deliver that result after the new turn's result. One handoff
+            // authorizes at most one extra result, never arbitrary duplicates.
+            pendingPriorResult = !complete && !interimResult;
             complete = false;
             interimResult = false;
             toolIds.clear();
@@ -182,7 +188,11 @@ class EventReader {
             return output;
         }
         if (type == "result") {
-            if (complete || interimResult) throw ProtocolError("E_PROTOCOL");
+            if (interimResult) throw ProtocolError("E_PROTOCOL");
+            if (complete) {
+                if (!pendingPriorResult) throw ProtocolError("E_PROTOCOL_ORDER");
+                pendingPriorResult = false;
+            }
             complete = backgroundTasks.empty();
             interimResult = !complete;
             failed = failed || event.value("is_error", false) || event.value("subtype", std::string()) != "success";
