@@ -228,7 +228,7 @@ codex-wrapper.bat
 6. 有更新时将五个产品及便携脚本发布到同一个 GitHub Release；已有工具包缺少 ccode 时修复同一个 Release，不删除标签
 
 每周发布工作流在 `main` 上运行，计划时间为每周一 UTC 00:00（澳门/北京时间 08:00）；
-GitHub 排队可能使实际执行时间延后。发布流程成功完成后自动核对已发布附件，并保留 每周一 UTC 01:00 的定时检查和手动检查；不在推送时抢先检查尚未发布的附件。
+GitHub 排队可能使实际执行时间延后。发布流程成功完成后自动核对已发布附件，并保留每周一 UTC 01:00 的定时检查和手动检查；不在推送时抢先检查尚未发布的附件。
 也可以在 Actions 页面手动运行 `Auto Release AI Tools Portable`。
 
 `ccode` 普通版现在与 Claude Code、Qwen Code、Codex App、Codex CLI 一起发布。
@@ -256,3 +256,5 @@ GitHub 排队可能使实际执行时间延后。发布流程成功完成后自�
 - [Qwen Code 仓库](https://github.com/QwenLM/qwen-code)
 - [Codex Windows App 文档](https://developers.openai.com/codex/app/windows)
 - [Codex CLI 仓库](https://github.com/openai/codex)
+
+Windows 回归在每次运行开始时读取一次 Claude Code 官方 `latest` 和 `stable` 版本，所有构建、离线及工作区测试共用该快照，不再锁定历史版本。两个通道不同时验证升级和回滚；相同时仅构建一次并跳过跨版本任务，不将同版本测试当作跨版本通过。统一 Release 中的 ccode 始终使用本次检测的 `latest`。

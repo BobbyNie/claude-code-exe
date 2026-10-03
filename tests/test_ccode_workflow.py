@@ -138,8 +138,8 @@ class AcceptanceWorkflowTests(unittest.TestCase):
     def test_session_writer_concurrency_is_independent_and_required(self):
         workflow = (Path(__file__).resolve().parents[1] /
                     '.github/workflows/test-ccode.yml').read_text(encoding='utf-8')
-        test_job = workflow.split('jobs:\n  test:\n', 1)[1].split('\n  workspace-boundary:', 1)[0]
-        self.assertIn("version: ['2.1.221', '2.1.282']", test_job)
+        test_job = workflow.split('\n  test:\n', 1)[1].split('\n  workspace-boundary:', 1)[0]
+        self.assertIn("version: ${{ fromJSON(needs.versions.outputs.versions) }}", test_job)
         step = test_job.split('      - name: Verify session writer concurrency', 1)[1].split('      - ', 1)[0]
         self.assertIn("if: ${{ !cancelled() && steps.build.outcome == 'success' }}", step)
         self.assertIn('python tests/ccode/concurrency-integration.py ./ccode.exe', step)
@@ -153,7 +153,7 @@ class AcceptanceWorkflowTests(unittest.TestCase):
         workflow = workflow_path.read_text(encoding='utf-8')
         self.assertIn('workflow_dispatch:', workflow)
         self.assertIn('runs-on: [self-hosted, Windows, X64, windows-11]', workflow)
-        self.assertIn("version: ['2.1.221', '2.1.282']", workflow)
+        self.assertIn("version: ${{ fromJSON(needs.versions.outputs.versions) }}", workflow)
         self.assertIn('Verify Windows 11 x64 ordinary-account environment', workflow)
         self.assertIn('./scripts/ccode/assert-windows11-x64.ps1', workflow)
         for command in (
@@ -323,8 +323,9 @@ class AcceptanceWorkflowTests(unittest.TestCase):
         for name in ('workspace-boundary', 'cross-version'):
             job = workflow.split(f'\n  {name}:\n', 1)[1]
             header = job.split('    steps:', 1)[0]
-            self.assertIn('needs: test', header)
-            self.assertIn('if: ${{ !cancelled() }}', header)
+            self.assertIn('needs: [versions, test]', header)
+            self.assertIn("!cancelled() && needs.versions.result == 'success'", header)
+            self.assertNotIn("needs.test.result == 'success'", header)
         self.assertNotIn('ccode-windows-tested-', workflow)
         self.assertNotIn('continue-on-error:', workflow)
 

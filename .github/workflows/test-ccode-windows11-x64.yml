@@ -7,13 +7,28 @@ permissions:
   contents: read
 
 jobs:
+  versions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      versions: ${{ steps.resolve.outputs.versions }}
+      latest: ${{ steps.resolve.outputs.latest }}
+      stable: ${{ steps.resolve.outputs.stable }}
+      cross_version: ${{ steps.resolve.outputs.cross_version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Resolve official engine channels once
+        id: resolve
+        run: python scripts/ccode/runtime_versions.py
+
   test:
+    needs: versions
     runs-on: [self-hosted, Windows, X64, windows-11]
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        version: ['2.1.221', '2.1.282']
+        version: ${{ fromJSON(needs.versions.outputs.versions) }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
@@ -127,26 +142,26 @@ jobs:
           if-no-files-found: error
 
   cross-version:
-    needs: test
-    if: ${{ !cancelled() && needs.test.result == 'success' }}
+    needs: [versions, test]
+    if: ${{ !cancelled() && needs.test.result == 'success' && needs.versions.outputs.cross_version == 'true' }}
     runs-on: [self-hosted, Windows, X64, windows-11]
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: ccode-windows11-x64-2.1.221
+          name: ccode-windows11-x64-${{ needs.versions.outputs.stable }}
           path: cross/old
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: ccode-windows11-x64-2.1.282
+          name: ccode-windows11-x64-${{ needs.versions.outputs.latest }}
           path: cross/new
       - name: Verify Windows 11 x64 ordinary-account environment
         shell: pwsh
         run: |
           ./scripts/ccode/assert-windows11-x64.ps1 `
             -Executable ./cross/new/ccode.exe `
-            -ExpectedEngineVersion '2.1.282' `
+            -ExpectedEngineVersion '${{ needs.versions.outputs.latest }}' `
             -AdapterRevision '${{ github.sha }}' `
             -EvidencePath './cross/environment.json'
       - name: Exercise actual upgrade and rollback between both engines

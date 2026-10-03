@@ -12,13 +12,28 @@ permissions:
   contents: read
 
 jobs:
+  versions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      versions: ${{ steps.resolve.outputs.versions }}
+      latest: ${{ steps.resolve.outputs.latest }}
+      stable: ${{ steps.resolve.outputs.stable }}
+      cross_version: ${{ steps.resolve.outputs.cross_version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Resolve official engine channels once
+        id: resolve
+        run: python scripts/ccode/runtime_versions.py
+
   test:
+    needs: versions
     runs-on: windows-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        version: ['2.1.221', '2.1.282']
+        version: ${{ fromJSON(needs.versions.outputs.versions) }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
@@ -142,14 +157,14 @@ jobs:
   workspace-boundary:
     # Keep this acceptance gate required/failing, but do not let an OS cwd limit
     # hide the independent lifecycle and cross-version regression results.
-    needs: test
-    if: ${{ !cancelled() }}
+    needs: [versions, test]
+    if: ${{ !cancelled() && needs.versions.result == 'success' }}
     runs-on: windows-latest
     timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
-        version: ['2.1.221', '2.1.282']
+        version: ${{ fromJSON(needs.versions.outputs.versions) }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -161,14 +176,14 @@ jobs:
         run: python tests/ccode/tools-integration.py ./workspace-boundary-bin/ccode.exe --workspace-boundary-only
 
   offline-hosted:
-    needs: test
-    if: ${{ !cancelled() }}
+    needs: [versions, test]
+    if: ${{ !cancelled() && needs.versions.result == 'success' }}
     runs-on: windows-latest
     timeout-minutes: 8
     strategy:
       fail-fast: false
       matrix:
-        version: ['2.1.221', '2.1.282']
+        version: ${{ fromJSON(needs.versions.outputs.versions) }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -190,19 +205,19 @@ jobs:
           if-no-files-found: error
 
   cross-version:
-    needs: test
-    if: ${{ !cancelled() }}
+    needs: [versions, test]
+    if: ${{ !cancelled() && needs.versions.result == 'success' && needs.versions.outputs.cross_version == 'true' }}
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: ccode-windows-built-2.1.221
+          name: ccode-windows-built-${{ needs.versions.outputs.stable }}
           path: cross/old
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: ccode-windows-built-2.1.282
+          name: ccode-windows-built-${{ needs.versions.outputs.latest }}
           path: cross/new
       - name: Exercise actual upgrade and rollback between both engines
         shell: pwsh
