@@ -149,6 +149,28 @@ inline std::string GatewayConnectRequest(const std::string& host, unsigned short
     return "CONNECT " + authority + " HTTP/1.1\r\nHost: " + authority + "\r\n" +
         (authorization.empty() ? std::string() : "Proxy-Authorization: " + authorization + "\r\n") + "\r\n";
 }
+// Request headers only. Payload bytes are sent separately without rewriting.
+inline std::string GatewayForwardRequest(const GatewayRequest& incoming, const std::string& host,
+        unsigned short port, const std::string& basePath, bool absoluteForm = false,
+        const std::string& proxyAuthorization = {}) {
+    const auto path = basePath + incoming.target;
+    if (host.empty() || !port || path.empty() || path[0] != '/' ||
+        path.find_first_of(" \t\r\n\\") != std::string::npos ||
+        host.find_first_of(" \t\r\n/?#@\\") != std::string::npos ||
+        proxyAuthorization.find_first_of("\r\n") != std::string::npos) RejectGatewayProxy();
+    const auto authority = (host.find(':') == std::string::npos ? host : "[" + host + "]") +
+                           ":" + std::to_string(port);
+    const auto target = absoluteForm ? "http://" + authority + path : path;
+    std::string request = incoming.method + " " + target + " HTTP/1.1\r\nHost: " + authority +
+        "\r\nConnection: close\r\nAccept-Encoding: identity\r\nContent-Length: " +
+        std::to_string(incoming.body.size()) + "\r\n";
+    if (absoluteForm && !proxyAuthorization.empty())
+        request += "Proxy-Authorization: " + proxyAuthorization + "\r\n";
+    for (const auto& header : incoming.headers)
+        if (GatewayLower(header.first) != "proxy-authorization")
+            request += header.first + ": " + header.second + "\r\n";
+    return request + "\r\n";
+}
 class GatewayConnectResponse {
     std::string pending;
     size_t received = 0;

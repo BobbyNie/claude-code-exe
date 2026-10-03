@@ -15,6 +15,19 @@ int main() {
         catch (const std::runtime_error&) { rejected = true; }
         assert(rejected);
     }
+    GatewayRequest origin;
+    origin.method = "POST"; origin.target = "/messages"; origin.body = "payload";
+    origin.headers = {{"authorization", "Bearer fixture"}, {"proxy-authorization", "untrusted"}};
+    const auto absolute = GatewayForwardRequest(origin, "api.example", 8080, "/base", true, "Basic fixture");
+    assert(absolute.find("POST http://api.example:8080/base/messages HTTP/1.1\r\n") == 0);
+    assert(absolute.find("Host: api.example:8080\r\n") != std::string::npos);
+    assert(absolute.find("Proxy-Authorization: Basic fixture\r\n") != std::string::npos);
+    assert(absolute.find("untrusted") == std::string::npos);
+    assert(absolute.find("Content-Length: 7\r\n") != std::string::npos);
+    const auto direct = GatewayForwardRequest(origin, "::1", 443, "/base", false, "Basic fixture");
+    assert(direct.find("POST /base/messages HTTP/1.1\r\nHost: [::1]:443\r\n") == 0);
+    assert(direct.find("Proxy-Authorization") == std::string::npos);
+    assert(direct.find("untrusted") == std::string::npos);
     assert(!SelectGatewayProxy("api.example", 443, "", "", "").active());
     auto proxy = SelectGatewayProxy("api.example", 443,
         "http://user:p%40ss@proxy.example:8080/", "http://ignored.example", "");

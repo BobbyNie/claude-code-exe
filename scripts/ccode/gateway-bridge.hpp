@@ -18,80 +18,10 @@
 
 namespace ccode {
 class GatewayBridge {
-    struct InternetHandle {
-        HINTERNET value = nullptr;
-        explicit InternetHandle(HINTERNET handle = nullptr) : value(handle) {}
-        ~InternetHandle() { if (value) WinHttpCloseHandle(value); }
-        InternetHandle(const InternetHandle&) = delete;
-        InternetHandle& operator=(const InternetHandle&) = delete;
-    };
-    // Async WinHTTP lets a cancelled turn close an in-flight request without
-    // waiting for a model response. The context outlives HANDLE_CLOSING.
-    struct Operation {
-        HANDLE ready = CreateEventW(nullptr, FALSE, FALSE, nullptr);
-        HANDLE closed = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-        HINTERNET request = nullptr;
-        std::atomic<DWORD> error{0}, count{0}, secureFailure{0};
-        bool callbackInstalled = false;
-        explicit Operation(HINTERNET handle) : request(handle) {
-            if (!ready || !closed || !request) {
-                if (request) WinHttpCloseHandle(request);
-                if (ready) CloseHandle(ready);
-                if (closed) CloseHandle(closed);
-                throw std::runtime_error("E_NETWORK");
-            }
-        }
-        ~Operation() {
-            WinHttpCloseHandle(request);
-            if (callbackInstalled) WaitForSingleObject(closed, INFINITE);
-            CloseHandle(ready); CloseHandle(closed);
-        }
-        static void CALLBACK Callback(HINTERNET, DWORD_PTR context, DWORD status, void* info, DWORD size) {
-            if (!context) return;
-            auto& self = *reinterpret_cast<Operation*>(context);
-            if (status == WINHTTP_CALLBACK_STATUS_HANDLE_CLOSING) { SetEvent(self.closed); return; }
-            if (status == WINHTTP_CALLBACK_STATUS_SECURE_FAILURE) {
-                self.secureFailure.store(*static_cast<DWORD*>(info)); return;
-            }
-            if (status == WINHTTP_CALLBACK_STATUS_REQUEST_ERROR) {
-                self.error.store(static_cast<WINHTTP_ASYNC_RESULT*>(info)->dwError);
-            } else if (status == WINHTTP_CALLBACK_STATUS_DATA_AVAILABLE) {
-                self.count.store(*static_cast<DWORD*>(info));
-            } else if (status == WINHTTP_CALLBACK_STATUS_READ_COMPLETE) {
-                self.count.store(size);
-            } else if (status != WINHTTP_CALLBACK_STATUS_SENDREQUEST_COMPLETE &&
-                       status != WINHTTP_CALLBACK_STATUS_HEADERS_AVAILABLE) return;
-            SetEvent(self.ready);
-        }
-        void Install() {
-            const DWORD_PTR context = reinterpret_cast<DWORD_PTR>(this);
-            if (!WinHttpSetOption(request, WINHTTP_OPTION_CONTEXT_VALUE,
-                    const_cast<DWORD_PTR*>(&context), sizeof(context)) ||
-                WinHttpSetStatusCallback(request, Callback,
-                    WINHTTP_CALLBACK_FLAG_ALL_COMPLETIONS | WINHTTP_CALLBACK_FLAG_HANDLES | WINHTTP_CALLBACK_FLAG_SECURE_FAILURE, 0) == WINHTTP_INVALID_STATUS_CALLBACK)
-                throw std::runtime_error("E_NETWORK");
-            callbackInstalled = true;
-        }
-        bool Await(BOOL started, const std::atomic<bool>& stopping) {
-            if (!started) {
-                const DWORD code = GetLastError();
-                if (code != ERROR_IO_PENDING) { error.store(code); return false; }
-            }
-            const auto deadline = GetTickCount64() + 600000;
-            while (!stopping.load()) {
-                const auto result = WaitForSingleObject(ready, 100);
-                if (result == WAIT_OBJECT_0) return error.load() == 0;
-                if (result != WAIT_TIMEOUT || GetTickCount64() >= deadline) {
-                    error.store(ERROR_WINHTTP_TIMEOUT); return false;
-                }
-            }
-            error.store(ERROR_OPERATION_ABORTED); return false;
-        }
-    };
     struct Worker { SOCKET socket; std::thread thread; std::atomic<bool> done{false}; };
     std::wstring host, basePath;
     INTERNET_PORT port = 0;
-    bool secure = false, configuredProxyPolicy = false;
+    bool secure = false;
     GatewayProxy proxy;
     std::unique_ptr<GatewayTrust> scopedTrust;
     std::string capability;
@@ -141,28 +71,36 @@ class GatewayBridge {
         return offset == length;
     }
     bool Send(SOCKET socket, const std::string& text) { return Send(socket, text.data(), text.size()); }
-    void ForwardScopedTls(SOCKET client, const GatewayRequest& incoming) {
+    void Forward(SOCKET client, const GatewayRequest& incoming) {
         bool responded = false;
         try {
-            GatewayTls upstream(host, port, *scopedTrust, stopping, proxy);
-            const auto target = NarrowHeader(basePath) + incoming.target;
-            if (target.find_first_of(" \t\r\n\\") != std::string::npos) throw std::runtime_error("E_NETWORK");
-            auto authority = NarrowHeader(host);
-            if (authority.find(':') != std::string::npos) authority = "[" + authority + "]";
-            if (port != 443) authority += ":" + std::to_string(port);
-            std::string request = incoming.method + " " + target + " HTTP/1.1\r\nHost: " + authority +
-                "\r\nConnection: close\r\nAccept-Encoding: identity\r\nContent-Length: " +
-                std::to_string(incoming.body.size()) + "\r\n";
-            for (const auto& header : incoming.headers) request += header.first + ": " + header.second + "\r\n";
-            upstream.Send(request + "\r\n");
-            upstream.Send(incoming.body);
-            GatewayResponseFraming framing(incoming.method == "HEAD");
-            while (!stopping.load()) {
-                auto record = upstream.Read();
-                if (record.ended) { framing.EndOfStream(record.authenticated); return; }
-                const bool complete = framing.Feed(record.bytes);
-                responded = true;
-                if (!Send(client, record.bytes) || complete) return;
+            const auto request = GatewayForwardRequest(incoming, NarrowHeader(host), port,
+                NarrowHeader(basePath), !secure && proxy.active(), proxy.authorization);
+            auto exchange = [&](auto& upstream) {
+                upstream.Send(request);
+                upstream.Send(incoming.body);
+                GatewayResponseFraming framing(incoming.method == "HEAD");
+                while (!stopping.load()) {
+                    auto record = upstream.Read();
+                    if (record.ended) {
+                        // Plain HTTP has no TLS close_notify. Inner HTTPS still
+                        // requires its own authenticated EOF when close-delimited.
+                        framing.EndOfStream(!secure || record.authenticated);
+                        return;
+                    }
+                    const bool complete = framing.Feed(record.bytes);
+                    responded = true;
+                    if (!Send(client, record.bytes) || complete) return;
+                }
+            };
+            if (secure) {
+                GatewayTls upstream(host, port, *scopedTrust, stopping, proxy);
+                exchange(upstream);
+            } else {
+                if (proxy.secure) throw std::runtime_error("E_NETWORK");
+                GatewaySocket upstream(proxy.active() ? Wide(proxy.host) : host,
+                                       proxy.active() ? proxy.port : port, stopping);
+                exchange(upstream);
             }
         } catch (const std::runtime_error& error) {
             if (!stopping.load()) {
@@ -171,75 +109,6 @@ class GatewayBridge {
                 failure.compare_exchange_strong(expected, code == "E_GATEWAY_TLS" ? 3 : code == "E_GATEWAY_DNS" ? 1 : 2);
                 if (!responded) Send(client, "HTTP/1.1 502 Gateway Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
             }
-        }
-    }
-    void Forward(SOCKET client, const GatewayRequest& incoming) {
-        if (scopedTrust) { ForwardScopedTls(client, incoming); return; }
-        if (proxy.secure) throw std::runtime_error("E_NETWORK");
-        const auto proxyAddress = Wide((proxy.host.find(':') == std::string::npos ? proxy.host : "[" + proxy.host + "]") +
-                                       ":" + std::to_string(proxy.port));
-        InternetHandle session(WinHttpOpen(L"ccode", proxy.active() ? WINHTTP_ACCESS_TYPE_NAMED_PROXY :
-            configuredProxyPolicy ? WINHTTP_ACCESS_TYPE_NO_PROXY : WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
-            proxy.active() ? proxyAddress.c_str() : WINHTTP_NO_PROXY_NAME,
-            // Selection already applied the caller's NO_PROXY policy. Do not
-            // add WinHTTP's implicit loopback bypass to an explicit proxy route.
-            proxy.active() ? L"<-loopback>" : WINHTTP_NO_PROXY_BYPASS, WINHTTP_FLAG_ASYNC));
-        if (!session.value || !WinHttpSetTimeouts(session.value, 10000, 10000, 10000, 600000))
-            throw std::runtime_error("E_NETWORK");
-        InternetHandle connection(WinHttpConnect(session.value, host.c_str(), port, 0));
-        if (!connection.value) throw std::runtime_error("E_NETWORK");
-        const auto target = basePath + Wide(incoming.target);
-        Operation operation(WinHttpOpenRequest(connection.value, Wide(incoming.method).c_str(), target.c_str(),
-            L"HTTP/1.1", WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_ESCAPE_DISABLE | (secure ? WINHTTP_FLAG_SECURE : 0)));
-        operation.Install();
-        DWORD disabled = WINHTTP_DISABLE_COOKIES | WINHTTP_DISABLE_AUTHENTICATION | WINHTTP_DISABLE_REDIRECTS;
-        DWORD logon = WINHTTP_AUTOLOGON_SECURITY_LEVEL_HIGH;
-        if (!WinHttpSetOption(operation.request, WINHTTP_OPTION_DISABLE_FEATURE, &disabled, sizeof(disabled)) ||
-            !WinHttpSetOption(operation.request, WINHTTP_OPTION_AUTOLOGON_POLICY, &logon, sizeof(logon)))
-            throw std::runtime_error("E_NETWORK");
-        std::wstring headers = L"Accept-Encoding: identity\r\nConnection: close\r\n";
-        if (proxy.active() && !proxy.authorization.empty())
-            headers += L"Proxy-Authorization: " + Wide(proxy.authorization) + L"\r\n";
-        for (const auto& header : incoming.headers)
-            headers += Wide(header.first) + L": " + Wide(header.second) + L"\r\n";
-        auto failed = [&] {
-            Failure(operation.error.load(), operation.secureFailure.load());
-            Send(client, "HTTP/1.1 502 Gateway Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
-        };
-        if (!operation.Await(WinHttpSendRequest(operation.request, headers.c_str(), static_cast<DWORD>(headers.size()),
-                incoming.body.empty() ? nullptr : const_cast<char*>(incoming.body.data()),
-                static_cast<DWORD>(incoming.body.size()), static_cast<DWORD>(incoming.body.size()),
-                reinterpret_cast<DWORD_PTR>(&operation)), stopping)) { failed(); return; }
-        if (!operation.Await(WinHttpReceiveResponse(operation.request, nullptr), stopping)) { failed(); return; }
-        DWORD status = 0, size = sizeof(status);
-        if (!WinHttpQueryHeaders(operation.request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
-                WINHTTP_HEADER_NAME_BY_INDEX, &status, &size, WINHTTP_NO_HEADER_INDEX) || status < 100 || status > 599)
-            throw std::runtime_error("E_NETWORK");
-        std::string response = "HTTP/1.1 " + std::to_string(status) + " Gateway\r\nConnection: close\r\n";
-        for (const auto* name : {L"Content-Type", L"Content-Encoding", L"Retry-After", L"Request-Id"}) {
-            std::array<wchar_t, 8192> value{}; DWORD bytes = static_cast<DWORD>(value.size() * sizeof(wchar_t));
-            if (WinHttpQueryHeaders(operation.request, WINHTTP_QUERY_CUSTOM, name, value.data(), &bytes, WINHTTP_NO_HEADER_INDEX))
-                response += NarrowHeader(name) + ": " + NarrowHeader(value.data()) + "\r\n";
-            else if (GetLastError() != ERROR_WINHTTP_HEADER_NOT_FOUND) throw std::runtime_error("E_NETWORK");
-        }
-        response += "\r\n";
-        if (!Send(client, response)) return;
-        std::array<char, 16384> buffer{};
-        while (!stopping.load()) {
-            // ReadData can wait to fill its requested length. Query the available
-            // bytes first so an SSE record is forwarded before the next arrives.
-            if (!operation.Await(WinHttpQueryDataAvailable(operation.request, nullptr), stopping)) {
-                Failure(operation.error.load()); return;
-            }
-            const DWORD available = operation.count.load();
-            if (!available) return;
-            const DWORD wanted = (std::min)(available, static_cast<DWORD>(buffer.size()));
-            if (!operation.Await(WinHttpReadData(operation.request, buffer.data(), wanted, nullptr), stopping)) {
-                Failure(operation.error.load()); return;
-            }
-            const DWORD read = operation.count.load();
-            if (!read) return;
-            if (!Send(client, buffer.data(), read)) return;
         }
     }
     void FinishRejectedResponse(SOCKET client) {
@@ -352,7 +221,6 @@ public:
         // Windows environment names are case-insensitive. Values stay in memory.
         const auto httpsProxy = environment(L"HTTPS_PROXY"), httpProxy = environment(L"HTTP_PROXY");
         const auto exclusions = environment(L"NO_PROXY");
-        configuredProxyPolicy = !httpsProxy.empty() || !httpProxy.empty() || !exclusions.empty();
         proxy = SelectGatewayProxy(NarrowHeader(host), port, httpsProxy, httpProxy, exclusions);
         if (parts.dwUrlPathLength) basePath.assign(parts.lpszUrlPath, parts.dwUrlPathLength);
         while (!basePath.empty() && basePath.back() == L'/') basePath.pop_back();

@@ -4259,3 +4259,31 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - This is a targeted correction against the existing actual Windows RED. Its
   native GREEN is pending; do not infer support from the bypass string alone.
   HTTPS-proxy nesting tests are still expected to fail until implemented.
+
+### 2026-10-03 — explicit socket routing and shared HTTP framing
+
+- Run37093895695 /7925122 still reports200/proxy0/origin1 for the same named
+  HTTP proxy denial test. The `<-loopback>` setting did not establish the required
+  route. Do not describe that setting as a successful fix.
+- Remove the WinHTTP forwarding branch rather than trying more implicit proxy
+  flags. Extract the already-used bounded/cancellable Winsock endpoint connection
+  from GatewayTls into GatewaySocket; both HTTP and TLS now explicitly connect
+  to the selected proxy or origin, without machine proxy lookup or origin fallback.
+  WinHTTP remains only for URL parsing/legacy neutral constants, not HTTP I/O.
+- HTTP proxy requests use absolute-form target and origin Host; direct/TLS origin
+  requests use origin-form. Proxy credentials are emitted only for the proxy hop,
+  never inherited from the child request. Request-body bytes are unchanged.
+  RED: missing shared request builder; GREEN: absolute/direct target, IPv6 Host,
+  framing length and credential-scope checks under ASAN/UBSAN.
+- Both paths now use GatewayResponseFraming, preserving validated wire headers,
+  chunking and trailers. Plain HTTP EOF is not mislabeled as a TLS close_notify;
+  HTTPS close-delimited responses retain their existing authenticated-EOF rule.
+- Positive Python TLS proxy fixture relays65544 bytes to exactly one fixed target,
+  in addition to rejection/cleanup cases. Full Python regression:175 tests,
+  5 platform skips. Local gateway syntax check reaches only the pre-existing
+  missing GetAddrInfoExCancel/GetAddrInfoExOverlappedResult MinGW declarations;
+  no production compatibility shim was added, no local native GREEN claim.
+- Add future HTTPS-proxy negative cases (hostname,expiry,untrusted CA), requiring
+  zero CONNECT/tunnels/origin requests, plus stalled TLS-proxy CONNECT cancellation.
+  Native routing GREEN remains pending, and HTTPS-proxy positive is still expected
+  RED until nesting is implemented. No independent Release claim.
