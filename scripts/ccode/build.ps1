@@ -109,16 +109,22 @@ try {
         "/nologo", "/std:c++17", "/O2", "/EHsc", "/MT", "/utf-8", "/DUNICODE", "/D_UNICODE",
         (Join-Path $PSScriptRoot "launcher.cpp"), $resourceObject
     ) + $enterpriseFlags + $launcherObjects + @(
-        "/Fe:$output", "/link", "bcrypt.lib", "/SUBSYSTEM:CONSOLE"
+        "/Fe:$output", "/link", "bcrypt.lib", "winhttp.lib", "ws2_32.lib", "/SUBSYSTEM:CONSOLE"
     )
     Invoke-Checked cl.exe @launcherArgs
 
-    foreach ($suite in @("process-tree", "native", "profile", "environment", "frontend", "session", "permission", "diagnostic")) {
+    foreach ($suite in @("gateway-http", "process-tree", "native", "profile", "environment", "frontend", "session", "permission", "diagnostic")) {
         $testExe = Join-Path $work "ccode-$suite-tests.exe"
         Invoke-Checked cl.exe /nologo /std:c++17 /O2 /EHsc /MT /utf-8 `
             (Join-Path $PSScriptRoot "..\..\tests\ccode\$suite-tests.cpp") "/Fe:$testExe" /link bcrypt.lib
         Invoke-Checked $testExe
     }
+
+    $gatewayProbe = Join-Path $work "ccode-gateway-bridge-probe.exe"
+    Invoke-Checked cl.exe /nologo /std:c++17 /O2 /EHsc /MT /utf-8 `
+        (Join-Path $PSScriptRoot "..\..\tests\ccode\gateway-bridge-probe.cpp") `
+        "/Fe:$gatewayProbe" /link bcrypt.lib winhttp.lib ws2_32.lib
+    Invoke-Checked python (Join-Path $PSScriptRoot "..\..\tests\ccode\gateway-bridge-integration.py") $gatewayProbe
 
     # Native verifier engineering tests. No Node runtime is linked into ccode.
     # Approved real signer policy and lifecycle integration remain pending.
@@ -142,7 +148,7 @@ try {
     $fixtureArgs = @("/nologo", "/std:c++17", "/O2", "/EHsc", "/MT", "/utf-8",
         "/DUNICODE", "/D_UNICODE", "/DCCODE_ENTERPRISE_REQUIRED", "/I$fixtureDir",
         (Join-Path $PSScriptRoot "launcher.cpp"), $resourceObject) + $cryptoObjects + @(
-        "/Fe:$fixtureExe", "/link", "bcrypt.lib", "/SUBSYSTEM:CONSOLE")
+        "/Fe:$fixtureExe", "/link", "bcrypt.lib", "winhttp.lib", "ws2_32.lib", "/SUBSYSTEM:CONSOLE")
     Invoke-Checked cl.exe @fixtureArgs
     Invoke-Checked $signatureTest $fixtureExe $metadataPath --enterprise-launcher
     & (Join-Path $PSScriptRoot "..\..\tests\ccode\test-enterprise-startup.ps1") -Executable $fixtureExe

@@ -1,6 +1,6 @@
-# API transport 修復提案（尚未批准或實作）
+# API transport 修復方案（已批准，實作中）
 
-日期：2026-10-03。目的：解決 unified sandbox Release 的真實 DNS／TLS 阻塞，並非更改失敗標準。
+日期：2026-10-03。使用者已明確回覆「同意」，批准實施原生 API transport。目的：解決 unified sandbox Release 的真實 DNS／TLS 阻塞，並非更改失敗標準。
 
 ## 已核實的起點
 
@@ -13,7 +13,7 @@
 ## 選項及取捨
 
 1. 等待上游輸出可靠的 structured cause：改動少，但目前沒有可驗證的可用修復，亦不能解決旧版相容驗收。
-2. 增加前端原生 API transport（建議，需確認架構變更）：實際 engine HTTP 請求經每次 invocation 的 loopback bridge，
+2. 增加前端原生 API transport（已選定）：實際 engine HTTP 請求經每次 invocation 的 loopback bridge，
    bridge 使用 Windows 原生網路介面連到設定的上游，從該次真實連線取得 DNS／憑證錯誤。
    這增加 HTTP／streaming／取消／憑證信任處理的責任，必須完整測試，不是小型錯誤字串補丁。
 3. 只做前置連線檢查：可能改善提示，但不能證明實際請求採用相同解析、連線及憑證；不作為修復選項。
@@ -37,4 +37,16 @@
 3. 真實 SSE、多輪工具、429、取消、斷流、redirect、並行及大小上限回歸；兩版本 engine 都接入 bridge。
 4. Windows hosted 全矩陣通過後，核實來源清單、企業 package／签名及剩餘資料安全門檻，再產出綁定 SHA 的獨立 Release。
 
-本文件僅記錄提案，不聲稱 transport 已實作、不移除任何現有失敗 gate，亦不聲稱 Release 已完成。
+## 實作進度：HTTP／DNS 垂直切片
+
+先接入 HTTP gateway：每次 RunTurn 建立 loopback capability listener，使用 WinHTTP async 執行
+實際 engine request，僅從該次 OS request error 分類 DNS。取消時關閉 request 並等待最後
+HANDLE_CLOSING callback，再回收 socket／threads。原始 engine bytes 不變，且不新增外部 runtime。
+
+- 完整／分段 HTTP body、capability、header framing／injection、hop-by-hop 移除已有可移植 RED→GREEN 測試。
+- 獨立 Windows fixture 將驗證真正轉發、並發、即時 stream、redirect 不跟隨、DNS 及取消回收。
+- HTTP slice 已接入 launcher；HTTPS 暫時仍由原始 engine 處理，不宣稱 TLS 已修好。
+- 後續必須補全 HTTPS 自訂 CA 相容性、request chunked framing、proxy 設定及其反例測試，
+  再核實正式候選／簽章及剩餘完整矩陣。這些未完成項不可由 HTTP slice 推論通過。
+
+方案批准不是實作／驗收通過；不移除任何現有失敗 gate，亦不聲稱 Release 已完成。

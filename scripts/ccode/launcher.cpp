@@ -1,5 +1,6 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
+#include "gateway-bridge.hpp"
 #include <windows.h>
 #include <bcrypt.h>
 #include <array>
@@ -433,7 +434,7 @@ bool RequiresExclusiveProfile(const Options& options) {
         !options.activateCandidate.empty() || !options.rollbackSnapshot.empty() ||
         !options.validateRollback.empty() || !options.activateRollback.empty();
 }
-std::vector<wchar_t> ChildEnvironment(const fs::path& profile, bool interactive) {
+std::vector<wchar_t> ChildEnvironment(const fs::path& profile, bool interactive, const std::wstring& gateway = {}) {
     std::vector<std::wstring> source;
     auto block = GetEnvironmentStringsW();
     if (!block) throw std::runtime_error("E_ENVIRONMENT");
@@ -442,6 +443,16 @@ std::vector<wchar_t> ChildEnvironment(const fs::path& profile, bool interactive)
     source.push_back(interactive ? L"CCODE_INTERACTIVE=1" : L"CCODE_INTERACTIVE=0");
     source.push_back(L"CCODE_FRONTEND_PID=" + std::to_wstring(GetCurrentProcessId()));
     auto entries = ccode::BuildEnvironment(source, profile);
+    if (!gateway.empty()) {
+        // Override after alias expansion; never mutate the parent environment.
+        entries.erase(std::remove_if(entries.begin(), entries.end(), [](const auto& value) {
+            return ccode::StartsWithInsensitive(value, L"ANTHROPIC_BASE_URL=") ||
+                   ccode::StartsWithInsensitive(value, L"A_BASE_URL=");
+        }), entries.end());
+        entries.push_back(L"ANTHROPIC_BASE_URL=" + gateway);
+        entries.push_back(L"A_BASE_URL=" + gateway);
+        std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) { return ccode::Lower(a) < ccode::Lower(b); });
+    }
     std::vector<wchar_t> result;
     for (auto& entry : entries) { result.insert(result.end(), entry.begin(), entry.end()); result.push_back(0); }
     result.push_back(0);
@@ -457,7 +468,11 @@ int RunTurn(const fs::path& module, const fs::path& payload, const fs::path& dat
     const auto turn = ccode::PlanSessionTurn(session);
     const auto sessionLockPath = ccode::PrepareSessionLockPath(data, profile, turn.id);
     auto sessionLock = AcquireFileLock(sessionLockPath, false, 0, "E_SESSION_BUSY", "E_SESSION_LOCK_PATH");
-    auto environment = ChildEnvironment(profile, interactive);
+    std::unique_ptr<ccode::GatewayBridge> gateway;
+    const auto upstream = Env(L"A_BASE_URL");
+    if (ccode::StartsWithInsensitive(upstream, L"http://"))
+        gateway = std::make_unique<ccode::GatewayBridge>(upstream);
+    auto environment = ChildEnvironment(profile, interactive, gateway ? gateway->Url() : std::wstring());
     Json mcp = {{"mcpServers", {{"ccode_permissions", {{"type", "stdio"},
         {"command", module.u8string()}, {"args", {"--ccode-permission-server"}}}}}}};
     std::wstring command = Quote(payload.wstring()) +
@@ -540,6 +555,7 @@ int RunTurn(const fs::path& module, const fs::path& payload, const fs::path& dat
     try { ccode::StopNativeProcessTree(job, code); }
     catch (...) { treeStopped = false; }
     writer.join();
+    if (gateway) gateway->Stop();
     activeJob.store(nullptr);
     if (!treeStopped) {
         if (failureCode) *failureCode = "E_PROCESS_TREE";
@@ -550,6 +566,13 @@ int RunTurn(const fs::path& module, const fs::path& payload, const fs::path& dat
     if (code == 130) {
         if (failureCode) *failureCode = "E_CANCELLED";
         std::cerr << "[Cancelled]\n"; return 130;
+    }
+    if (gateway && !gateway->Error().empty()) {
+        const auto error = gateway->Error();
+        if (failureCode) *failureCode = error;
+        if (error == "E_GATEWAY_DNS") std::cerr << ccode::ProtocolFailureMessage(error);
+        else std::cerr << "[E_NETWORK: gateway request failed]\n";
+        return 65;
     }
     if (!protocolError.empty()) {
         if (failureCode) *failureCode = protocolError;

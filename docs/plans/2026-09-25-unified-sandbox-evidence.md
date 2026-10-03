@@ -3786,3 +3786,22 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   enterprise gateway/model and third-party workload must be supplied/approved
   externally, never generated from engineering fixtures and called approved.
   Do not repeatedly rerun unchanged DNS/expiry/legacy TLS failures as progress.
+
+### 2026-10-03 — approved native API transport: HTTP/DNS slice
+
+- User approved the native transport proposal after accepting hosted Windows
+  evidence as the release platform. No TLS assertion or data-safety gate removed.
+- HTTP RunTurn now routes actual engine requests through an invocation-scoped,
+  loopback capability bridge and async WinHTTP. DNS code comes only from the
+  actual upstream request's OS error, not text, preflight or a synthetic event.
+  Native error is retained independently of the engine's generic error adapter.
+- Request-framing tests first failed for missing implementation, then passed;
+  malicious header/target tests next failed, then passed after validation and
+  hop-by-hop stripping. Python regression: 160 tests OK, 5 skipped (socket
+  fixtures required approved loopback access). New Windows probe cross-compiles.
+- Windows runtime execution remains pending for the probe and both real engines.
+  The probe covers forwarding/body/token preservation, capability denial,
+  concurrency, unbuffered stream, no redirect, actual DNS and bounded cancellation.
+- HTTPS still follows the unchanged engine path in this slice. Custom-CA parity,
+  request chunked framing and proxy configuration remain implementation work;
+  this slice is not a completed transport, full acceptance or a release.
