@@ -159,6 +159,35 @@ jobs:
         shell: pwsh
         run: python tests/ccode/tools-integration.py ./workspace-boundary-bin/ccode.exe --workspace-boundary-only
 
+  offline-hosted:
+    needs: test
+    if: ${{ !cancelled() }}
+    runs-on: windows-latest
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ['2.1.221', '2.1.282']
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ccode-windows-built-${{ matrix.version }}
+          path: offline-bin
+      - name: Verify isolated hosted offline runtime and restore networking
+        shell: pwsh
+        run: |
+          python scripts/ccode/hosted_offline.py --executable ./offline-bin/ccode.exe `
+            --version '${{ matrix.version }}' --revision '${{ github.sha }}' `
+            --evidence './offline-evidence/${{ matrix.version }}/offline.json'
+          if ($LASTEXITCODE -ne 0) { throw 'Hosted offline acceptance or restoration failed' }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: ${{ !cancelled() }}
+        with:
+          name: ccode-hosted-offline-${{ matrix.version }}
+          path: offline-evidence/${{ matrix.version }}/offline.json
+          if-no-files-found: error
+
   cross-version:
     needs: test
     if: ${{ !cancelled() }}

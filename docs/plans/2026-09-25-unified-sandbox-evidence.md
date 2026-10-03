@@ -4387,3 +4387,24 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - It does not prove later commits, signed enterprise candidate lifecycle,
   disconnected hosted acceptance, formal trust/notice approval, or an independent
   Release. Latest hosted-environment changes remain under separate CI validation.
+
+### 2026-10-03 Real hosted offline orchestration candidate
+
+- Added a hosted-only isolation controller and independent two-version CI jobs.
+  It rejects local/self-hosted execution, selects initially-Up non-loopback adapter
+  GUIDs, arms a separate bounded recovery process, disconnects adapters, runs the
+  existing offline acceptance harness, restores adapters and requires them Up.
+- The harness runs through the existing native-tested Job Object process runner,
+  so timeout cleanup reaps the process tree before normal network restoration.
+  Disconnect or trial failure still restores; restoration failures remain fatal.
+  A watchdog intervention invalidates the trial rather than silently passing it.
+- Controller tests cover successful ordering, partial disconnect/trial failures,
+  restoration failure, hosted-only guard, adapter input validation and recovery
+  signaling. Missing implementation / missing workflow step were observed RED;
+  those local tests are now GREEN. They do not prove actual Windows networking.
+- New native offline jobs remain pending. A01 stays unproven until genuine
+  disconnected evidence and restoration succeed. No local network was modified.
+  Watchdog cannot guarantee survival of forced destruction of the runner VM.
+- Latest prior run `37096185797` has a new failed 2.1.282 subagent step while still
+  running; its cause must be read after job completion. The earlier green run is
+  not generalized to this later candidate or every scheduling permutation.
