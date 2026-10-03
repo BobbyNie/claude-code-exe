@@ -11,6 +11,9 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$EvidencePath,
 
+    [ValidateSet('windows11-ordinary', 'github-hosted')]
+    [string]$AcceptanceTarget = 'windows11-ordinary',
+
     [string]$PythonCommand = 'python',
 
     [string]$WorkingRoot,
@@ -224,10 +227,11 @@ New-Item -ItemType Directory -Path $programRoot, $workspaceRoot, $dataRoot -Forc
 $app = Join-Path $programRoot 'ccode.exe'
 Copy-Item -LiteralPath $source -Destination $app
 
-# The ordinary-account, Windows 11 Client, OS x64 and process x64 gate is shared
-# with the connected test entry point, but this verifier itself is standalone.
+# Explicit platform scope never substitutes for the independent offline check.
+# The default still requires Windows 11 Client and an ordinary account.
 & $platformGate -Executable $app -ExpectedEngineVersion $ExpectedEngineVersion `
-    -AdapterRevision $AdapterRevision -EvidencePath $platformEvidencePath | Out-Null
+    -AdapterRevision $AdapterRevision -EvidencePath $platformEvidencePath `
+    -AcceptanceTarget $AcceptanceTarget | Out-Null
 $platformEvidence = Get-Content -LiteralPath $platformEvidencePath -Raw | ConvertFrom-Json
 
 $routeInventory = @(
@@ -365,7 +369,10 @@ $evidence = [ordered]@{
     schemaVersion = 1
     collectedAtUtc = [DateTime]::UtcNow.ToString('o')
     acceptance = [ordered]@{
-        scope = 'Windows 11 x64 offline ordinary-account package trial'
+        scope = $(if ($AcceptanceTarget -eq 'github-hosted') {
+            'GitHub hosted Windows x64 offline package trial'
+        } else { 'Windows 11 x64 offline ordinary-account package trial' })
+        acceptanceTarget = $AcceptanceTarget
         passed = -not [bool]$failure
         failure = ConvertTo-SafeText $failure
         loopbackFixture = [ordered]@{

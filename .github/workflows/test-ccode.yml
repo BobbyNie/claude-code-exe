@@ -34,6 +34,14 @@ jobs:
         id: build
         shell: pwsh
         run: ./scripts/ccode/build.ps1 -Version '${{ matrix.version }}' -AdapterRevision '${{ github.sha }}' -OutputDir .
+      - name: Record actual hosted platform and account
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          ./scripts/ccode/assert-windows11-x64.ps1 -Executable ./ccode.exe `
+            -ExpectedEngineVersion '${{ matrix.version }}' -AdapterRevision '${{ github.sha }}' `
+            -AcceptanceTarget github-hosted `
+            -EvidencePath './hosted-evidence/${{ matrix.version }}/environment.json'
       - name: Verify and record hosted package provenance
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         shell: pwsh
@@ -49,6 +57,12 @@ jobs:
         with:
           name: ccode-hosted-provenance-${{ matrix.version }}
           path: hosted-evidence/${{ matrix.version }}/package-provenance.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        with:
+          name: ccode-hosted-environment-${{ matrix.version }}
+          path: hosted-evidence/${{ matrix.version }}/environment.json
           if-no-files-found: error
       - name: Test manifest signature contracts
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}

@@ -4358,3 +4358,18 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - New fixture test reproduced missing safe assertion helper (RED), then passed
   after integration (GREEN), with private prompt/token/path markers excluded.
   This change does not claim all other diagnostic paths have been audited.
+
+### 2026-10-03 Hosted platform selection in standalone offline harness
+
+- The standalone offline harness previously unconditionally called the Windows11
+  ordinary-account gate despite the approved hosted acceptance scope. Added explicit
+  `AcceptanceTarget` (`windows11-ordinary` default, `github-hosted` opt-in) to the
+  shared platform collector and offline harness. Actual OS/build, x64 architecture,
+  administrator token and group membership remain recorded, not relabeled.
+- The hosted workflow now executes the platform collector and uploads environment
+  evidence separately from payload provenance. Windows script execution is pending
+  native CI; local source-contract RED→GREEN is not PowerShell execution evidence.
+- Offline non-loopback route/adapter rejection and service/driver/data deltas remain
+  unchanged. This does NOT supply offline evidence: a bounded hosted disconnect,
+  restoration and actual isolated harness run are still required before A01 passes.
+- No private key/trust approval or signed candidate is supplied by this change.

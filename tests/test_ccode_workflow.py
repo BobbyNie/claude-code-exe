@@ -189,6 +189,22 @@ class AcceptanceWorkflowTests(unittest.TestCase):
         ):
             self.assertIn(requirement, platform)
 
+    def test_hosted_offline_target_is_explicit_and_keeps_network_isolation_gate(self):
+        root = Path(__file__).resolve().parents[1]
+        platform = (root / 'scripts/ccode/assert-windows11-x64.ps1').read_text(encoding='utf-8')
+        offline = (root / 'scripts/ccode/accept-offline-windows11-x64.ps1').read_text(encoding='utf-8')
+        for source in (platform, offline):
+            self.assertIn("[ValidateSet('windows11-ordinary', 'github-hosted')]", source)
+            self.assertIn("[string]$AcceptanceTarget = 'windows11-ordinary'", source)
+        self.assertIn("$AcceptanceTarget -eq 'windows11-ordinary'", platform)
+        self.assertIn('acceptanceTarget = $AcceptanceTarget', platform)
+        self.assertIn('-AcceptanceTarget $AcceptanceTarget', offline)
+        self.assertIn("$nonLoopbackDefaultRoutes.Count -ne 0 -or $connectedNonLoopbackAdapters.Count -ne 0", offline)
+        self.assertIn("'GitHub hosted Windows x64 offline package trial'", offline)
+        workflow = (root / '.github/workflows/test-ccode.yml').read_text(encoding='utf-8')
+        self.assertIn('-AcceptanceTarget github-hosted', workflow)
+        self.assertIn('environment.json', workflow)
+
     def test_offline_windows11_acceptance_is_standalone_and_records_host_deltas(self):
         root = Path(__file__).resolve().parents[1]
         verifier_path = root / 'scripts/ccode/accept-offline-windows11-x64.ps1'
