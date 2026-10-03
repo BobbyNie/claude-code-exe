@@ -1,6 +1,6 @@
 # Unified Windows x64 Release readiness — 2026-10-03
 
-**Status: engineering CI green; public-edition publication authorized on 2026-10-03; enterprise approval remains incomplete.**
+**Status: public edition `ccode-v1.0.0-windows-x64` published on 2026-10-03; enterprise approval remains incomplete.**
 
 ## Verified candidate
 

@@ -4566,3 +4566,18 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   prove the approved signed enterprise candidate lifecycle. Independent Release
   remains unpublished; signer/pin, notice/redistribution/name-policy inputs and
   final candidate scope audit remain required. HTTPS-proxy→HTTPS is deferred only.
+
+## 2026-10-03 普通版独立 Release 已发布
+
+- 用户批准普通版范围后，发布 `ccode-v1.0.0-windows-x64`，Release ID `402363761`。
+- 发布时间：2026-10-03 14:22:52（Asia/Macau；UTC 06:22:52）。
+- GitHub API 确认 `draft=false`、`prerelease=false`；实际 tag 指向已通过 7/7 jobs 的
+  `ee64866c94ec523f8e52837da42b5cbca71cfeca`，而非后续仅文档提交。
+- 原样采用 CI run `37101196950` 的 2.1.282 产物，没有重建、rerun 或代码修改。
+- 五个发布附件（exe、ZIP、provenance、README、SHA256SUMS）均已上传；
+  草稿阶段逐一确认远端 size/SHA256 与本地字节一致，公开后再次核对清单和摘要。
+- exe SHA256：`4335f300620be156df853c1f8d8e8ba8ffc7687c465fb68b2e8ca0370d7f7038`。
+- ZIP SHA256：`a4b97b9fba7279468d56fe7f41b6db832772c3ef400bc4e67509b2dbb2d1524b`。
+- 未更改日常混合工具包，也未抢占其 latest 标记。普通版已交付；完整企业方案仍未完成。
+- 已知代理限制、无企业签名声明及 hosted 实际平台已在 Release 正文与 README 中公开。
+- 发布地址：https://github.com/BobbyNie/claude-code-exe/releases/tag/ccode-v1.0.0-windows-x64
