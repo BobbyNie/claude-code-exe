@@ -1,6 +1,6 @@
 # Unified Windows x64 Release readiness — 2026-10-03
 
-**Status: engineering CI green; independent Release not published or approved.**
+**Status: engineering CI green; public-edition publication authorized on 2026-10-03; enterprise approval remains incomplete.**
 
 ## Verified candidate
 
@@ -49,7 +49,7 @@ Provenance reports record extracted engine hash/size matching their embedded
 manifest, official source URLs/hashes, and exact adapter revision. This supports
 payload provenance, not a trusted publisher signature or redistribution approval.
 
-## Release blockers and proof still required
+## Enterprise release blockers and proof still required (historical full scope)
 
 1. **Approved distribution inputs (A02/A04):** actual required notice bytes plus
    independently approved hashes, redistribution authorization and approved
@@ -71,6 +71,10 @@ payload provenance, not a trusted publisher signature or redistribution approval
 5. **Publication:** only after these gates, publish the independent release with
    its exact verified candidate commit, final package hashes, notices and support
    limitations. Main's daily mixed bundle is not this deliverable.
+
+The user subsequently authorized an ordinary public release; the enterprise-only gates above
+no longer block that edition. See [public release scope](2026-10-03-public-release.md).
+This does not record enterprise acceptance as passed.
 
 No physical Windows11 gate is reinstated. No new release/tag was created by this
 readiness audit. These are retained requirements from the design and acceptance
