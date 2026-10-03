@@ -32,6 +32,33 @@ class GatewayTrust {
     }
 public:
     using Certificate = std::unique_ptr<const CERT_CONTEXT, CertificateDeleter>;
+    // Microsoft MsQuic cert_capi.c documents Schannel's chain-order property.
+    // Keep the serialized store alive through the returned leaf context so
+    // intermediate certificates remain available to the chain engine.
+    static Certificate DeserializePeer(const CRYPT_DATA_BLOB& blob) {
+        if (!blob.pbData || !blob.cbData || blob.cbData > 4 * 1024 * 1024)
+            throw std::runtime_error("E_GATEWAY_TLS");
+        Store store(CertOpenStore(CERT_STORE_PROV_SERIALIZED, X509_ASN_ENCODING, 0,
+            CERT_STORE_DEFER_CLOSE_UNTIL_LAST_FREE_FLAG, &blob));
+        Certificate leaf;
+        PCCERT_CONTEXT item = nullptr;
+        while ((item = CertEnumCertificatesInStore(store.value, item)) != nullptr) {
+            DWORD order = 0, length = sizeof(order);
+            if (!CertGetCertificateContextProperty(item, 0xE697U, &order, &length) || length != sizeof(order)) {
+                CertFreeCertificateContext(item);
+                throw std::runtime_error("E_GATEWAY_TLS");
+            }
+            if (!order) {
+                if (leaf) {
+                    CertFreeCertificateContext(item);
+                    throw std::runtime_error("E_GATEWAY_TLS");
+                }
+                leaf.reset(CertDuplicateCertificateContext(item));
+            }
+        }
+        if (!leaf) throw std::runtime_error("E_GATEWAY_TLS");
+        return leaf;
+    }
     static Certificate Decode(const std::string& pem) {
         if (pem.size() > 4 * 1024 * 1024) throw std::runtime_error("E_GATEWAY_TLS");
         DWORD length = 0;

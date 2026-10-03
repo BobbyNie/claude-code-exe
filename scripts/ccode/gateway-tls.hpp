@@ -135,11 +135,17 @@ class GatewayTls {
             // Schannel manual validation is not permission to accept an invalid
             // peer: validate as soon as the certificate exists, before sending
             // the next handshake token (in particular, the client's Finished).
-            PCCERT_CONTEXT peer = nullptr;
-            if (!verified && QueryContextAttributesW(&context, SECPKG_ATTR_REMOTE_CERT_CONTEXT, &peer) == SEC_E_OK) {
-                const auto policy = trust.Verify(peer, hostname);
-                CertFreeCertificateContext(peer);
-                if (policy != GatewayCertificateResult::Trusted) throw std::runtime_error("E_GATEWAY_TLS");
+            // Unlike REMOTE_CERT_CONTEXT (available too late on TLS 1.2),
+            // SDK attribute 0x75 is explicitly valid DURING the SSPI loop.
+            // Do not use its 0x74 INPROC counterpart: that is post-handshake.
+            struct PeerBlob {
+                CERT_BLOB value{};
+                ~PeerBlob() { if (value.pbData) FreeContextBuffer(value.pbData); }
+            } peer;
+            if (!verified && QueryContextAttributesW(&context, 0x75, &peer.value) == SEC_E_OK) {
+                const auto certificate = GatewayTrust::DeserializePeer(peer.value);
+                if (trust.Verify(certificate.get(), hostname) != GatewayCertificateResult::Trusted)
+                    throw std::runtime_error("E_GATEWAY_TLS");
                 verified = true;
             }
             if (status == SEC_E_OK && !(attributes & ISC_RET_CONFIDENTIALITY)) throw std::runtime_error("E_NETWORK");

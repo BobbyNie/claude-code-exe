@@ -3951,3 +3951,20 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   connection/handshake counters to its assertion, identical in privacy scope to
   the real-engine fixture, to distinguish no connection from a completed handshake.
   No assertion changed or guessed TLS exception reclassified. Native GREEN pending.
+
+### 2026-10-03 — query the actual peer during the SSPI handshake
+
+- Run 37085799560 (`1b2a862`) confirms reject-response tests now pass in both
+  Windows builds. TLS remains RED: one TLS1.2 handshake completed, zero HTTP
+  requests, and no server handshake error. Zero HTTP is not TLS acceptance.
+- Microsoft SDK `minschannel.h` defines serialized peer attribute 0x75 as usable
+  during and after the SSPI loop; 0x74 INPROC is explicitly post-handshake only.
+  Query 0x75 before emitting continuation tokens and validate the actual peer
+  under the same invocation-scoped trust policy. No preflight or second connection.
+- Deserialize the store using Schannel's chain-order property as documented by
+  Microsoft MsQuic `src/platform/cert_capi.c`; preserve intermediates through the
+  leaf context, reject missing/malformed order and ambiguous leaf identity.
+- New native serialization tests first fail compilation on missing DeserializePeer
+  (RED). Implementation cross-compiles with warnings as errors for both policy
+  suite and bridge probe. Native runtime GREEN is pending the pushed Windows run;
+  compilation is not proof of handshake rejection. Assertions remain unchanged.
