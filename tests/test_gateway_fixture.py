@@ -221,6 +221,13 @@ class GatewayFixtureTests(unittest.TestCase):
         with self.assertRaises(AssertionError):
             fixture.stream_failure_diagnostic('private E_MISSING_RESULT text')
 
+    def test_native_network_failure_takes_precedence_over_engine_adapter_error(self):
+        self.assertEqual(fixture.stream_failure_diagnostic(
+            '[E_ENGINE: request failed]\n[E_NETWORK: gateway request failed]\n'),
+            ('E_NETWORK', 'network'))
+        with self.assertRaises(AssertionError):
+            fixture.stream_failure_diagnostic('private [E_NETWORK: gateway request failed] text')
+
     def test_complete_arguments_still_lack_block_and_message_termination(self):
         events = fixture.unfinished_tool_events("fixture-model", "target.txt", "marker", True)
         self.assertEqual([kind for kind, _ in events],

@@ -3844,3 +3844,15 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
   This is a foundation, not an integrated HTTPS transport: launcher still routes
   HTTPS through the original engine. Schannel connection integration, custom CA
   loading, proxy parity and real positive/negative TLS handshakes remain required.
+
+### 2026-10-03 — gateway diagnostic oracle correction
+
+- Job111086229362 on run37082623497 fails check_unreachable at exact diagnostic
+  equality: the new native E_NETWORK report supersedes an earlier E_ENGINE line,
+  while the fixture only recognizes the old engine lines. This is a newly
+  exposed fixture mismatch; it is not evidence that untrusted TLS was reached.
+- Add a RED test containing both canonical lines, then prioritize the exact
+  native neutral line (GREEN). Arbitrary/private substring matching remains
+  rejected and full report schema/privacy equality remains mandatory.
+- Python regression: 161 tests OK, 5 skipped, with approved loopback access.
+  Real-engine Windows GREEN for this correction is pending a new CI run.

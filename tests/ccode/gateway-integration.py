@@ -295,6 +295,7 @@ def stream_failure_diagnostic(terminal):
     """Choose only exact neutral renderer lines, never substring-match private text."""
     lines = set(terminal.splitlines())
     candidates = (
+        ('E_NETWORK', 'network', '[E_NETWORK: gateway request failed]'),
         ('E_GATEWAY_RETRY', 'network', '[E_GATEWAY_RETRY: automatic retry refused]'),
         ('E_MISSING_RESULT', 'protocol', '[E_MISSING_RESULT: incomplete turn]'),
         ('E_TRUNCATED_EVENT', 'protocol', '[E_TRUNCATED_EVENT: incomplete turn]'),
