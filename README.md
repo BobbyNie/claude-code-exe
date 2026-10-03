@@ -227,7 +227,7 @@ codex-wrapper.bat
 6. 有更新时将五个产品及便携脚本发布到同一个 GitHub Release；已有工具包缺少 ccode 时修复同一个 Release，不删除标签
 
 每日发布工作流在 `main` 上运行，计划时间为 UTC 00:00（澳门/北京时间 08:00）；
-GitHub 排队可能使实际执行时间延后。UTC 01:00 的独立检查流程核对已发布附件。
+GitHub 排队可能使实际执行时间延后。发布流程成功完成后自动核对已发布附件，并保留 UTC 01:00 的定时检查和手动检查；不在推送时抢先检查尚未发布的附件。
 也可以在 Actions 页面手动运行 `Auto Release AI Tools Portable`。
 
 `ccode` 普通版现在与 Claude Code、Qwen Code、Codex App、Codex CLI 一起发布。

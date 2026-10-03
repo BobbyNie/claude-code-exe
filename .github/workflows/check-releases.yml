@@ -4,26 +4,24 @@ on:
   schedule:
     - cron: '0 1 * * *'
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/check-releases.yml'
-      - 'scripts/check-all-versions.ps1'
-      - 'scripts/check-github-releases.ps1'
-      - 'scripts/codex/**'
-      - 'scripts/qwen/**'
+  workflow_run:
+    workflows: [Auto Release AI Tools Portable]
+    types: [completed]
+    branches: [main]
 
 permissions:
   contents: read
 
 jobs:
   verify-releases:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: windows-latest
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Verify releases match official latest versions
         env:
