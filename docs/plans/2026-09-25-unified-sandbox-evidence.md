@@ -4228,3 +4228,20 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - GREEN: ASAN/UBSAN proxy suite and Windows cross-compilation. Actual Windows
   startup/CONNECT GREEN remains pending the changed-code run; this is not an
   unchanged rerun or a claim that all proxy cases now pass.
+
+### 2026-10-03 — proxy fixture evidence, not transport completion
+
+- Run37093343641 /38d29f2 passes the formerly failing bridge startup and reaches
+  the HTTP proxy407 assertion, which fails in both engine jobs. Its result does
+  not reveal the actual status or whether the proxy/origin was contacted; do not
+  guess the next production fix. Add only neutral status and connection/request
+  counts to that assertion; do not log URI, credentials, headers or bodies.
+- Extend the fixed-target CONNECT fixture to accept verified TLS from a client.
+  RED: missing tls_context parameter; GREEN: Python client validates the test CA
+  and proxy hostname before issuing CONNECT. A separate RED caught an unclosed
+  wrapped SSLSocket; explicit handler.finish close makes that regression GREEN.
+  Full local regression:174 tests,5 platform skips, no failures.
+- The Windows positive/denial fixture now also requires HTTPS-proxy CONNECT,
+  separately counting outer TLS handshakes. Production still rejects HTTPS proxy
+  URLs; that requirement is expected RED, not an implemented feature. The earlier
+  HTTP proxy failure may stop execution before this new assertion is reached.

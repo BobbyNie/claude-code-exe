@@ -52,14 +52,24 @@ def proxy_environment(uri, bypass=""):
 
 
 @contextmanager
-def connect_proxy(target, *, deny=False, authorization="", authority_host=None, stall=False):
+def connect_proxy(target, *, deny=False, authorization="", authority_host=None, stall=False, tls_context=None):
     """Local test proxy: fixed target only, connection counts, no private logs."""
     authority = f"{authority_host or target[0]}:{target[1]}"
 
     class Handler(socketserver.BaseRequestHandler):
+        def finish(self):
+            self.request.close()
+
         def handle(self):
             self.server.connections += 1
             self.request.settimeout(5)
+            if tls_context is not None:
+                try:
+                    self.request = tls_context.wrap_socket(self.request, server_side=True)
+                    self.server.tls_handshakes += 1
+                except (ssl.SSLError, ConnectionError):
+                    self.server.tls_failures += 1
+                    return
             header = bytearray()
             while not header.endswith(b"\r\n\r\n"):
                 byte = self.request.recv(1)
@@ -100,7 +110,7 @@ def connect_proxy(target, *, deny=False, authorization="", authority_host=None, 
             self.handler_failed = True  # Never print an exception containing peer data.
 
     server = Server(("127.0.0.1", 0), Handler)
-    server.connections = server.tunnels = 0
+    server.connections = server.tunnels = server.tls_handshakes = server.tls_failures = 0
     server.handler_failed = False
     server.started, server.stopped = threading.Event(), threading.Event()
     server.worker = threading.Thread(target=server.serve_forever, daemon=True)
@@ -213,7 +223,10 @@ def main(executable):
         with connect_proxy(("127.0.0.1", server.server_port), deny=True) as proxy:
             env = proxy_environment(f"http://127.0.0.1:{proxy.server_address[1]}")
             with bridge(executable, upstream, env=env) as (process, url):
-                assert request(url)[0] == 407
+                status = request(url)[0]
+                assert status == 407, "HTTP proxy denial mismatch: " + json.dumps({
+                    "status": status, "proxy_connections": proxy.connections,
+                    "proxy_tunnels": proxy.tunnels, "origin_requests": len(records)})
                 assert proxy.connections == 1 and proxy.tunnels == 0 and not records
                 stdout, stderr = process.communicate("stop\n", timeout=5)
                 assert process.returncode == 0 and not stdout.strip() and not stderr.strip()
@@ -318,14 +331,19 @@ def main(executable):
         tls_thread.start()
         try:
             target = ("127.0.0.1", tls_server.server_port)
-            for deny in (False, True):
-                with connect_proxy(target, deny=deny, authorization="Basic dXNlcjpwQHNz") as proxy:
-                    env = proxy_environment(f"http://user:p%40ss@127.0.0.1:{proxy.server_address[1]}")
+            for scheme, deny in (("http", False), ("http", True), ("https", False), ("https", True)):
+                with connect_proxy(target, deny=deny, authorization="Basic dXNlcjpwQHNz",
+                                   tls_context=tls_context if scheme == "https" else None) as proxy:
+                    env = proxy_environment(f"{scheme}://user:p%40ss@127.0.0.1:{proxy.server_address[1]}")
                     before = len(records)
                     with bridge(executable, f"https://127.0.0.1:{tls_server.server_port}/base/",
                                 certificates / "expired-test-ca.pem", env=env) as (process, url):
                         result = request(url)
-                        assert result[0] == (502 if deny else 200)
+                        assert result[0] == (502 if deny else 200), "Proxy transport mismatch: " + json.dumps({
+                            "scheme": scheme, "denied": deny, "status": result[0],
+                            "proxy_connections": proxy.connections, "proxy_tls": proxy.tls_handshakes,
+                            "proxy_tunnels": proxy.tunnels, "origin_requests": len(records) - before})
+                        assert proxy.tls_handshakes == (1 if scheme == "https" else 0)
                         assert proxy.connections == 1 and proxy.tunnels == (0 if deny else 1)
                         assert len(records) == before + (0 if deny else 1), "Proxy denial fell back to origin"
                         assert not getattr(tls_server, "proxy_credentials_seen", False), "Proxy credentials reached origin"
