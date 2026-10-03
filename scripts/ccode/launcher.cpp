@@ -442,17 +442,7 @@ std::vector<wchar_t> ChildEnvironment(const fs::path& profile, bool interactive,
     FreeEnvironmentStringsW(block);
     source.push_back(interactive ? L"CCODE_INTERACTIVE=1" : L"CCODE_INTERACTIVE=0");
     source.push_back(L"CCODE_FRONTEND_PID=" + std::to_wstring(GetCurrentProcessId()));
-    auto entries = ccode::BuildEnvironment(source, profile);
-    if (!gateway.empty()) {
-        // Override after alias expansion; never mutate the parent environment.
-        entries.erase(std::remove_if(entries.begin(), entries.end(), [](const auto& value) {
-            return ccode::StartsWithInsensitive(value, L"ANTHROPIC_BASE_URL=") ||
-                   ccode::StartsWithInsensitive(value, L"A_BASE_URL=");
-        }), entries.end());
-        entries.push_back(L"ANTHROPIC_BASE_URL=" + gateway);
-        entries.push_back(L"A_BASE_URL=" + gateway);
-        std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) { return ccode::Lower(a) < ccode::Lower(b); });
-    }
+    const auto entries = ccode::BuildEnvironment(source, profile, gateway);
     std::vector<wchar_t> result;
     for (auto& entry : entries) { result.insert(result.end(), entry.begin(), entry.end()); result.push_back(0); }
     result.push_back(0);

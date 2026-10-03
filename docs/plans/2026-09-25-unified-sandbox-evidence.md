@@ -4158,3 +4158,25 @@ B/C、遠端檔案同步不屬選定 A 方案；不能用這個排除理由省�
 - This slice addresses the native HTTPS response path only. Proxy parity, the
   separate WinHTTP response path, full candidate acceptance and formal Release
   gates remain open; no release or comprehensive transport parity claim.
+
+### 2026-10-03 — invocation-local bridge proxy bypass
+
+- Inspection found that ChildEnvironment rewrote the API endpoint to the private
+  127.0.0.1 bridge while retaining inherited proxy variables without an explicit
+  bypass. This is a routing/privacy risk, not evidence of an observed disclosure.
+- Move endpoint override into the actual BuildEnvironment path and append only
+  127.0.0.1 to the child's existing NO_PROXY when a bridge exists. Preserve original
+  exclusions, HTTP_PROXY/HTTPS_PROXY and the parent environment; no blanket `*`
+  exemption is introduced. No-bridge children retain their original proxy policy.
+- RED: missing gateway-aware BuildEnvironment signature. GREEN: mixed-case
+  variables, empty/missing exclusions, existing wildcard preservation, original
+  endpoint replacement and unchanged parent/no-bridge cases. Portable environment
+  suite runs and Windows suite cross-compiles.
+- Add a real-engine HTTP401 fixture with inherited proxy settings and empty
+  NO_PROXY: the gateway must receive exactly one model request, emit the existing
+  neutral diagnostic, and the proxy probe must observe zero connections. The
+  probe counts connections without reading paths, credentials or bodies. Its own
+  test failed for missing implementation before passing. Hosted execution pending.
+- Full local Python regression:170 tests,5 platform skips, no failures. This is
+  the engine-to-loopback hop only; upstream HTTP/HTTPS proxy transport remains
+  unfinished and is not inferred from this bypass or the hosted fixture.

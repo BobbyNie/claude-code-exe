@@ -1,10 +1,11 @@
 """Actual engine gateway rejection; local HTTP fixture and dummy credentials only."""
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 import json
 import os
 from pathlib import Path
 import shutil
 import socket
+import socketserver
 import ssl
 import subprocess
 import sys
@@ -92,6 +93,27 @@ def untrusted_tls_endpoint(*, maximum_version=None, expired=False, trusted_chain
         server.shutdown()
         server.server_close()
         worker.join(timeout=5)
+
+
+@contextmanager
+def rejecting_proxy_probe():
+    """Count connections only; never read proxy paths, credentials or bodies."""
+    class Handler(socketserver.BaseRequestHandler):
+        def handle(self):
+            self.server.connections += 1
+            self.request.sendall(b"HTTP/1.1 502 Probe Rejected\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+
+    server = socketserver.TCPServer(("127.0.0.1", 0), Handler)
+    server.connections = 0
+    server.worker = threading.Thread(target=server.serve_forever, daemon=True)
+    server.worker.start()
+    try:
+        yield server
+    finally:
+        server.shutdown()
+        server.server_close()
+        server.worker.join(timeout=5)
+        assert not server.worker.is_alive(), "Proxy probe cleanup did not finish"
 
 
 @contextmanager
@@ -313,8 +335,9 @@ def stream_failure_diagnostic(terminal):
 
 
 def check_rejection(executable, status_code, error_type, diagnostic, stream_cut=False,
-                    graceful_eof=False, complete_arguments=False):
-    with tempfile.TemporaryDirectory(prefix="ccode-gateway-") as folder:
+                    graceful_eof=False, complete_arguments=False, proxy_bypass=False):
+    with tempfile.TemporaryDirectory(prefix="ccode-gateway-") as folder, (
+            rejecting_proxy_probe() if proxy_bypass else nullcontext(None)) as proxy:
         root = Path(folder).resolve()
         program = root / "program"
         workspace = root / "workspace"
@@ -374,6 +397,11 @@ def check_rejection(executable, status_code, error_type, diagnostic, stream_cut=
         env = {key: value for key, value in os.environ.items()
                if not key.startswith(("A_", "C_", "ANTHROPIC_", "CLAUDE_", "CCODE_"))}
         env.update(A_AUTH_TOKEN=token, A_BASE_URL=f"http://127.0.0.1:{server.server_port}")
+        if proxy is not None:
+            env = {key: value for key, value in env.items()
+                   if key.lower() not in {"http_proxy", "https_proxy", "all_proxy", "no_proxy"}}
+            proxy_url = f"http://127.0.0.1:{proxy.server_address[1]}"
+            env.update(HTTP_PROXY=proxy_url, HTTPS_PROXY=proxy_url, ALL_PROXY=proxy_url, NO_PROXY="")
         try:
             tool_options = ["--tools", "Write", "--allowedTools", "Write"] if stream_cut else ["--tools", ""]
             report_path = root / "failure.json"
@@ -405,6 +433,8 @@ def check_rejection(executable, status_code, error_type, diagnostic, stream_cut=
                 }
                 raise AssertionError("Gateway rejection timed out: " + json.dumps(diagnostics)) from None
             assert result.returncode != 0, "Failed gateway turn incorrectly succeeded"
+            if proxy is not None:
+                assert proxy.connections == 0, "Private loopback hop reached the configured proxy"
             if stream_cut:
                 assert cut_delivered.is_set(), "Truncated tool arguments were not delivered"
             messages = [body for path, body in requests if path == "/v1/messages"]
@@ -441,6 +471,8 @@ def check_rejection(executable, status_code, error_type, diagnostic, stream_cut=
                         else "unfinished tool stream at clean HTTP EOF" if graceful_eof
                         else "truncated tool stream" if stream_cut else f"HTTP {status_code}")
             print(f"PASS: actual engine {scenario} fails without model-request replay, workspace writes or terminal secret disclosure")
+            if proxy is not None:
+                print("PASS: actual engine loopback bridge bypasses inherited proxy without proxy connections")
         finally:
             server.shutdown()
             server.server_close()
@@ -457,6 +489,7 @@ if __name__ == "__main__":
         sys.exit(0)
     check_unreachable(executable)
     check_rejection(executable, 401, "authentication_error", "E_GATEWAY_AUTH")
+    check_rejection(executable, 401, "authentication_error", "E_GATEWAY_AUTH", proxy_bypass=True)
     check_rejection(executable, 429, "rate_limit_error", "E_GATEWAY_RATE_LIMIT")
     check_rejection(executable, 200, None, "E_", stream_cut=True)
     check_rejection(executable, 200, None, "E_", stream_cut=True, graceful_eof=True)

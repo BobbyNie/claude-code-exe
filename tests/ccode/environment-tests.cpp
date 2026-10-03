@@ -29,6 +29,35 @@ int main() {
     assert(has(L"NODE_TLS_REJECT_UNAUTHORIZED=1"));
     assert(!has(L"node_tls_reject_unauthorized=0"));
 
+    // Only the child bridge hop bypasses proxies. Preserve upstream/tool proxy
+    // settings and caller exclusions, and never mutate the inherited block.
+    const std::vector<std::wstring> inheritedProxy = {
+        L"https_proxy=http://proxy.invalid:8080", L"HTTP_PROXY=http://proxy.invalid:8081",
+        L"no_proxy=corp.internal .example.test", L"A_BASE_URL=https://upstream.test",
+        L"ANTHROPIC_BASE_URL=https://stale.test"};
+    const auto bridgeEnv = ccode::BuildEnvironment(inheritedProxy, L"D:\\profile",
+        L"http://127.0.0.1:1234/capability");
+    const auto contains = [](const auto& block, const std::wstring& value) {
+        return std::find(block.begin(), block.end(), value) != block.end();
+    };
+    assert(contains(bridgeEnv, L"NO_PROXY=corp.internal .example.test,127.0.0.1"));
+    assert(contains(bridgeEnv, L"https_proxy=http://proxy.invalid:8080"));
+    assert(contains(bridgeEnv, L"HTTP_PROXY=http://proxy.invalid:8081"));
+    assert(contains(bridgeEnv, L"A_BASE_URL=http://127.0.0.1:1234/capability"));
+    assert(contains(bridgeEnv, L"ANTHROPIC_BASE_URL=http://127.0.0.1:1234/capability"));
+    assert(contains(inheritedProxy, L"no_proxy=corp.internal .example.test"));
+    assert(!contains(bridgeEnv, L"no_proxy=corp.internal .example.test"));
+    for (const auto& inherited : {std::vector<std::wstring>{},
+                                 std::vector<std::wstring>{L"NO_PROXY="}}) {
+        const auto child = ccode::BuildEnvironment(inherited, L"profile", L"http://127.0.0.1:1234/capability");
+        assert(contains(child, L"NO_PROXY=127.0.0.1"));
+    }
+    const auto noBridge = ccode::BuildEnvironment(inheritedProxy, L"profile");
+    assert(contains(noBridge, L"no_proxy=corp.internal .example.test"));
+    assert(contains(noBridge, L"ANTHROPIC_BASE_URL=https://upstream.test"));
+    assert(contains(ccode::BuildEnvironment({L"NO_PROXY=*"}, L"profile", L"http://127.0.0.1:1234/capability"),
+                    L"NO_PROXY=*,127.0.0.1"));
+
     const auto boundary = ccode::BoundaryManifest();
     assert(boundary.at("schemaVersion") == 1);
     assert(boundary.at("platform") == "windows");

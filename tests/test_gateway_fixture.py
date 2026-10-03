@@ -17,6 +17,14 @@ spec.loader.exec_module(fixture)
 
 
 class GatewayFixtureTests(unittest.TestCase):
+    def test_proxy_probe_observes_connections_without_reading_request_data(self):
+        with fixture.rejecting_proxy_probe() as proxy:
+            with socket.create_connection(proxy.server_address, timeout=2) as connection:
+                response = connection.recv(1024)
+                self.assertTrue(response.startswith(b"HTTP/1.1 502 "))
+            self.assertEqual(proxy.connections, 1)
+        self.assertFalse(proxy.worker.is_alive())
+
     def test_dns_refusal_requires_nonzero_exit_and_exact_neutral_line(self):
         self.assertTrue(fixture.dns_failure_observed(1, '[E_GATEWAY_DNS: name resolution failed]\n'))
         self.assertFalse(fixture.dns_failure_observed(0, '[E_GATEWAY_DNS: name resolution failed]\n'))
