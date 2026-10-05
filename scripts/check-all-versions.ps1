@@ -158,8 +158,6 @@ function New-BundleReleaseTag {
 function Get-BundleRequiredAssets {
     return @(
         "claude.exe",
-        "ccode.exe",
-        "ccode-provenance.json",
         "SHA256SUMS.txt",
         "claude-wrapper.bat",
         "qwen-wrapper.bat",

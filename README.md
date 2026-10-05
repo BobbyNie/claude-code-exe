@@ -25,14 +25,15 @@
 在 [Releases](https://github.com/BobbyNie/claude-code-exe/releases) 页面下载最新 `AI Tools Portable Bundle`。同一个 Release asset 中包含：
 
 - `claude.exe` / `claude-wrapper.bat`
-- `ccode.exe`（Claude Code 的隔离便携封装）
 - `qwen.exe` / `qwen-wrapper.bat`
 - `Codex.msix`
 - `codex.exe` / `codex-wrapper.bat`
 
 Release 描述会列出 Claude Code、Qwen Code、Codex App、Codex CLI 各自的版本号。
 
-## ccode.exe 使用方法
+## ccode.exe 历史版本使用方法
+
+自 2026-10-05 起，自动发布不再构建或上传 ccode。以下说明仅适用于历史版本或自行构建的版本。源码和独立回归测试保留。
 
 `ccode.exe` 是 Claude Code 的单文件隔离封装。它会在首次运行时把经过校验的官方 Windows x64 payload 解压到自身目录下的 `data\cc\runtime\`，并将用户配置、缓存和临时文件隔离到 `data\cc\profile\`。请将它放在名称不含 `anthropic` 或 `claude`（不区分大小写）的目录中运行。
 
@@ -147,7 +148,7 @@ Windows 回归测试会加载实际隔离 DLL，检查重复创建目录、文�
 
 - ccode 显式使用 `default` 权限模式，保留本地逐次批准和拒绝机制，不随上游默认值切换为 `auto` 分类器；仍可显式选择受支持的 `plan` 或 `acceptEdits` 模式，不开放权限绕过模式。
 - ccode 会拒绝同时缺少 `A_AUTH_TOKEN` 和 `A_API_KEY`、空的 `A_BASE_URL`、交互式登录命令，以及名称含保留字的启动目录或工作目录；它不会检查凭证或 URL 值中的保留字、路径或协议。
-- 如果仍出现连接官方服务的提示，请确认使用的是最新 Release 中的 `ccode.exe`，并在同一个启动脚本中设置 `A_AUTH_TOKEN`、`A_BASE_URL` 和模型变量；`C_*` 变量不要保留 `CODE_` 片段。
+- 如果仍出现连接官方服务的提示，请确认使用的是对应历史 Release 或自行构建的 `ccode.exe`，并在同一个启动脚本中设置 `A_AUTH_TOKEN`、`A_BASE_URL` 和模型变量；`C_*` 变量不要保留 `CODE_` 片段。
 - 不要使用 `setx` 持久化 API Key；优先在当前终端设置，或通过企业认可的密钥管理工具注入。
 - 企业 EDR/防毒软件可能会拦截启动期相容层注入。若启动返回错误，请将 `ccode.exe` 及其解压出的 `data\cc\runtime\` 加入企业批准的白名单，而不是关闭防护软件。
 - 该封装不改变官方 payload 的版权、许可或服务条款；请确认企业代理和账号使用方式符合适用条款。
@@ -223,24 +224,24 @@ codex-wrapper.bat
 1. 每周从官方源检测四个产品的最新版本
 2. 下载 Claude/Qwen/Codex App/Codex CLI Windows 产物
 3. 为 CLI 工具添加便携启动脚本
-4. 用本次检测到的最新 Claude Code 版本构建普通版 `ccode.exe`，校验内嵌引擎与 `claude.exe` 完全一致并运行验收
-5. 按四个上游版本号生成组合标签；公开 Release 已存在且包含 `ccode.exe`、来源记录、校验清单及所有必需附件时跳过
-6. 有更新时将五个产品及便携脚本发布到同一个 GitHub Release；已有工具包缺少 ccode 时修复同一个 Release，不删除标签
+4. 为四个产品和便携脚本生成 SHA256 校验清单
+5. 按四个上游版本号生成组合标签；公开 Release 已存在且包含四个产品、校验清单及所有必需附件时跳过
+6. 有更新时将四个产品及便携脚本发布到同一个 GitHub Release；附件不完整时修复同一个 Release，不删除标签
 
 每周发布工作流在 `main` 上运行，计划时间为每周一 UTC 00:00（澳门/北京时间 08:00）；
 GitHub 排队可能使实际执行时间延后。发布流程成功完成后自动核对已发布附件，并保留每周一 UTC 01:00 的定时检查和手动检查；不在推送时抢先检查尚未发布的附件。
 也可以在 Actions 页面手动运行 `Auto Release AI Tools Portable`。
 
-`ccode` 普通版现在与 Claude Code、Qwen Code、Codex App、Codex CLI 一起发布。
-不使用旧的 `append-ccode-release.yml` 后置追加流程：构建、测试、来源校验全部通过后才发布。
+自动发布仅包含 Claude Code、Qwen Code、Codex App 和 Codex CLI。
+自动发布不再构建、验收或上传 `ccode.exe` 与 `ccode-provenance.json`，也不再要求这两个附件。
 新 Release 先以草稿上传，核对远端附件大小和 SHA256 后公开；失败不会报告发布成功。
-2026-10-03 的独立 Release 仅作为历史版本保留，后续请下载每周混合工具包中的 `ccode.exe`。
+历史 Release 中的 ccode 附件保留，不自动删除。
 `main` 上封装代码或测试变更会触发 Windows x64 回归测试；不使用企业签名材料作为普通版门槛。
 
 | 产品 | 工作流 | 版本源 | 发布产物 |
 | --- | --- | --- | --- |
 | Claude Code | `auto-release.yml` | Google Cloud Storage | `claude.exe` + `claude-wrapper.bat` |
-| ccode 普通版 | `auto-release.yml` | 同次检测的最新 Claude Code payload + 本项目兼容层 | `ccode.exe` + 来源记录 + SHA256 清单 |
+| ccode 历史版本／自行构建 | 不再自动发布 | 保留源码与独立回归测试 | 不上传至新 Release |
 | Qwen Code | `auto-release.yml` | 阿里云 OSS | `qwen.exe` + `qwen-wrapper.bat` |
 | Codex App | `auto-release.yml` | Microsoft Store metadata / Microsoft CDN | `Codex.msix` |
 | Codex CLI | `auto-release.yml` | `openai/codex` GitHub Releases | `codex.exe` + `codex-wrapper.bat` |
@@ -257,4 +258,4 @@ GitHub 排队可能使实际执行时间延后。发布流程成功完成后自�
 - [Codex Windows App 文档](https://developers.openai.com/codex/app/windows)
 - [Codex CLI 仓库](https://github.com/openai/codex)
 
-Windows 回归在每次运行开始时读取一次 Claude Code 官方 `latest` 和 `stable` 版本，所有构建、离线及工作区测试共用该快照，不再锁定历史版本。两个通道不同时验证升级和回滚；相同时仅构建一次并跳过跨版本任务，不将同版本测试当作跨版本通过。统一 Release 中的 ccode 始终使用本次检测的 `latest`。
+Windows 回归在每次运行开始时读取一次 Claude Code 官方 `latest` 和 `stable` 版本，所有构建、离线及工作区测试共用该快照，不再锁定历史版本。两个通道不同时验证升级和回滚；相同时仅构建一次并跳过跨版本任务，不将同版本测试当作跨版本通过。此独立回归流程不会将 ccode 发布到 Release。

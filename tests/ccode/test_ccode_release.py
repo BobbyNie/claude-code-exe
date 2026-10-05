@@ -6,21 +6,15 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class CcodeReleaseTests(unittest.TestCase):
-    def test_ccode_is_built_and_tested_before_same_bundle_publication(self):
+    def test_release_excludes_ccode_packaging_and_uploads(self):
         self.assertFalse((ROOT / ".github/workflows/append-ccode-release.yml").exists())
         workflow = (ROOT / ".github/workflows/auto-release.yml").read_text(encoding="utf-8")
-        build = workflow.split("      - name: Build latest ccode", 1)[1].split("      - name:", 1)[0]
-        self.assertIn("steps.check_versions.outputs.claude_version", build)
-        self.assertIn("-AdapterRevision '${{ github.sha }}'", build)
-        self.assertNotIn("SignerSpkiPath", build)
-        self.assertLess(workflow.index("      - name: Verify latest ccode"),
-                        workflow.index("      - name: Create Release"))
-        for required in ("package-manifest-integration.py", "test-windows.ps1",
-                         "portable-integration.py", "gateway-integration.py",
-                         "tools-integration.py", "hosted_offline.py",
-                         "release\\ccode.exe", "ccode-provenance.json", "SHA256SUMS.txt"):
+        for removed in ("scripts/ccode/", "ccode.exe", "ccode-provenance.json",
+                        "Build latest ccode", "Configure MSVC", "setup-bun", "setup-node"):
+            self.assertNotIn(removed, workflow)
+        for required in ("release\\claude.exe", "release\\qwen.exe", "release\\Codex.msix",
+                         "release\\codex.exe", "SHA256SUMS.txt", "publish-bundle.ps1"):
             self.assertIn(required, workflow)
-        self.assertNotIn("continue-on-error", workflow)
         self.assertNotIn("gh release delete", workflow)
 
     def test_native_tests_cover_public_isolation_rules(self):

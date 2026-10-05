@@ -1,5 +1,14 @@
 # A 方案實施與驗收證據台帳
 
+## 2026-10-05 发布范围更新：移除 ccode
+
+使用者要求删除 ccode 打包部分，并停止通过 Action 发布 ccode.exe。
+本更新取代此前五产品统一发布要求。每周发布保留 Claude Code、Qwen Code、Codex App、Codex CLI。
+发布工作流移除 ccode 构建工具、构建、专用验收、附件复制和发布说明。
+必需附件清单移除 ccode.exe 与 ccode-provenance.json，保留四产品附件和 SHA256 清单。
+历史 Release、ccode 源码及独立回归流程保留；以下旧发布记录仅作为历史证据。
+
+
 ## 2026-10-03 五产品统一 Release：实际发布验证通过
 
 - 代码提交 `4e56bf858b57ad1539ffdc96db753d8ba07882af`，已推送 `main`。

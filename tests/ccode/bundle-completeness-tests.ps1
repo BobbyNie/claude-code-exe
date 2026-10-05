@@ -10,12 +10,13 @@ if (Test-BundleReleaseComplete -Tag fixture -RepoName fixture) {
 $script:assets = @('claude.exe', 'qwen.exe', 'Codex.msix', 'codex.exe', 'README.txt')
 function Get-ReleaseAssetNames { param($Tag, $RepoName) return $script:assets }
 if (Test-BundleReleaseComplete -Tag fixture -RepoName fixture) {
-    throw 'Legacy bundle without ccode must be incomplete'
+    throw 'Bundle missing wrappers and checksums must be incomplete'
 }
 $script:assets = @(Get-BundleRequiredAssets)
-if ($script:assets -notcontains 'ccode.exe') { throw 'ccode must be required' }
+if ($script:assets -contains 'ccode.exe' -or $script:assets -contains 'ccode-provenance.json') { throw 'ccode must not be required' }
+if ($script:assets.Count -ne 10) { throw 'Four-product bundle must require ten assets' }
 if (-not (Test-BundleReleaseComplete -Tag fixture -RepoName fixture)) {
-    throw 'Complete five-product bundle must be accepted'
+    throw 'Complete four-product bundle must be accepted'
 }
 foreach ($missing in @(Get-BundleRequiredAssets)) {
     $script:assets = @(Get-BundleRequiredAssets | Where-Object { $_ -ne $missing })

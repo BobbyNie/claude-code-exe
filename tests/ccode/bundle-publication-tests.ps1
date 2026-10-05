@@ -4,6 +4,8 @@ $root = Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())
 New-Item -ItemType Directory $root | Out-Null
 try {
     foreach ($name in Get-BundleRequiredAssets) { Set-Content (Join-Path $root $name) 'fixture' }
+    Set-Content (Join-Path $root 'ccode.exe') 'stale ccode must not be uploaded'
+    Set-Content (Join-Path $root 'ccode-provenance.json') '{}'
     $notes = Join-Path $root 'notes.md'; Set-Content $notes 'fixture notes'
     function gh {
         $global:bundleTest_calls += ,@($args)
@@ -36,6 +38,8 @@ try {
         $expectFailure = $scenario -in @('upload-failed', 'digest-mismatch')
         if ($failed -ne $expectFailure) { throw "Unexpected publication outcome: $scenario" }
         $commands = @($global:bundleTest_calls | ForEach-Object { $_ -join ' ' })
+        $uploads = @($commands | Where-Object { $_ -match '^release upload ' })
+        if ($uploads -match 'ccode\.exe|ccode-provenance\.json') { throw 'Must not upload stale ccode files' }
         if ($commands -match '^release delete ') { throw 'Must preserve existing release and tag' }
         $edits = @($commands | Where-Object { $_ -match '^release edit ' })
         if ($expectFailure -and $edits.Count) { throw 'Failed upload/digest must not publish' }
