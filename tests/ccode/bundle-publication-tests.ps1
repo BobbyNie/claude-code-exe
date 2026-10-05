@@ -11,6 +11,13 @@ try {
         $global:bundleTest_calls += ,@($args)
         $global:LASTEXITCODE = 0
         if ($args[0] -eq 'release' -and $args[1] -eq 'view') {
+            if ($args -contains 'databaseId,tagName') {
+                if ($scenario -eq 'lookup-failed') { $global:LASTEXITCODE = 1; return }
+                if ($scenario -eq 'invalid-id') { return '{"databaseId":"../latest","tagName":"fixture-tag"}' }
+                if ($scenario -eq 'wrong-tag') { return '{"databaseId":42,"tagName":"different-tag"}' }
+                return '{"databaseId":42,"tagName":"fixture-tag"}'
+            }
+
             if (-not $global:bundleTest_exists) { $global:LASTEXITCODE = 1; return }
             return '{"isDraft":false}'
         }
@@ -18,6 +25,13 @@ try {
             $global:LASTEXITCODE = 1; return
         }
         if ($args[0] -eq 'api') {
+            # GitHub's tag lookup does not resolve an unpublished draft.
+            if ($args[1] -match '/releases/tags/') {
+                $global:LASTEXITCODE = 1
+                return
+            }
+            if ($args[1] -ne 'repos/fixture/repo/releases/42') { throw 'Wrong release ID endpoint' }
+
             $assets = @(Get-BundleRequiredAssets | ForEach-Object {
                 $file = Get-Item (Join-Path $root $_)
                 @{ name=$_; size=$file.Length; digest=('sha256:' + (Get-FileHash $file.FullName).Hash.ToLowerInvariant()) }
@@ -26,7 +40,7 @@ try {
             return (@{assets=$assets} | ConvertTo-Json -Depth 5)
         }
     }
-    foreach ($scenario in @('new', 'existing', 'upload-failed', 'digest-mismatch')) {
+    foreach ($scenario in @('new', 'existing', 'upload-failed', 'digest-mismatch', 'lookup-failed', 'invalid-id', 'wrong-tag')) {
         $global:bundleTest_exists = $scenario -ne 'new'
         $global:bundleTest_failUpload = $scenario -eq 'upload-failed'
         $global:bundleTest_badDigest = $scenario -eq 'digest-mismatch'
@@ -35,7 +49,7 @@ try {
             & "$PSScriptRoot/../../scripts/publish-bundle.ps1" -Tag 'fixture-tag' -Repo 'fixture/repo' `
                 -AssetDirectory $root -NotesPath $notes -TargetCommit ('a' * 40)
         } catch { $failed = $true }
-        $expectFailure = $scenario -in @('upload-failed', 'digest-mismatch')
+        $expectFailure = $scenario -in @('upload-failed', 'digest-mismatch', 'lookup-failed', 'invalid-id', 'wrong-tag')
         if ($failed -ne $expectFailure) { throw "Unexpected publication outcome: $scenario" }
         $commands = @($global:bundleTest_calls | ForEach-Object { $_ -join ' ' })
         $uploads = @($commands | Where-Object { $_ -match '^release upload ' })

@@ -22,7 +22,14 @@ if ($LASTEXITCODE -ne 0) {
 }
 gh release upload $Tag --repo $Repo @files --clobber
 if ($LASTEXITCODE -ne 0) { throw 'Release asset upload failed' }
-$remoteJson = gh api "repos/$Repo/releases/tags/$Tag"
+# gh release view resolves drafts; the REST tag endpoint can return 404 before publication.
+$identityJson = gh release view $Tag --repo $Repo --json 'databaseId,tagName'
+if ($LASTEXITCODE -ne 0) { throw 'Release identity lookup failed' }
+$identity = $identityJson | ConvertFrom-Json
+if ($identity.tagName -cne $Tag -or [string]$identity.databaseId -notmatch '^[1-9][0-9]*$') {
+    throw 'Invalid release identity'
+}
+$remoteJson = gh api "repos/$Repo/releases/$($identity.databaseId)"
 if ($LASTEXITCODE -ne 0) { throw 'Release asset verification failed' }
 $remote = $remoteJson | ConvertFrom-Json
 foreach ($path in $files) {
