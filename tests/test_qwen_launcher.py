@@ -29,6 +29,11 @@ class QwenLauncherTests(unittest.TestCase):
         self.assertIn('Console.CancelKeyPress += handler', (ROOT / 'scripts/qwen/launcher.cs').read_text())
         self.assertIn('release\\qwen-launcher.revision -Value "4"', workflow)
 
+    def test_windows_compiler_receives_resolved_native_source_paths(self):
+        script = (ROOT / 'tests/qwen/test-windows.ps1').read_text()
+        self.assertIn('(Resolve-Path -LiteralPath $LauncherSource).Path', script)
+        self.assertIn("(Resolve-Path -LiteralPath (Join-Path $PSScriptRoot 'launcher-tests.cs')).Path", script)
+
 
 if __name__ == '__main__':
     unittest.main()
