@@ -88,10 +88,14 @@ internal static class TerminalTests
         var environment = new Dictionary<string, string> { { "QWEN_HOME", "custom-home" }, { "HANDOFF_TEST", "secret 中文 ;" } };
         int exit = TerminalHost.Handoff(StartPipeChild, new[] { "--resume", "a ; 中文", "" }, Directory.GetCurrentDirectory(), environment, 10000);
         Check(exit == 23, "Parent did not receive actual child exit code");
-        bool timedOut = false;
-        try { TerminalHost.Handoff(delegate(string token) { }, new string[0], Directory.GetCurrentDirectory(), environment, 100); }
-        catch (TimeoutException) { timedOut = true; }
-        Check(timedOut, "Failed Terminal startup must have a bounded wait");
+        // Exercise pending overlapped cancellation repeatedly on .NET Framework.
+        for (int attempt = 0; attempt < 25; attempt++)
+        {
+            bool timedOut = false;
+            try { TerminalHost.Handoff(delegate(string token) { }, new string[0], Directory.GetCurrentDirectory(), environment, 10); }
+            catch (TimeoutException) { timedOut = true; }
+            Check(timedOut, "Failed Terminal startup must have a bounded wait");
+        }
         exit = TerminalHost.Handoff(StartPipeChild, new[] { "--disconnect" }, Directory.GetCurrentDirectory(), environment, 10000);
         Check(exit == 130, "Closed Terminal tab must release the waiting parent");
     }

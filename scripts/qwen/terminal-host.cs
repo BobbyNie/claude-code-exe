@@ -4,6 +4,7 @@ using System.Text;
 using System.IO.Pipes;
 using System.IO.Compression;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Text.RegularExpressions;
 #if !NET8_0_OR_GREATER
 using System.Security.AccessControl;
@@ -109,13 +110,15 @@ internal static class TerminalHost
         string token = Guid.NewGuid().ToString("N");
         using (var pipe = CreatePipe(PipePrefix + token))
         {
-            var connection = pipe.BeginWaitForConnection(null, null);
-            using (connection.AsyncWaitHandle)
+            // FromAsync owns callback completion. Do not dispose an APM AsyncWaitHandle:
+            // .NET Framework may still signal that handle after cancellation.
+            var connection = Task.Factory.FromAsync(pipe.BeginWaitForConnection, pipe.EndWaitForConnection, null);
+            start(token);
+            if (!connection.Wait(connectionTimeout))
             {
-                start(token);
-                if (!connection.AsyncWaitHandle.WaitOne(connectionTimeout))
-                    throw new TimeoutException("Windows Terminal did not start Qwen within the startup timeout.");
-                pipe.EndWaitForConnection(connection);
+                pipe.Dispose();
+                try { connection.Wait(); } catch (AggregateException) { }
+                throw new TimeoutException("Windows Terminal did not start Qwen within the startup timeout.");
             }
             try
             {
