@@ -105,6 +105,12 @@ jobs:
           & ./qwen.exe --help
           if ($LASTEXITCODE -ne 0) { throw 'Packaged Qwen help check failed' }
 
+      - name: Test bundled Windows Terminal startup
+        if: steps.check_versions.outputs.new_release == 'true'
+        shell: pwsh
+        timeout-minutes: 3
+        run: ./tests/qwen/test-windows.ps1 -PackagedExe ./qwen.exe
+
       - name: Download Codex app offline MSIX
         if: steps.check_versions.outputs.new_release == 'true'
         shell: pwsh
@@ -133,7 +139,7 @@ jobs:
           Copy-Item scripts\wrapper.bat release\claude-wrapper.bat
           Copy-Item scripts\qwen\wrapper.bat release\qwen-wrapper.bat
           Copy-Item scripts\codex\wrapper.bat release\codex-wrapper.bat
-          Set-Content -Path release\qwen-launcher.revision -Value "4" -Encoding ASCII -NoNewline
+          Set-Content -Path release\qwen-launcher.revision -Value "5" -Encoding ASCII -NoNewline
 
           @"
           AI Tools Portable Bundle
@@ -151,7 +157,11 @@ jobs:
           - Codex.msix
           - codex.exe / codex-wrapper.bat
 
-          Qwen launcher revision: 4
+          Qwen launcher revision: 5
+          - Bundle official Windows Terminal 1.25.2733.0 with isolated portable settings.
+          - Interactive CMD startup uses bundled Terminal and keeps the full Qwen UI.
+          - Existing Windows Terminal, redirected streams and headless commands stay direct.
+          - Requires Windows 10 build 19041 or later (x64).
           - Direct EXE and wrapper use the same portable data paths.
           - Preserve custom QWEN_HOME and QWEN_RUNTIME_DIR values.
           - Preserve Windows path arguments and wait for terminal cleanup on Ctrl+C.
@@ -184,7 +194,11 @@ jobs:
           - Codex App: $codexAppVersion
           - Codex CLI: $codexCliVersion
 
-          Qwen launcher revision: 4
+          Qwen launcher revision: 5
+          - Bundle official Windows Terminal 1.25.2733.0 with isolated portable settings.
+          - Interactive CMD startup uses bundled Terminal and keeps the full Qwen UI.
+          - Existing Windows Terminal, redirected streams and headless commands stay direct.
+          - Requires Windows 10 build 19041 or later (x64).
           - Direct EXE and wrapper use the same portable data paths.
           - Preserve custom QWEN_HOME and QWEN_RUNTIME_DIR values.
           - Preserve Windows path arguments and wait for terminal cleanup on Ctrl+C.

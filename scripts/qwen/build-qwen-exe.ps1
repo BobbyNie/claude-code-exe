@@ -16,7 +16,10 @@ $ErrorActionPreference = "Stop"
 $runtimeZip = Join-Path $OutputDir "qwen-runtime.zip"
 $outputExe = Join-Path $OutputDir "qwen.exe"
 $versionFile = Join-Path $OutputDir "qwen-version.txt"
-$launcherSource = Join-Path $PSScriptRoot "launcher.cs"
+$launcherSource = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "launcher.cs")).Path
+$terminalSource = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "terminal-host.cs")).Path
+$terminalZip = Join-Path $OutputDir "qwen-terminal.zip"
+$terminalVersionFile = Join-Path $OutputDir "qwen-terminal-version.txt"
 
 if (-not (Test-Path (Join-Path $SourceDir "bin\qwen.cmd"))) {
     Write-Error "Source directory is missing bin\qwen.cmd: $SourceDir"
@@ -35,6 +38,7 @@ if (Test-Path $runtimeZip) {
     Remove-Item $runtimeZip -Force
 }
 
+& (Join-Path $PSScriptRoot "download-terminal.ps1") -OutputDir $OutputDir
 Write-Output "Creating embedded runtime archive..."
 Compress-Archive -Path (Join-Path $SourceDir "*") -DestinationPath $runtimeZip -Force
 
@@ -66,6 +70,7 @@ if (Test-Path $outputExe) {
 
 $compileArgs = @(
     "/nologo",
+    "/codepage:65001",
     "/target:exe",
     "/optimize+",
     "/out:$outputExe",
@@ -73,7 +78,10 @@ $compileArgs = @(
     "/reference:System.IO.Compression.FileSystem.dll",
     "/resource:$runtimeZip,QwenRuntime",
     "/resource:$versionFile,QwenVersion",
-    $launcherSource
+    "/resource:$terminalZip,QwenTerminal",
+    "/resource:$terminalVersionFile,QwenTerminalVersion",
+    $launcherSource,
+    $terminalSource
 )
 
 & $cscPath @compileArgs
@@ -83,6 +91,8 @@ if ($LASTEXITCODE -ne 0) {
 
 Remove-Item $runtimeZip -Force
 Remove-Item $versionFile -Force
+Remove-Item $terminalZip -Force
+Remove-Item $terminalVersionFile -Force
 
 $exeInfo = Get-Item $outputExe
 Write-Output "Built qwen.exe: $($exeInfo.Length) bytes ($([math]::Round($exeInfo.Length / 1MB, 2)) MB)"

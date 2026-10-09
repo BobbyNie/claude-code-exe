@@ -16,8 +16,57 @@ internal static class LauncherTests
     {
         return Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(value));
     }
+    private static void TestBundledTerminal(string packagedExe)
+    {
+        var assembly = Assembly.LoadFrom(packagedExe);
+        var extract = assembly.GetType("Program").GetMethod("EnsureTerminalExtracted", BindingFlags.Static | BindingFlags.NonPublic);
+        string exeDir = Path.GetDirectoryName(packagedExe);
+        string terminalExe = (string)extract.Invoke(null, new object[] { exeDir });
+        string terminalDir = Path.GetDirectoryName(terminalExe);
+        Check(File.Exists(Path.Combine(terminalDir, ".portable")), "Packaged Terminal is not portable");
+        Check(File.Exists(Path.Combine(terminalDir, "LICENSE")) && File.Exists(Path.Combine(terminalDir, "NOTICE.html")), "License notices missing");
+        var self = Assembly.GetExecutingAssembly().Location;
+        string output = Path.Combine(Path.GetDirectoryName(self), "terminal-output.txt");
+        string project = Path.Combine(Path.GetDirectoryName(self), "project ; 中文");
+        Directory.CreateDirectory(project);
+        Directory.SetCurrentDirectory(project);
+        Environment.SetEnvironmentVariable("QWEN_HOME", Path.Combine(exeDir, "custom home"));
+        Environment.SetEnvironmentVariable("QWEN_RUNTIME_DIR", null);
+        Environment.SetEnvironmentVariable("TERMINAL_TEST_SECRET", "value 中文 ;");
+        string[] values = { @"C:\path ; 中文\", "quote\"value", "" };
+        int exit = TerminalHost.Launch(terminalExe, self, new[] { "--terminal-probe", output, values[0], values[1], values[2] }, exeDir);
+        Check(exit == 23, "Terminal handoff changed exit code: " + exit);
+        string[] lines = File.ReadAllLines(output);
+        Check(lines[0] == project, "Terminal changed project directory");
+        Check(lines[1] == Path.Combine(exeDir, "custom home"), "Terminal changed custom home");
+        Check(lines[2] == Path.Combine(exeDir, "data", "qwen-runtime"), "Terminal changed portable history");
+        Check(!string.IsNullOrEmpty(lines[3]), "Probe did not run inside Windows Terminal");
+        Check(lines[4] == "value 中文 ;", "Terminal lost caller environment");
+        for (int i = 0; i < values.Length; i++) Check(lines[i + 5] == Encode(values[i]), "Terminal changed argument " + i);
+        Console.WriteLine("PASS: real bundled Windows Terminal, project directory, portable history, environment, special arguments and exit code");
+    }
+
     private static int Main(string[] args)
     {
+        if (args.Length == 2 && args[0] == "--qwen-terminal-child")
+            return TerminalHost.RunChild(args[1], delegate(string[] forwarded) {
+                if (forwarded.Length == 1 && forwarded[0] == "--disconnect") Environment.Exit(0);
+                if (forwarded.Length > 0 && forwarded[0] == "--terminal-probe")
+                {
+                    File.WriteAllLines(forwarded[1], new[] {
+                        Directory.GetCurrentDirectory(),
+                        Environment.GetEnvironmentVariable("QWEN_HOME") ?? "",
+                        Environment.GetEnvironmentVariable("QWEN_RUNTIME_DIR") ?? "",
+                        Environment.GetEnvironmentVariable("WT_SESSION") ?? "",
+                        Environment.GetEnvironmentVariable("TERMINAL_TEST_SECRET") ?? "",
+                        Encode(forwarded[2]), Encode(forwarded[3]), Encode(forwarded[4])
+                    });
+                    return 23;
+                }
+                Check(forwarded.Length == 3 && forwarded[1] == "a ; 中文" && forwarded[2] == "", "Child arguments corrupted");
+                Check(Environment.GetEnvironmentVariable("HANDOFF_TEST") == "secret 中文 ;", "Child environment lost");
+                return 23;
+            });
         if (args.Length > 0 && args[0] == "--child")
         {
             uint[] processes = new uint[64];
@@ -35,6 +84,12 @@ internal static class LauncherTests
         }
         try
         {
+            if (args.Length == 2 && args[0] == "--terminal-integration")
+            {
+                TestBundledTerminal(Path.GetFullPath(args[1]));
+                return 0;
+            }
+            TerminalTests.Run();
             uint[] consoleProcesses = new uint[64];
             if (GetConsoleProcessList(consoleProcesses, 64) == 0)
                 Check(AllocConsole(), "Cannot allocate a console for the Windows test");

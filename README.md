@@ -188,14 +188,26 @@ qwen-wrapper.bat
 
 ### Windows 终端与历史记录
 
-封装修订 `qwen-launcher-r4` 统一了 EXE 和启动脚本的数据路径。
+封装修订 `qwen-launcher-r5` 内置 Windows Terminal 1.25.2733.0 的官方 x64 便携包。
+交互启动会从传统 CMD 转到内置 Terminal，并保留完整 Qwen 界面。
+不需要安装 Windows Terminal。不需要添加 `--screen-reader`。
+系统必须是 Windows 10 2004（内部版本 19041）或更高版本，或 Windows 11。
+EXE 所在目录必须允许写入。
+
+首次交互启动会解压到 `.qwen-terminal/terminal-1.25.2733.0`。
+Terminal 设置位于该目录的 `settings` 子目录。它不会修改系统已安装 Terminal 的设置。
+封装保留微软许可证和 `NOTICE.html`。下载时必须通过固定 SHA256 校验。
+Terminal 版本固定在 `scripts/qwen/terminal-release.json`，不会在用户机器上自动下载或更新。
+修改此版本时，需要同时增加启动器修订号，再发布新版。
+
+EXE 和启动脚本继续使用相同的数据路径。
 两种启动方式默认都使用程序目录下的 `data`。
 若你已设置 `QWEN_HOME` 或 `QWEN_RUNTIME_DIR`，启动器会保留这些值。
 运行时文件位于 `.qwen-runtime`，它与历史记录目录分开。
 
 1. 备份现有 `data` 目录和 `%USERPROFILE%\.qwen` 目录。
 2. 替换 `qwen.exe` 和 `qwen-wrapper.bat`。不要删除数据目录。
-3. 在 Windows Terminal 或 PowerShell 中打开原来的项目目录。
+3. 在 CMD、PowerShell 或 Windows Terminal 中打开原来的项目目录。
 4. 从该目录运行 `qwen.exe --resume`。
 
 历史记录与项目目录关联。换一个项目目录后，原项目的历史记录可能不会显示。
@@ -211,10 +223,19 @@ $env:QWEN_RUNTIME_DIR = $env:QWEN_HOME
 若旧版已使用自定义数据目录，请改为设置原来的两个路径。
 不要直接合并同名历史记录文件。先备份，再选择旧路径读取。
 
-启动器不重定向终端输入和输出。Qwen 子进程使用现有终端。
-启动器等待 Qwen 退出后才返回，以便 Qwen 完成终端清理。
-这不保证修复 Qwen 自身的界面重绘问题。
-若仍然闪缩，请记录终端名称、Qwen 版本和触发操作。
+启动模式如下：
+
+- 普通交互启动、`--resume`、`--continue` 和 `-i` 会使用内置 Terminal。
+- 已在 Windows Terminal 中运行时，启动器使用当前窗口。
+- `--help`、`--version`、`-p`、位置提示词和子命令保持直接运行。
+- 标准输入、输出或错误被重定向时，启动器保持直接运行。
+- 未识别的选项保持直接运行，避免新的自动化选项意外打开窗口。
+
+启动器通过当前用户专用的命名管道传递参数、环境变量和项目目录。
+它不会把提示词或密钥写入临时文件。
+启动器等待 Qwen 退出后返回相同的退出码。关闭 Terminal 标签页时返回 `130`。
+Terminal 子进程必须在 60 秒内连接。连接失败时，启动器报告错误，不切换到简化界面。
+此方案更换终端宿主，不修改 Qwen 的界面渲染。显示效果仍需在目标 Windows 机器验证。
 
 ### 目录结构
 
@@ -222,6 +243,8 @@ $env:QWEN_RUNTIME_DIR = $env:QWEN_HOME
 qwen-portable/
 ├── qwen.exe
 ├── qwen-wrapper.bat
+├── .qwen-runtime/      # Qwen 程序文件
+├── .qwen-terminal/     # 内置 Terminal、独立设置与许可证
 └── data/
     ├── .qwen/          # 配置（QWEN_HOME）
     └── qwen-runtime/   # 运行时会话数据（QWEN_RUNTIME_DIR）

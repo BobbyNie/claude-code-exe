@@ -15,56 +15,70 @@ internal static class Program
     {
         try
         {
+            if (args.Length == 2 && args[0] == "--qwen-terminal-child")
+                return TerminalHost.RunChild(args[1], RunQwen);
+
             string exePath = Assembly.GetExecutingAssembly().Location;
             string exeDir = Path.GetDirectoryName(exePath);
-            if (string.IsNullOrEmpty(exeDir))
+            if (TerminalHost.ShouldLaunch(args, Console.IsInputRedirected, Console.IsOutputRedirected,
+                Console.IsErrorRedirected, Environment.GetEnvironmentVariable("WT_SESSION")))
             {
-                exeDir = Directory.GetCurrentDirectory();
-            }
-
-            string runtimeDir = Path.Combine(exeDir, RuntimeDirName);
-            EnsureRuntimeExtracted(runtimeDir);
-
-            string nodeExe = Path.Combine(runtimeDir, "node", "node.exe");
-            string cliJs = Path.Combine(runtimeDir, "lib", "cli.js");
-
-            if (!File.Exists(nodeExe) || !File.Exists(cliJs))
-            {
-                Console.Error.WriteLine("Qwen Code runtime files are missing.");
-                return 1;
-            }
-
-            var startInfo = CreateStartInfo(nodeExe, cliJs, args, exeDir);
-
-            using (var process = Process.Start(startInfo))
-            {
-                if (process == null)
-                {
-                    return 1;
-                }
-
-                // The child owns Ctrl+C and terminal cleanup. Keep its waiting parent alive.
-                ConsoleCancelEventHandler handler = delegate(object sender, ConsoleCancelEventArgs e)
-                {
-                    e.Cancel = true;
-                };
-                Console.CancelKeyPress += handler;
                 try
                 {
-                    process.WaitForExit();
-                    return process.ExitCode;
+                    string terminalExe = EnsureTerminalExtracted(exeDir);
+                    return WaitForCleanup(delegate { return TerminalHost.Launch(terminalExe, exePath, args, exeDir); });
                 }
-                finally
+                catch (Exception ex)
                 {
-                    Console.CancelKeyPress -= handler;
+                    throw new InvalidOperationException("Bundled Windows Terminal startup failed. Requires Windows 10 build 19041 or later. " + ex.Message, ex);
                 }
             }
+            return RunQwen(args);
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine(ex.Message);
             return 1;
         }
+    }
+
+    internal static string EnsureTerminalExtracted(string exeDir)
+    {
+        string version;
+        using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("QwenTerminalVersion"))
+        {
+            if (stream == null) throw new InvalidOperationException("Embedded Terminal version is missing.");
+            using (var reader = new StreamReader(stream)) version = reader.ReadToEnd().Trim();
+        }
+        return TerminalHost.EnsureExtracted(exeDir, version, delegate {
+            return Assembly.GetExecutingAssembly().GetManifestResourceStream("QwenTerminal");
+        });
+    }
+
+    private static int RunQwen(string[] args)
+    {
+        string exeDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+        string runtimeDir = Path.Combine(exeDir, RuntimeDirName);
+        EnsureRuntimeExtracted(runtimeDir);
+        string nodeExe = Path.Combine(runtimeDir, "node", "node.exe");
+        string cliJs = Path.Combine(runtimeDir, "lib", "cli.js");
+        if (!File.Exists(nodeExe) || !File.Exists(cliJs))
+            throw new InvalidOperationException("Qwen Code runtime files are missing.");
+        var startInfo = CreateStartInfo(nodeExe, cliJs, args, exeDir);
+        using (var process = Process.Start(startInfo))
+        {
+            if (process == null) return 1;
+            return WaitForCleanup(delegate { process.WaitForExit(); return process.ExitCode; });
+        }
+    }
+
+    private static int WaitForCleanup(Func<int> wait)
+    {
+        // The terminal child owns Ctrl+C and cleanup. Keep its waiting parent alive.
+        ConsoleCancelEventHandler handler = delegate(object sender, ConsoleCancelEventArgs e) { e.Cancel = true; };
+        Console.CancelKeyPress += handler;
+        try { return wait(); }
+        finally { Console.CancelKeyPress -= handler; }
     }
 
     private static ProcessStartInfo CreateStartInfo(string nodeExe, string cliJs, string[] args, string exeDir)
@@ -77,12 +91,17 @@ internal static class Program
             // Keep the caller's console and terminal handles. Do not create a second window.
             CreateNoWindow = false,
         };
+        SetPortableEnvironment(info, exeDir);
+        // Do not change WorkingDirectory: Qwen associates sessions with the project directory.
+        return info;
+    }
+
+    internal static void SetPortableEnvironment(ProcessStartInfo info, string exeDir)
+    {
         if (string.IsNullOrEmpty(info.EnvironmentVariables["QWEN_HOME"]))
             info.EnvironmentVariables["QWEN_HOME"] = Path.Combine(exeDir, "data", ".qwen");
         if (string.IsNullOrEmpty(info.EnvironmentVariables["QWEN_RUNTIME_DIR"]))
             info.EnvironmentVariables["QWEN_RUNTIME_DIR"] = Path.Combine(exeDir, "data", "qwen-runtime");
-        // Do not change WorkingDirectory: Qwen associates sessions with the project directory.
-        return info;
     }
 
     private static string BuildArguments(string cliJs, string[] args)
@@ -99,7 +118,7 @@ internal static class Program
         return builder.ToString();
     }
 
-    private static string QuoteArgument(string value)
+    internal static string QuoteArgument(string value)
     {
         if (string.IsNullOrEmpty(value))
         {
