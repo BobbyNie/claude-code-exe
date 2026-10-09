@@ -152,7 +152,7 @@ function New-BundleReleaseTag {
         [string]$CodexCliVersion
     )
 
-    return "ai-tools-claude-$ClaudeVersion-qwen-$QwenVersion-codex-app-$CodexAppVersion-codex-cli-$CodexCliVersion"
+    return "ai-tools-claude-$ClaudeVersion-qwen-$QwenVersion-codex-app-$CodexAppVersion-codex-cli-$CodexCliVersion-qwen-launcher-r4"
 }
 
 function Get-BundleRequiredAssets {

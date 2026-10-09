@@ -186,6 +186,36 @@ claude-portable/
 qwen-wrapper.bat
 ```
 
+### Windows 终端与历史记录
+
+封装修订 `qwen-launcher-r4` 统一了 EXE 和启动脚本的数据路径。
+两种启动方式默认都使用程序目录下的 `data`。
+若你已设置 `QWEN_HOME` 或 `QWEN_RUNTIME_DIR`，启动器会保留这些值。
+运行时文件位于 `.qwen-runtime`，它与历史记录目录分开。
+
+1. 备份现有 `data` 目录和 `%USERPROFILE%\.qwen` 目录。
+2. 替换 `qwen.exe` 和 `qwen-wrapper.bat`。不要删除数据目录。
+3. 在 Windows Terminal 或 PowerShell 中打开原来的项目目录。
+4. 从该目录运行 `qwen.exe --resume`。
+
+历史记录与项目目录关联。换一个项目目录后，原项目的历史记录可能不会显示。
+旧版直接运行 EXE 时，默认数据可能位于 `%USERPROFILE%\.qwen`。
+若要读取该目录，请在同一个 PowerShell 窗口设置：
+
+```powershell
+$env:QWEN_HOME = Join-Path $env:USERPROFILE '.qwen'
+$env:QWEN_RUNTIME_DIR = $env:QWEN_HOME
+& 'C:\qwen-portable\qwen.exe' --resume
+```
+
+若旧版已使用自定义数据目录，请改为设置原来的两个路径。
+不要直接合并同名历史记录文件。先备份，再选择旧路径读取。
+
+启动器不重定向终端输入和输出。Qwen 子进程使用现有终端。
+启动器等待 Qwen 退出后才返回，以便 Qwen 完成终端清理。
+这不保证修复 Qwen 自身的界面重绘问题。
+若仍然闪缩，请记录终端名称、Qwen 版本和触发操作。
+
 ### 目录结构
 
 ```

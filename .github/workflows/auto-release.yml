@@ -28,6 +28,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
+      - name: Test Qwen Windows launcher
+        shell: pwsh
+        run: ./tests/qwen/test-windows.ps1
+
       - name: Check for new bundle release
         id: check_versions
         env:
@@ -89,6 +93,18 @@ jobs:
         run: |
           .\scripts\qwen\download.ps1 -Version ${{ steps.check_versions.outputs.qwen_version }} -OutputDir .
 
+      - name: Test packaged Qwen startup
+        if: steps.check_versions.outputs.new_release == 'true'
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          $version = & ./qwen.exe --version
+          if ($LASTEXITCODE -ne 0 -or ($version -join "`n") -notmatch [regex]::Escape('${{ steps.check_versions.outputs.qwen_version }}')) {
+            throw 'Packaged Qwen version check failed'
+          }
+          & ./qwen.exe --help
+          if ($LASTEXITCODE -ne 0) { throw 'Packaged Qwen help check failed' }
+
       - name: Download Codex app offline MSIX
         if: steps.check_versions.outputs.new_release == 'true'
         shell: pwsh
@@ -117,7 +133,7 @@ jobs:
           Copy-Item scripts\wrapper.bat release\claude-wrapper.bat
           Copy-Item scripts\qwen\wrapper.bat release\qwen-wrapper.bat
           Copy-Item scripts\codex\wrapper.bat release\codex-wrapper.bat
-          Set-Content -Path release\qwen-launcher.revision -Value "3" -Encoding ASCII -NoNewline
+          Set-Content -Path release\qwen-launcher.revision -Value "4" -Encoding ASCII -NoNewline
 
           @"
           AI Tools Portable Bundle
@@ -134,6 +150,13 @@ jobs:
           - qwen.exe / qwen-wrapper.bat
           - Codex.msix
           - codex.exe / codex-wrapper.bat
+
+          Qwen launcher revision: 4
+          - Direct EXE and wrapper use the same portable data paths.
+          - Preserve custom QWEN_HOME and QWEN_RUNTIME_DIR values.
+          - Preserve Windows path arguments and wait for terminal cleanup on Ctrl+C.
+          - Run resume from the original project directory.
+          - Back up existing data before replacing the launcher.
 
           File checksums: SHA256SUMS.txt
           "@ | Out-File -Encoding UTF8 release\README.txt
@@ -160,6 +183,13 @@ jobs:
           - Qwen Code: $qwenVersion
           - Codex App: $codexAppVersion
           - Codex CLI: $codexCliVersion
+
+          Qwen launcher revision: 4
+          - Direct EXE and wrapper use the same portable data paths.
+          - Preserve custom QWEN_HOME and QWEN_RUNTIME_DIR values.
+          - Preserve Windows path arguments and wait for terminal cleanup on Ctrl+C.
+          - Run resume from the original project directory.
+          - Back up existing data before replacing the launcher.
 
           File checksums: SHA256SUMS.txt
           "@

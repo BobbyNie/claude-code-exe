@@ -34,12 +34,7 @@ internal static class Program
                 return 1;
             }
 
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = nodeExe,
-                Arguments = BuildArguments(cliJs, args),
-                UseShellExecute = false,
-            };
+            var startInfo = CreateStartInfo(nodeExe, cliJs, args, exeDir);
 
             using (var process = Process.Start(startInfo))
             {
@@ -48,8 +43,21 @@ internal static class Program
                     return 1;
                 }
 
-                process.WaitForExit();
-                return process.ExitCode;
+                // The child owns Ctrl+C and terminal cleanup. Keep its waiting parent alive.
+                ConsoleCancelEventHandler handler = delegate(object sender, ConsoleCancelEventArgs e)
+                {
+                    e.Cancel = true;
+                };
+                Console.CancelKeyPress += handler;
+                try
+                {
+                    process.WaitForExit();
+                    return process.ExitCode;
+                }
+                finally
+                {
+                    Console.CancelKeyPress -= handler;
+                }
             }
         }
         catch (Exception ex)
@@ -59,10 +67,28 @@ internal static class Program
         }
     }
 
+    private static ProcessStartInfo CreateStartInfo(string nodeExe, string cliJs, string[] args, string exeDir)
+    {
+        var info = new ProcessStartInfo
+        {
+            FileName = nodeExe,
+            Arguments = BuildArguments(cliJs, args),
+            UseShellExecute = false,
+            // Keep the caller's console and terminal handles. Do not create a second window.
+            CreateNoWindow = false,
+        };
+        if (string.IsNullOrEmpty(info.EnvironmentVariables["QWEN_HOME"]))
+            info.EnvironmentVariables["QWEN_HOME"] = Path.Combine(exeDir, "data", ".qwen");
+        if (string.IsNullOrEmpty(info.EnvironmentVariables["QWEN_RUNTIME_DIR"]))
+            info.EnvironmentVariables["QWEN_RUNTIME_DIR"] = Path.Combine(exeDir, "data", "qwen-runtime");
+        // Do not change WorkingDirectory: Qwen associates sessions with the project directory.
+        return info;
+    }
+
     private static string BuildArguments(string cliJs, string[] args)
     {
         var builder = new StringBuilder();
-        builder.Append('"').Append(cliJs).Append('"');
+        builder.Append(QuoteArgument(cliJs));
 
         foreach (var arg in args)
         {
@@ -87,15 +113,20 @@ internal static class Program
 
         var quoted = new StringBuilder();
         quoted.Append('"');
+        int backslashes = 0;
         foreach (var ch in value)
         {
-            if (ch == '\\' || ch == '"')
+            if (ch == '\\')
             {
-                quoted.Append('\\');
+                backslashes++;
+                continue;
             }
-
+            // Windows only doubles backslashes before a quote or the closing quote.
+            quoted.Append('\\', ch == '"' ? backslashes * 2 + 1 : backslashes);
             quoted.Append(ch);
+            backslashes = 0;
         }
+        quoted.Append('\\', backslashes * 2);
 
         quoted.Append('"');
         return quoted.ToString();
