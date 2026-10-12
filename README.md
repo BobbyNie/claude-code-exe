@@ -188,8 +188,10 @@ qwen-wrapper.bat
 
 ### Windows 终端与历史记录
 
-封装修订 `qwen-launcher-r5` 内置 Windows Terminal 1.25.2733.0 的官方 x64 便携包。
-交互启动会从传统 CMD 转到内置 Terminal，并保留完整 Qwen 界面。
+封装修订 `qwen-launcher-r6` 内置 Windows Terminal 1.25.2733.0 的官方 x64 便携包。
+交互启动会使用内置 `WindowsTerminal.exe`，再通过系统自带的 Windows PowerShell 启动 Qwen。
+启动器保留完整 Qwen 界面，不要求安装 PowerShell 7。
+启动命令明确选择 PowerShell。已有 r5 Terminal 设置不需要删除或重置。
 不需要安装 Windows Terminal。不需要添加 `--screen-reader`。
 系统必须是 Windows 10 2004（内部版本 19041）或更高版本，或 Windows 11。
 EXE 所在目录必须允许写入。

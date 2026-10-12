@@ -36,7 +36,7 @@ try {
       {
         "guid": "{4e28b223-8a1c-4afb-8d70-a0b8de748e2f}",
         "name": "Qwen",
-        "commandline": "cmd.exe",
+        "commandline": "powershell.exe -NoLogo -NoProfile",
         "closeOnExit": "always"
       }
     ]

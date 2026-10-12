@@ -12,6 +12,41 @@ internal static class LauncherTests
     {
         if (!condition) throw new Exception(message);
     }
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct ProcessEntry
+    {
+        public uint Size, Usage, ProcessId;
+        public IntPtr DefaultHeap;
+        public uint ModuleId, Threads, ParentProcessId;
+        public int BasePriority;
+        public uint Flags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)] public string ExeFile;
+    }
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr CreateToolhelp32Snapshot(uint flags, uint processId);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    private static extern bool Process32FirstW(IntPtr snapshot, ref ProcessEntry entry);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    private static extern bool Process32NextW(IntPtr snapshot, ref ProcessEntry entry);
+    [DllImport("kernel32.dll")] private static extern bool CloseHandle(IntPtr handle);
+    private static string ParentProcessName()
+    {
+        IntPtr snapshot = CreateToolhelp32Snapshot(2, 0);
+        Check(snapshot != new IntPtr(-1), "Cannot inspect process parent");
+        try
+        {
+            var entry = new ProcessEntry { Size = (uint)Marshal.SizeOf(typeof(ProcessEntry)) };
+            if (Process32FirstW(snapshot, ref entry))
+                do
+                {
+                    if (entry.ProcessId == (uint)Process.GetCurrentProcess().Id)
+                        using (var parent = Process.GetProcessById((int)entry.ParentProcessId))
+                            return parent.ProcessName;
+                } while (Process32NextW(snapshot, ref entry));
+            throw new Exception("Cannot find process parent");
+        }
+        finally { CloseHandle(snapshot); }
+    }
     private static string Encode(string value)
     {
         return Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(value));
@@ -34,7 +69,9 @@ internal static class LauncherTests
         Environment.SetEnvironmentVariable("QWEN_RUNTIME_DIR", null);
         Environment.SetEnvironmentVariable("TERMINAL_TEST_SECRET", "value 中文 ;");
         string[] values = { @"C:\path ; 中文\", "quote\"value", "" };
-        int exit = TerminalHost.Launch(terminalExe, self, new[] { "--terminal-probe", output, values[0], values[1], values[2] }, exeDir);
+        var launch = assembly.GetType("TerminalHost").GetMethod("Launch", BindingFlags.Static | BindingFlags.NonPublic);
+        int exit = (int)launch.Invoke(null, new object[] { terminalExe, self,
+            new[] { "--terminal-probe", output, values[0], values[1], values[2] }, exeDir });
         Check(exit == 23, "Terminal handoff changed exit code: " + exit);
         string[] lines = File.ReadAllLines(output);
         Check(lines[0] == project, "Terminal changed project directory");
@@ -43,7 +80,8 @@ internal static class LauncherTests
         Check(!string.IsNullOrEmpty(lines[3]), "Probe did not run inside Windows Terminal");
         Check(lines[4] == "value 中文 ;", "Terminal lost caller environment");
         for (int i = 0; i < values.Length; i++) Check(lines[i + 5] == Encode(values[i]), "Terminal changed argument " + i);
-        Console.WriteLine("PASS: real bundled Windows Terminal, project directory, portable history, environment, special arguments and exit code");
+        Check(lines[8].Equals("powershell", StringComparison.OrdinalIgnoreCase), "Packaged launcher must run under Windows PowerShell, got: " + lines[8]);
+        Console.WriteLine("PASS: real bundled Windows Terminal through PowerShell, project directory, portable history, environment, special arguments and exit code");
     }
 
     private static int Main(string[] args)
@@ -59,7 +97,7 @@ internal static class LauncherTests
                         Environment.GetEnvironmentVariable("QWEN_RUNTIME_DIR") ?? "",
                         Environment.GetEnvironmentVariable("WT_SESSION") ?? "",
                         Environment.GetEnvironmentVariable("TERMINAL_TEST_SECRET") ?? "",
-                        Encode(forwarded[2]), Encode(forwarded[3]), Encode(forwarded[4])
+                        Encode(forwarded[2]), Encode(forwarded[3]), Encode(forwarded[4]), ParentProcessName()
                     });
                     return 23;
                 }

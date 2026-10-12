@@ -8,7 +8,7 @@ $terminalSource = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '../../scr
 $terminalTests = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot 'terminal-tests.cs')).Path
 $testSource = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot 'launcher-tests.cs')).Path
 $compiler = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
-$directory = Join-Path $env:RUNNER_TEMP ('qwen launcher tests ; 中文 ' + [guid]::NewGuid())
+$directory = Join-Path $env:RUNNER_TEMP ('qwen launcher tests ; 中文''s ' + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $directory | Out-Null
 $exe = Join-Path $directory 'tests.exe'
 & $compiler /nologo /codepage:65001 /target:exe /main:LauncherTests "/out:$exe" `

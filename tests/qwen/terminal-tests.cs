@@ -45,12 +45,18 @@ internal static class TerminalTests
     }
     private static void TerminalCommand()
     {
-        var info = TerminalHost.CreateStartInfo(@"C:\terminal\WindowsTerminal.exe", @"C:\my project ; 中文\qwen.exe", "0123456789abcdef0123456789abcdef");
+        string launcher = @"C:\my project ; 中文's\qwen.exe";
+        string token = "0123456789abcdef0123456789abcdef";
+        var info = TerminalHost.CreateStartInfo(@"C:\terminal\WindowsTerminal.exe", launcher, token);
         Check(info.FileName.EndsWith("WindowsTerminal.exe"), "Must use bundled binary, not system wt alias");
         Check(info.Arguments.StartsWith("-w new new-tab --inheritEnvironment"), "Must use independent window and inherit caller environment");
-        Check(info.Arguments.Contains(@"\;"), "Terminal delimiter must be escaped in executable path");
-        Check(!info.UseShellExecute, "Do not pass user input through a shell");
-        Check(info.Arguments.EndsWith("--qwen-terminal-child 0123456789abcdef0123456789abcdef"), "Must hand off through private pipe token");
+        Check(info.Arguments.Contains(@"WindowsPowerShell\v1.0\powershell.exe"), "Terminal must explicitly start system Windows PowerShell");
+        Check(info.Arguments.Contains("-NoLogo -NoProfile -EncodedCommand "), "Shell must not depend on installed profiles");
+        string encoded = info.Arguments.Substring(info.Arguments.IndexOf("-EncodedCommand ") + "-EncodedCommand ".Length);
+        string script = Encoding.Unicode.GetString(Convert.FromBase64String(encoded));
+        Check(script == "& '" + launcher.Replace("'", "''") + "' --qwen-terminal-child '" + token + "'\r\nexit $LASTEXITCODE", "Shell must quote the launcher and preserve its exit code");
+        Check(!info.Arguments.Contains(";"), "Terminal command must not contain unescaped delimiters");
+        Check(!info.UseShellExecute, "Do not use shell association to start Terminal");
     }
     private static void PortableExtraction()
     {

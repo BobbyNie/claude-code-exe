@@ -7,6 +7,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class TerminalPackageTests(unittest.TestCase):
+    def test_default_profile_uses_windows_powershell_without_user_profile(self):
+        script = (ROOT / 'scripts/qwen/download-terminal.ps1').read_text()
+        self.assertIn('"commandline": "powershell.exe -NoLogo -NoProfile"', script)
+
     def test_terminal_download_is_pinned_and_fails_closed_on_checksum(self):
         script = (ROOT / 'scripts/qwen/download-terminal.ps1').read_text()
         lock = json.loads((ROOT / 'scripts/qwen/terminal-release.json').read_text())

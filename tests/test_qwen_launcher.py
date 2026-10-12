@@ -34,12 +34,12 @@ class QwenLauncherTests(unittest.TestCase):
     def test_repaired_bundle_has_a_distinct_tag_and_windows_gate(self):
         versions = (ROOT / 'scripts/check-all-versions.ps1').read_text()
         workflow = (ROOT / '.github/workflows/auto-release.yml').read_text()
-        self.assertIn('-qwen-launcher-r5"', versions)
+        self.assertIn('-qwen-launcher-r6"', versions)
         self.assertIn('tests/qwen/test-windows.ps1', workflow)
         self.assertIn('-PackagedExe ./qwen.exe', workflow)
         self.assertIn('Test packaged Qwen startup', workflow)
         self.assertIn('Console.CancelKeyPress += handler', (ROOT / 'scripts/qwen/launcher.cs').read_text())
-        self.assertIn('release\\qwen-launcher.revision -Value "5"', workflow)
+        self.assertIn('release\\qwen-launcher.revision -Value "6"', workflow)
 
     def test_windows_compiler_receives_resolved_native_source_paths(self):
         script = (ROOT / 'tests/qwen/test-windows.ps1').read_text()

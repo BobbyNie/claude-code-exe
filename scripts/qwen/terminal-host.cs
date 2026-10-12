@@ -18,10 +18,18 @@ internal static class TerminalHost
 {
     internal static ProcessStartInfo CreateStartInfo(string terminalExe, string launcherExe, string token)
     {
+        // Encode only the trusted launcher path and pipe token. User arguments and
+        // secrets still travel through the private pipe, never through PowerShell.
+        string script = "& '" + launcherExe.Replace("'", "''") + "' --qwen-terminal-child '" +
+            token.Replace("'", "''") + "'\r\nexit $LASTEXITCODE";
+        string system = Environment.GetFolderPath(Environment.SpecialFolder.System);
+        if (string.IsNullOrEmpty(system)) system = @"C:\Windows\System32";
+        string powershell = system + @"\WindowsPowerShell\v1.0\powershell.exe";
         return new ProcessStartInfo {
             FileName = terminalExe,
             Arguments = "-w new new-tab --inheritEnvironment --title Qwen " +
-                Program.QuoteArgument(launcherExe.Replace(";", @"\;")) + " --qwen-terminal-child " + token,
+                Program.QuoteArgument(powershell.Replace(";", @"\;")) +
+                " -NoLogo -NoProfile -EncodedCommand " + Convert.ToBase64String(Encoding.Unicode.GetBytes(script)),
             UseShellExecute = false,
             CreateNoWindow = true,
         };
